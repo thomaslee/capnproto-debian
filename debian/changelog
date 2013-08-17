@@ -1,0 +1,5 @@
+capnproto (0.2.0-1) unstable; urgency=low
+
+  * Initial release (Closes: #719782)
+
+ -- Tom Lee <debian@tomlee.co>  Sat, 17 Aug 2013 02:02:00 -0700
