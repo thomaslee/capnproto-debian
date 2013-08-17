@@ -38,3 +38,17 @@ override_dh_auto_install:
 	dh_auto_install
 	sed -i "/dependency_libs/ s/'.*'/''/" `find $(CURDIR)/debian/ -name '*.la'`
 
+override_dh_auto_build:
+	xsltproc --nonet \
+		--param make.year.ranges 1 \
+		--param make.single.year.ranges 1 \
+		--param man.charmap.use.subset 0 \
+		-o debian/ \
+	http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl \
+		debian/capnp.1.xml
+	dh_auto_build
+
+override_dh_auto_clean:
+	rm -f debian/capnp.1
+	dh_auto_clean
+
