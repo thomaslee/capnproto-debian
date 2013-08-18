@@ -31,4 +31,5 @@ Makefile
 /src/capnp/test.capnp.h
 /test_capnpc_middleman
 gtest-config
+/debian/capnproto
 
