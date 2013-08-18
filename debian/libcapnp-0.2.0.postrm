@@ -2,7 +2,7 @@
 
 set -e
 
-if test "$1" = "remove"; then
+if [ "$1" = "remove" ]; then
     ldconfig
 fi
 
