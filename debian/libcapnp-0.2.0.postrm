@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+CMD="$1"
+
+if test "x$CMD" = "xremove"; then
+    ldconfig
+fi
+
