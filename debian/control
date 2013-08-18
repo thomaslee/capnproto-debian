@@ -15,19 +15,52 @@ Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Cap'n Proto C++ library
- FIXME DESCRIPTION GOES HERE
+ Similar to Protocol Buffers, Cap'n Proto is an efficient means of
+ serializing structured data to be transferred across a network or
+ written to disk. Users write a Cap'n Proto definition file that
+ drives a code generator, which in turn emits C++ code for encoding &
+ decoding messages in the Cap'n Proto format.
+ .
+ In addition to being extremely fast, Cap'n Proto also smooths over some
+ of the rougher aspects of Protocol Buffers & introduces a number of new
+ features to boot.
+ .
+ This package contains the runtime library needed for C++ applications.
 
 Package: libcapnp-dev
 Architecture: any
 Section: libdevel
 Depends: ${misc:Depends}, libcapnp-0.2.0 (= ${binary:Version})
 Description: Cap'n Proto C++ library (development files)
- FIXME DESCRIPTION GOES HERE
+ Similar to Protocol Buffers, Cap'n Proto is an efficient means of
+ serializing structured data to be transferred across a network or
+ written to disk. Users write a Cap'n Proto definition file that
+ drives a code generator, which in turn emits C++ code for encoding &
+ decoding messages in the Cap'n Proto format.
+ .
+ In addition to being extremely fast, Cap'n Proto also smooths over some
+ of the rougher aspects of Protocol Buffers & introduces a number of new
+ features to boot.
+ .
+ This package contains the headers and static libraries needed for writing
+ C++ applications.
 
 Package: capnproto
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
  libcapnp-0.2.0 (= ${binary:Version})
 Description: Tool for working with the Cap'n Proto data interchange format
- FIXME DESCRIPTION GOES HERE
+ Similar to Protocol Buffers, Cap'n Proto is an efficient means of
+ serializing structured data to be transferred across a network or
+ written to disk. Users write a Cap'n Proto definition file that
+ drives a code generator, which in turn emits C++ code for encoding &
+ decoding messages in the Cap'n Proto format.
+ .
+ In addition to being extremely fast, Cap'n Proto also smooths over some
+ of the rougher aspects of Protocol Buffers & introduces a number of new
+ features to boot.
+ .
+ This package contains a small suite of tools for developing & maintaining
+ your Cap'n Proto schema files, including a code generator for compiling
+ your schema files to supported languages.
 
