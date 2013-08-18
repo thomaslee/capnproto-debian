@@ -7,27 +7,27 @@ Build-Depends: debhelper (>= 8.0.0), gcc (>= 4.7.3-1~),
  xsltproc, autotools-dev
 Standards-Version: 3.9.4
 Homepage: http://kentonv.github.io/capnproto/
-#Vcs-Git: git://git.debian.org/collab-maint/capnproto.git
-#Vcs-Browser: http://git.debian.org/?p=collab-maint/capnproto.git;a=summary
+Vcs-Git: git://github.com/thomaslee/capnporoto-debian.git
+Vcs-Browser: http://github.com/thomaslee/capnproto-debian
 
 Package: libcapnp-0.2.0
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: capnproto C++ library
+Description: Cap'n Proto C++ library
  FIXME DESCRIPTION GOES HERE
 
 Package: libcapnp-dev
 Architecture: any
 Section: libdevel
 Depends: ${misc:Depends}, libcapnp-0.2.0 (= ${binary:Version})
-Description: capnproto C++ library (development files)
+Description: Cap'n Proto C++ library (development files)
  FIXME DESCRIPTION GOES HERE
 
-Package: capnproto-compiler
+Package: capnproto
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
  libcapnp-0.2.0 (= ${binary:Version})
-Description: compiler for capnproto definition files
+Description: Tool for working with the Cap'n Proto data interchange format
  FIXME DESCRIPTION GOES HERE
 
