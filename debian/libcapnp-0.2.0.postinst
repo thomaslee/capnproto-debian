@@ -2,9 +2,9 @@
 
 set -e
 
-CMD="$1"
-
-if test "x$CMD" = "xconfigure"; then
+if test "$1" = "configure"; then
     ldconfig
 fi
+
+#DEBHELPER#
 

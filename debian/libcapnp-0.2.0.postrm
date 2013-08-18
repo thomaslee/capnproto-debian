@@ -2,9 +2,9 @@
 
 set -e
 
-CMD="$1"
-
-if test "x$CMD" = "xremove"; then
+if test "$1" = "remove"; then
     ldconfig
 fi
+
+#DEBHELPER#
 
