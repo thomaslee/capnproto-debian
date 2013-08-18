@@ -33,4 +33,5 @@ Makefile
 /test_capnpc_middleman
 gtest-config
 /debian/capnproto
+/.pc
 
