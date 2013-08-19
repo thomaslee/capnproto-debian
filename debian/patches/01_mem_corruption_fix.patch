@@ -1,3 +1,11 @@
+Description: Fixes a potential memory corruption bug in 0.2.0.
+ Upstream 0.2.0 shipped with a memory corruption bug.
+ .
+ This patch modifies the source to address this issue.
+Origin: https://github.com/kentonv/capnproto/commit/26af52ab8ec3c88a457eb72d11af67816b1ed288
+Forwarded: not-needed
+Applied-Upstream: https://github.com/kentonv/capnproto/commit/26af52ab8ec3c88a457eb72d11af67816b1ed288
+Last-Update: 2013-08-19
 --- a/src/capnp/layout.c++
 +++ b/src/capnp/layout.c++
 @@ -444,6 +444,7 @@
