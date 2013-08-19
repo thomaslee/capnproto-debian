@@ -17,6 +17,7 @@
 # linking with g++ uses -nostdlib and does not add -lpthread or -lgcc
 # http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=468555
 #
+export DEB_CXXFLAGS_MAINT_APPEND = -DNDEBUG
 export DEB_LDFLAGS_MAINT_APPEND = -lpthread
 
 export DEB_BUILD_MAINT_OPTIONS=hardening=+all
