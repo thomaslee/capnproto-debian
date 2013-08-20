@@ -1,6 +1,6 @@
 ## Process this file with autoconf to produce configure.
 
-AC_INIT([Capn Proto],[0.2.0],[capnproto@googlegroups.com],[capnproto-c++])
+AC_INIT([Capn Proto],[0.2.1],[capnproto@googlegroups.com],[capnproto-c++])
 
 AC_CONFIG_SRCDIR([src/capnp/layout.c++])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -14,7 +14,7 @@ AS_IF([test "x${ac_cv_env_CFLAGS_set}" = "x"],
 AS_IF([test "x${ac_cv_env_CXXFLAGS_set}" = "x"],
       [CXXFLAGS="-O2 -DNDEBUG"])
 
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([tar-ustar])
 
 AC_ARG_WITH([external-capnp],
   [AS_HELP_STRING([--with-external-capnp],
