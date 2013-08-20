@@ -49,7 +49,7 @@ Package: capnproto
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
  libcapnp-0.2.1 (= ${binary:Version})
-Description: Tool for working with the Cap'n Proto data interchange format
+Description: tool for working with the Cap'n Proto data interchange format
  Similar to Protocol Buffers, Cap'n Proto is an efficient means of
  serializing structured data to be transferred across a network or
  written to disk. Users write a Cap'n Proto definition file that
