@@ -1,1 +1,1 @@
-capnp binary: hardening-no-fortify-functions /usr/bin/capnp
+capnproto binary: hardening-no-fortify-functions usr/bin/capnp
