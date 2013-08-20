@@ -1,3 +1,11 @@
+capnproto (0.2.1-1) unstable; urgency=low
+
+  * Imported Upstream version 0.2.1
+  * Removed 01_mem_corruption_fix.patch
+  * Update packaging scripts from 0.2.0 to 0.2.1
+
+ -- Tom Lee <debian@tomlee.co>  Tue, 20 Aug 2013 00:18:16 -0700
+
 capnproto (0.2.0-1) unstable; urgency=low
 
   * Initial release (Closes: #719782)
