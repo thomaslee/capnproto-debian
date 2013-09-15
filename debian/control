@@ -7,7 +7,7 @@ Build-Depends: debhelper (>= 8.0.0), gcc (>= 4.7),
  xsltproc, autotools-dev
 Standards-Version: 3.9.4
 Homepage: http://kentonv.github.io/capnproto/
-Vcs-Git: git://github.com/thomaslee/capnporoto-debian.git
+Vcs-Git: git://github.com/thomaslee/capnproto-debian
 Vcs-Browser: http://github.com/thomaslee/capnproto-debian
 
 Package: libcapnp-0.2.1
