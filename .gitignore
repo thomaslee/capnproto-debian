@@ -21,14 +21,16 @@ Makefile
 *.log
 *.debhelper
 /debian/capnproto-compiler
-/debian/libcapnp-0.2.0
-/debian/libcapnp-0.2.1
+/debian/libcapnp-0.3.0
+/debian/libcapnp-0.3.0
 /debian/libcapnp-dev
+/debian/libkj-0.3.0
+/debian/libkj-dev
 *.substvars
 /capnp-test
 *.swp
-/src/capnp/test-import.capnp.c++
-/src/capnp/test-import.capnp.h
+/src/capnp/test-import*.capnp.c++
+/src/capnp/test-import*.capnp.h
 /src/capnp/test.capnp.c++
 /src/capnp/test.capnp.h
 /test_capnpc_middleman
@@ -37,4 +39,5 @@ gtest-config
 /.pc
 tags
 vgdump
-/autom4te.cache
+autom4te.cache
+/capnp-evolution-test
