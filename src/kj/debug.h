@@ -111,7 +111,7 @@ namespace kj {
     ::kj::_::Debug::log(__FILE__, __LINE__, ::kj::_::Debug::Severity::severity, \
                         #__VA_ARGS__, __VA_ARGS__)
 
-#define KJ_DBG(...) KJ_LOG(DEBUG, ##__VA_ARGS__)
+#define KJ_DBG(...) KJ_LOG(DBG, ##__VA_ARGS__)
 
 #define _kJ_FAULT(nature, cond, ...) \
   if (KJ_LIKELY(cond)) {} else \
@@ -147,14 +147,26 @@ namespace kj {
   ::kj::_::Debug::ContextImpl<decltype(KJ_UNIQUE_NAME(_kjContextFunc))> \
       KJ_UNIQUE_NAME(_kjContext)(KJ_UNIQUE_NAME(_kjContextFunc))
 
-#ifdef NDEBUG
-#define KJ_DLOG(...) do {} while (false)
-#define KJ_DASSERT(...) do {} while (false)
-#define KJ_DREQUIRE(...) do {} while (false)
-#else
+#define _kJ_NONNULL(nature, value, ...) \
+  (*({ \
+    auto result = ::kj::_::readMaybe(value); \
+    if (KJ_UNLIKELY(!result)) { \
+      ::kj::_::Debug::Fault(__FILE__, __LINE__, ::kj::Exception::Nature::nature, 0, \
+                            #value " != nullptr", #__VA_ARGS__, ##__VA_ARGS__).fatal(); \
+    } \
+    result; \
+  }))
+#define KJ_ASSERT_NONNULL(value, ...) _kJ_NONNULL(LOCAL_BUG, value, ##__VA_ARGS__)
+#define KJ_REQUIRE_NONNULL(value, ...) _kJ_NONNULL(PRECONDITION, value, ##__VA_ARGS__)
+
+#ifdef KJ_DEBUG
 #define KJ_DLOG LOG
 #define KJ_DASSERT KJ_ASSERT
 #define KJ_DREQUIRE KJ_REQUIRE
+#else
+#define KJ_DLOG(...) do {} while (false)
+#define KJ_DASSERT(...) do {} while (false)
+#define KJ_DREQUIRE(...) do {} while (false)
 #endif
 
 namespace _ {  // private
@@ -170,7 +182,7 @@ public:
     WARNING,   // A problem was detected but execution can continue with correct output.
     ERROR,     // Something is wrong, but execution can continue with garbage output.
     FATAL,     // Something went wrong, and execution cannot continue.
-    DEBUG      // Temporary debug logging.  See KJ_DBG.
+    DBG        // Temporary debug logging.  See KJ_DBG.
 
     // Make sure to update the stringifier if you add a new severity level.
   };

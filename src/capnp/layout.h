@@ -154,6 +154,11 @@ template <> struct ElementSizeForType<Data> {
   static constexpr FieldSize value = FieldSize::POINTER;
 };
 
+template <typename T>
+inline constexpr FieldSize elementSizeForType() {
+  return ElementSizeForType<T>::value;
+}
+
 }  // namespace _ (private)
 
 // =============================================================================
@@ -272,10 +277,19 @@ public:
   static StructBuilder initRoot(SegmentBuilder* segment, word* location, StructSize size);
   static void setRoot(SegmentBuilder* segment, word* location, StructReader value);
   static StructBuilder getRoot(SegmentBuilder* segment, word* location, StructSize size);
+  static void adoptRoot(SegmentBuilder* segment, word* location, OrphanBuilder orphan);
+
+  inline word* getLocation() { return reinterpret_cast<word*>(data); }
+  // Get the object's location.  Only valid for independently-allocated objects (i.e. not list
+  // elements).
 
   inline BitCount getDataSectionSize() const { return dataSize; }
   inline WirePointerCount getPointerSectionSize() const { return pointerCount; }
   inline Data::Builder getDataSectionAsBlob();
+
+  template <typename T>
+  KJ_ALWAYS_INLINE(bool hasDataField(ElementCount offset));
+  // Return true if the field is set to something other than its default value.
 
   template <typename T>
   KJ_ALWAYS_INLINE(T getDataField(ElementCount offset));
@@ -364,6 +378,12 @@ public:
   // Detach the given pointer field from this object.  The pointer becomes null, and the child
   // object is returned as an orphan.
 
+  void clearPointer(WirePointerCount ptrIndex);
+  // Equivalent to calling disown() and letting the result simply be destroyed.
+
+  void clearAll();
+  // Clear all pointers and data.
+
   void transferContentFrom(StructBuilder other);
   // Adopt all pointers from `other`, and also copy all data.  If `other`'s sections are larger
   // than this, the extra data is not transferred, meaning there is a risk of data loss when
@@ -420,6 +440,10 @@ public:
   inline BitCount getDataSectionSize() const { return dataSize; }
   inline WirePointerCount getPointerSectionSize() const { return pointerCount; }
   inline Data::Reader getDataSectionAsBlob();
+
+  template <typename T>
+  KJ_ALWAYS_INLINE(bool hasDataField(ElementCount offset) const);
+  // Return true if the field is set to something other than its default value.
 
   template <typename T>
   KJ_ALWAYS_INLINE(T getDataField(ElementCount offset) const);
@@ -512,6 +536,17 @@ public:
   inline ListBuilder()
       : segment(nullptr), ptr(nullptr), elementCount(0 * ELEMENTS),
         step(0 * BITS / ELEMENTS) {}
+
+  inline word* getLocation() {
+    // Get the object's location.  Only valid for independently-allocated objects (i.e. not list
+    // elements).
+
+    if (step * ELEMENTS <= BITS_PER_WORD * WORDS) {
+      return reinterpret_cast<word*>(ptr);
+    } else {
+      return reinterpret_cast<word*>(ptr) - POINTER_SIZE_IN_WORDS;
+    }
+  }
 
   inline ElementCount size() const;
   // The number of elements in the list.
@@ -619,6 +654,8 @@ public:
       : segment(nullptr), ptr(nullptr), elementCount(0), step(0 * BITS / ELEMENTS),
         structDataSize(0), structPointerCount(0), nestingLimit(0x7fffffff) {}
 
+  static ListReader readRootUnchecked(const word* location, FieldSize elementSize);
+
   inline ElementCount size() const;
   // The number of elements in the list.
 
@@ -699,6 +736,23 @@ struct ObjectBuilder {
       : kind(ObjectKind::STRUCT), structBuilder(structBuilder) {}
   ObjectBuilder(ListBuilder listBuilder)
       : kind(ObjectKind::LIST), listBuilder(listBuilder) {}
+
+  inline word* getLocation() {
+    switch (kind) {
+      case ObjectKind::NULL_POINTER: return nullptr;
+      case ObjectKind::STRUCT: return structBuilder.getLocation();
+      case ObjectKind::LIST: return listBuilder.getLocation();
+    }
+    return nullptr;
+  }
+
+  ObjectReader asReader() const;
+
+  inline ObjectBuilder(ObjectBuilder& other) { memcpy(this, &other, sizeof(*this)); }
+  inline ObjectBuilder(ObjectBuilder&& other) { memcpy(this, &other, sizeof(*this)); }
+  // Hack:  Compiler thinks StructBuilder and ListBuilder are non-trivially-copyable due to the
+  //   inheritance from DisallowConstCopy, but that means the union causes ObjectBuilder's copy
+  //   constructor to be deleted.  We happen to know that trivial copying works here...
 };
 
 struct ObjectReader {
@@ -725,7 +779,7 @@ public:
   inline OrphanBuilder(): segment(nullptr), location(nullptr) { memset(&tag, 0, sizeof(tag)); }
   OrphanBuilder(const OrphanBuilder& other) = delete;
   inline OrphanBuilder(OrphanBuilder&& other);
-  inline ~OrphanBuilder();
+  inline ~OrphanBuilder() noexcept(false);
 
   static OrphanBuilder initStruct(BuilderArena* arena, StructSize size);
   static OrphanBuilder initList(BuilderArena* arena, ElementCount elementCount,
@@ -743,8 +797,8 @@ public:
   OrphanBuilder& operator=(const OrphanBuilder& other) = delete;
   inline OrphanBuilder& operator=(OrphanBuilder&& other);
 
-  inline bool operator==(decltype(nullptr)) { return location == nullptr; }
-  inline bool operator!=(decltype(nullptr)) { return location != nullptr; }
+  inline bool operator==(decltype(nullptr)) const { return location == nullptr; }
+  inline bool operator!=(decltype(nullptr)) const { return location != nullptr; }
 
   StructBuilder asStruct(StructSize size);
   // Interpret as a struct, or throw an exception if not a struct.
@@ -786,7 +840,7 @@ private:
   // FAR pointer.
 
   word* location;
-  // Pointer to the object, or null if the tag is a FAR pointer.
+  // Pointer to the object, or nullptr if the pointer is null.
 
   inline OrphanBuilder(const void* tagPtr, SegmentBuilder* segment, word* location)
       : segment(segment), location(location) {
@@ -811,6 +865,16 @@ inline Data::Builder StructBuilder::getDataSectionAsBlob() {
 }
 
 template <typename T>
+inline bool StructBuilder::hasDataField(ElementCount offset) {
+  return getDataField<Mask<T>>(offset) != 0;
+}
+
+template <>
+inline bool StructBuilder::hasDataField<Void>(ElementCount offset) {
+  return false;
+}
+
+template <typename T>
 inline T StructBuilder::getDataField(ElementCount offset) {
   return reinterpret_cast<WireValue<T>*>(data)[offset / ELEMENTS].get();
 }
@@ -826,7 +890,7 @@ inline bool StructBuilder::getDataField<bool>(ElementCount offset) {
 
 template <>
 inline Void StructBuilder::getDataField<Void>(ElementCount offset) {
-  return Void::VOID;
+  return VOID;
 }
 
 template <typename T>
@@ -865,7 +929,17 @@ inline Data::Reader StructReader::getDataSectionAsBlob() {
 }
 
 template <typename T>
-T StructReader::getDataField(ElementCount offset) const {
+inline bool StructReader::hasDataField(ElementCount offset) const {
+  return getDataField<Mask<T>>(offset) != 0;
+}
+
+template <>
+inline bool StructReader::hasDataField<Void>(ElementCount offset) const {
+  return false;
+}
+
+template <typename T>
+inline T StructReader::getDataField(ElementCount offset) const {
   if ((offset + 1 * ELEMENTS) * capnp::bitsPerElement<T>() <= dataSize) {
     return reinterpret_cast<const WireValue<T>*>(data)[offset / ELEMENTS].get();
   } else {
@@ -890,7 +964,7 @@ inline bool StructReader::getDataField<bool>(ElementCount offset) const {
 
 template <>
 inline Void StructReader::getDataField<Void>(ElementCount offset) const {
-  return Void::VOID;
+  return VOID;
 }
 
 template <typename T>
@@ -906,7 +980,7 @@ template <typename T>
 inline T ListBuilder::getDataElement(ElementCount index) {
   return reinterpret_cast<WireValue<T>*>(ptr + index * step / BITS_PER_BYTE)->get();
 
-  // TODO(soon):  Benchmark this alternate implementation, which I suspect may make better use of
+  // TODO(perf):  Benchmark this alternate implementation, which I suspect may make better use of
   //   the x86 SIB byte.  Also use it for all the other getData/setData implementations below, and
   //   the various non-inline methods that look up pointers.
   //   Also if using this, consider changing ptr back to void* instead of byte*.
@@ -924,7 +998,7 @@ inline bool ListBuilder::getDataElement<bool>(ElementCount index) {
 
 template <>
 inline Void ListBuilder::getDataElement<Void>(ElementCount index) {
-  return Void::VOID;
+  return VOID;
 }
 
 template <typename T>
@@ -964,7 +1038,7 @@ inline bool ListReader::getDataElement<bool>(ElementCount index) const {
 
 template <>
 inline Void ListReader::getDataElement<Void>(ElementCount index) const {
-  return Void::VOID;
+  return VOID;
 }
 
 // These are defined in the source file.
@@ -995,7 +1069,7 @@ inline OrphanBuilder::OrphanBuilder(OrphanBuilder&& other)
   other.location = nullptr;
 }
 
-inline OrphanBuilder::~OrphanBuilder() {
+inline OrphanBuilder::~OrphanBuilder() noexcept(false) {
   if (segment != nullptr) euthanize();
 }
 

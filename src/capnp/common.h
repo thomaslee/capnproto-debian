@@ -33,13 +33,26 @@
 
 namespace capnp {
 
+#define CAPNP_VERSION_MAJOR 0
+#define CAPNP_VERSION_MINOR 3
+#define CAPNP_VERSION_MICRO 0
+
+#define CAPNP_VERSION \
+  (CAPNP_VERSION_MAJOR * 1000000 + CAPNP_VERSION_MINOR * 1000 + CAPNP_VERSION_MICRO)
+
 typedef unsigned int uint;
 
-enum class Void {
-  // Type used for Void fields.  There is only one value.  Using C++'s "void" type creates a bunch
-  // of issues since it behaves differently from other types.
-  VOID
+struct Void {
+  // Type used for Void fields.  Using C++'s "void" type creates a bunch of issues since it behaves
+  // differently from other types.
+
+  inline constexpr bool operator==(Void other) const { return true; }
+  inline constexpr bool operator!=(Void other) const { return false; }
 };
+
+static constexpr Void VOID = Void();
+// Constant value for `Void`,  which is an empty struct.
+
 template <typename T>
 inline T& operator<<(T& os, Void) { return os << "void"; }
 
@@ -256,13 +269,14 @@ constexpr WordCount WORDS = kj::unit<WordCount>();
 constexpr ElementCount ELEMENTS = kj::unit<ElementCount>();
 constexpr WirePointerCount POINTERS = kj::unit<WirePointerCount>();
 
-constexpr auto BITS_PER_BYTE = 8 * BITS / BYTES;
-constexpr auto BITS_PER_WORD = 64 * BITS / WORDS;
-constexpr auto BYTES_PER_WORD = 8 * BYTES / WORDS;
+// GCC 4.7 actually gives unused warnings on these constants in opt mode...
+constexpr auto BITS_PER_BYTE KJ_UNUSED = 8 * BITS / BYTES;
+constexpr auto BITS_PER_WORD KJ_UNUSED = 64 * BITS / WORDS;
+constexpr auto BYTES_PER_WORD KJ_UNUSED = 8 * BYTES / WORDS;
 
-constexpr auto BITS_PER_POINTER = 64 * BITS / POINTERS;
-constexpr auto BYTES_PER_POINTER = 8 * BYTES / POINTERS;
-constexpr auto WORDS_PER_POINTER = 1 * WORDS / POINTERS;
+constexpr auto BITS_PER_POINTER KJ_UNUSED = 64 * BITS / POINTERS;
+constexpr auto BYTES_PER_POINTER KJ_UNUSED = 8 * BYTES / POINTERS;
+constexpr auto WORDS_PER_POINTER KJ_UNUSED = 1 * WORDS / POINTERS;
 
 constexpr WordCount POINTER_SIZE_IN_WORDS = 1 * POINTERS * WORDS_PER_POINTER;
 

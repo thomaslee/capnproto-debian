@@ -34,10 +34,6 @@ namespace compiler {
 
 class Module: public ErrorReporter {
 public:
-  virtual kj::StringPtr getLocalName() const = 0;
-  // Typically, the absolute or cwd-relative path name of the module file, used in error messages.
-  // This is only for display purposes.
-
   virtual kj::StringPtr getSourceName() const = 0;
   // The name of the module file relative to the source tree.  Used to decide where to output
   // generated code and to form the `displayName` in the schema.
@@ -87,6 +83,10 @@ public:
   // Given the type ID of a schema node, find the ID of a node nested within it.  Throws an
   // exception if the parent ID is not recognized; returns null if the parent has no child of the
   // given name.  Neither the parent nor the child schema node is actually compiled.
+
+  Orphan<List<schema::CodeGeneratorRequest::RequestedFile::Import>>
+      getFileImportTable(const Module& module, Orphanage orphanage) const;
+  // Build the import table for the CodeGeneratorRequest for the given module.
 
   enum Eagerness: uint32_t {
     // Flags specifying how eager to be about compilation.  These are intended to be bitwise OR'd.

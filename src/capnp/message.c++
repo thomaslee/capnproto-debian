@@ -25,6 +25,7 @@
 #include "message.h"
 #include <kj/debug.h>
 #include "arena.h"
+#include "orphan.h"
 #include <stdlib.h>
 #include <exception>
 #include <string>
@@ -104,6 +105,12 @@ _::StructBuilder MessageBuilder::getRoot(_::StructSize size) {
   _::SegmentBuilder* rootSegment = getRootSegment();
   return _::StructBuilder::getRoot(
       rootSegment, rootSegment->getPtrUnchecked(0 * WORDS), size);
+}
+
+void MessageBuilder::adoptRootInternal(_::OrphanBuilder orphan) {
+  _::SegmentBuilder* rootSegment = getRootSegment();
+  _::StructBuilder::adoptRoot(
+      rootSegment, rootSegment->getPtrUnchecked(0 * WORDS), kj::mv(orphan));
 }
 
 kj::ArrayPtr<const kj::ArrayPtr<const word>> MessageBuilder::getSegmentsForOutput() {

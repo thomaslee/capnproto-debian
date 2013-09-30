@@ -78,11 +78,11 @@ namespace {
 
 typedef p::Span<uint32_t> Location;
 
-Token::Body::Builder initTok(Orphan<Token>& t, const Location& loc) {
-  auto tb = t.get();
-  tb.setStartByte(loc.begin());
-  tb.setEndByte(loc.end());
-  return tb.getBody();
+Token::Builder initTok(Orphan<Token>& t, const Location& loc) {
+  auto builder = t.get();
+  builder.setStartByte(loc.begin());
+  builder.setEndByte(loc.end());
+  return builder;
 }
 
 void buildTokenSequenceList(List<List<Token>>::Builder builder,
@@ -224,7 +224,7 @@ Lexer::Lexer(Orphanage orphanageParam, const ErrorReporter& errorReporterParam)
             KJ_IF_MAYBE(c, comment) {
               attachDocComment(builder, kj::mv(*c));
             }
-            builder.getBlock().setNone();
+            builder.setLine();
             return result;
           }),
       transform(
@@ -241,7 +241,7 @@ Lexer::Lexer(Orphanage orphanageParam, const ErrorReporter& errorReporterParam)
             } else KJ_IF_MAYBE(c, lateComment) {
               attachDocComment(builder, kj::mv(*c));
             }
-            auto list = builder.getBlock().initStatements(statements.size());
+            auto list = builder.initBlock(statements.size());
             for (uint i = 0; i < statements.size(); i++) {
               list.adoptWithCaveats(i, kj::mv(statements[i]));
             }

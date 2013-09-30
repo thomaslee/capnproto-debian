@@ -69,6 +69,8 @@ public:
 
   Exception(Nature nature, Durability durability, const char* file, int line,
             String description = nullptr) noexcept;
+  Exception(Nature nature, Durability durability, String file, int line,
+            String description = nullptr) noexcept;
   Exception(const Exception& other) noexcept;
   Exception(Exception&& other) = default;
   ~Exception() noexcept;
@@ -107,6 +109,7 @@ public:
   // callback stack.
 
 private:
+  String ownFile;
   const char* file;
   int line;
   Nature nature;
@@ -258,6 +261,16 @@ void UnwindDetector::catchExceptionsIfUnwinding(Func&& func) const {
     func();
   }
 }
+
+#define KJ_ON_SCOPE_SUCCESS(code) \
+  ::kj::UnwindDetector KJ_UNIQUE_NAME(_kjUnwindDetector); \
+  KJ_DEFER(if (!KJ_UNIQUE_NAME(_kjUnwindDetector).isUnwinding()) { code; })
+// Runs `code` if the current scope is exited normally (not due to an exception).
+
+#define KJ_ON_SCOPE_FAILURE(code) \
+  ::kj::UnwindDetector KJ_UNIQUE_NAME(_kjUnwindDetector); \
+  KJ_DEFER(if (KJ_UNIQUE_NAME(_kjUnwindDetector).isUnwinding()) { code; })
+// Runs `code` if the current scope is exited due to an exception.
 
 }  // namespace kj
 
