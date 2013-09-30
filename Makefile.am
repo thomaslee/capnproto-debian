@@ -40,7 +40,17 @@ AM_LDFLAGS = $(PTHREAD_CFLAGS)
 EXTRA_DIST =                                                                 \
   README.txt                                                                 \
   LICENSE.txt                                                                \
-  $(test_capnpc_inputs)
+  $(test_capnpc_inputs)                                                      \
+  src/capnp/compiler/capnp-test.sh                                           \
+  src/capnp/testdata/segmented-packed                                        \
+  src/capnp/testdata/errors.capnp.nobuild                                    \
+  src/capnp/testdata/short.txt                                               \
+  src/capnp/testdata/flat                                                    \
+  src/capnp/testdata/binary                                                  \
+  src/capnp/testdata/errors.txt                                              \
+  src/capnp/testdata/segmented                                               \
+  src/capnp/testdata/packed                                                  \
+  src/capnp/testdata/pretty.txt
 
 CLEANFILES = $(test_capnpc_outputs) test_capnpc_middleman
 
@@ -135,17 +145,18 @@ includecapnp_HEADERS =                                         \
   src/capnp/schema.capnp.h                                     \
   src/capnp/schema.h                                           \
   src/capnp/schema-loader.h                                    \
+  src/capnp/schema-parser.h                                    \
   src/capnp/dynamic.h                                          \
   src/capnp/pretty-print.h                                     \
   src/capnp/serialize.h                                        \
   src/capnp/serialize-packed.h                                 \
   src/capnp/generated-header-support.h
 
-lib_LTLIBRARIES = libcapnp.la
+lib_LTLIBRARIES = libkj.la libcapnp.la libcapnpc.la
 
-libcapnp_la_LIBADD = $(PTHREAD_LIBS)
-libcapnp_la_LDFLAGS = -release $(VERSION) -export-dynamic -no-undefined
-libcapnp_la_SOURCES=                                           \
+libkj_la_LIBADD = $(PTHREAD_LIBS)
+libkj_la_LDFLAGS = -release $(VERSION) -export-dynamic -no-undefined
+libkj_la_SOURCES=                                              \
   src/kj/common.c++                                            \
   src/kj/units.c++                                             \
   src/kj/memory.c++                                            \
@@ -159,7 +170,11 @@ libcapnp_la_SOURCES=                                           \
   src/kj/mutex.c++                                             \
   src/kj/thread.c++                                            \
   src/kj/main.c++                                              \
-  src/kj/parse/char.c++                                        \
+  src/kj/parse/char.c++
+
+libcapnp_la_LIBADD = libkj.la $(PTHREAD_LIBS)
+libcapnp_la_LDFLAGS = -release $(VERSION) -export-dynamic -no-undefined
+libcapnp_la_SOURCES=                                           \
   src/capnp/c++.capnp.c++                                      \
   src/capnp/blob.c++                                           \
   src/capnp/arena.h                                            \
@@ -173,7 +188,11 @@ libcapnp_la_SOURCES=                                           \
   src/capnp/dynamic.c++                                        \
   src/capnp/stringify.c++                                      \
   src/capnp/serialize.c++                                      \
-  src/capnp/serialize-packed.c++                               \
+  src/capnp/serialize-packed.c++
+
+libcapnpc_la_LIBADD = libcapnp.la libkj.la $(PTHREAD_LIBS)
+libcapnpc_la_LDFLAGS = -release $(VERSION) -export-dynamic -no-undefined
+libcapnpc_la_SOURCES=                                          \
   src/capnp/compiler/md5.h                                     \
   src/capnp/compiler/md5.c++                                   \
   src/capnp/compiler/error-reporter.h                          \
@@ -190,27 +209,34 @@ libcapnp_la_SOURCES=                                           \
   src/capnp/compiler/node-translator.c++                       \
   src/capnp/compiler/compiler.h                                \
   src/capnp/compiler/compiler.c++                              \
-  src/capnp/compiler/module-loader.h                           \
-  src/capnp/compiler/module-loader.c++
+  src/capnp/schema-parser.c++
 
 bin_PROGRAMS = capnp capnpc-capnp capnpc-c++
 
-capnp_LDADD = $(PTHREAD_LIBS) libcapnp.la
-capnp_SOURCES = src/capnp/compiler/capnp.c++
+capnp_LDADD = libcapnpc.la libcapnp.la libkj.la $(PTHREAD_LIBS)
+capnp_SOURCES =                                                \
+  src/capnp/compiler/module-loader.h                           \
+  src/capnp/compiler/module-loader.c++                         \
+  src/capnp/compiler/capnp.c++
 
-capnpc_capnp_LDADD = $(PTHREAD_LIBS) libcapnp.la
+capnpc_capnp_LDADD = libcapnp.la libkj.la $(PTHREAD_LIBS)
 capnpc_capnp_SOURCES = src/capnp/compiler/capnpc-capnp.c++
 
-capnpc_c___LDADD = $(PTHREAD_LIBS) libcapnp.la
+capnpc_c___LDADD = libcapnp.la libkj.la $(PTHREAD_LIBS)
 capnpc_c___SOURCES = src/capnp/compiler/capnpc-c++.c++
 
 # Symlink capnpc -> capnp.  The capnp binary will behave like the old capnpc
 # binary (i.e. like "capnp compile") when invoked via this symlink.
+#
+# Also attempt to run ldconfig, because otherwise users get confused.  If
+# it fails (e.g. because the platform doesn't have it, or because the
+# user doesn't have root privileges), don't worry about it.
 install-exec-hook:
-	ln -s capnp $(DESTDIR)$(bindir)/capnpc
+	ln -sf capnp $(DESTDIR)$(bindir)/capnpc
+	ldconfig < /dev/null > /dev/null 2>&1 || true
 
 uninstall-hook:
-	rm $(DESTDIR)$(bindir)/capnpc
+	rm -f $(DESTDIR)$(bindir)/capnpc
 
 # Source files intentionally not included in the dist at this time:
 #  src/capnp/serialize-snappy*
@@ -221,13 +247,16 @@ uninstall-hook:
 
 test_capnpc_inputs =                                           \
   src/capnp/test.capnp                                         \
-  src/capnp/test-import.capnp
+  src/capnp/test-import.capnp                                  \
+  src/capnp/test-import2.capnp
 
 test_capnpc_outputs =                                          \
   src/capnp/test.capnp.c++                                     \
   src/capnp/test.capnp.h                                       \
   src/capnp/test-import.capnp.c++                              \
-  src/capnp/test-import.capnp.h
+  src/capnp/test-import.capnp.h                                \
+  src/capnp/test-import2.capnp.c++                             \
+  src/capnp/test-import2.capnp.h
 
 if USE_EXTERNAL_CAPNP
 
@@ -247,8 +276,8 @@ $(test_capnpc_outputs): test_capnpc_middleman
 
 BUILT_SOURCES = $(test_capnpc_outputs)
 
-check_PROGRAMS = capnp-test
-capnp_test_LDADD = gtest/lib/libgtest.la gtest/lib/libgtest_main.la libcapnp.la
+check_PROGRAMS = capnp-test capnp-evolution-test
+capnp_test_LDADD = gtest/lib/libgtest.la gtest/lib/libgtest_main.la libcapnpc.la libcapnp.la libkj.la
 capnp_test_CPPFLAGS = -Igtest/include -I$(srcdir)/gtest/include
 capnp_test_SOURCES =                                           \
   src/kj/common-test.c++                                       \
@@ -265,6 +294,7 @@ capnp_test_SOURCES =                                           \
   src/kj/mutex-test.c++                                        \
   src/kj/parse/common-test.c++                                 \
   src/kj/parse/char-test.c++                                   \
+  src/capnp/common-test.c++                                    \
   src/capnp/blob-test.c++                                      \
   src/capnp/endian-test.c++                                    \
   src/capnp/endian-fallback-test.c++                           \
@@ -285,4 +315,7 @@ capnp_test_SOURCES =                                           \
   src/capnp/compiler/md5-test.c++
 nodist_capnp_test_SOURCES = $(test_capnpc_outputs)
 
-TESTS = capnp-test
+capnp_evolution_test_LDADD = libcapnpc.la libcapnp.la libkj.la
+capnp_evolution_test_SOURCES = src/capnp/compiler/evolution-test.c++
+
+TESTS = capnp-test capnp-evolution-test src/capnp/compiler/capnp-test.sh

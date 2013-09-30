@@ -42,25 +42,6 @@ namespace compiler {
 
 namespace {
 
-template <typename T>
-size_t findLargestElementBefore(const kj::Vector<T>& vec, const T& key) {
-  KJ_REQUIRE(vec.size() > 0 && vec[0] <= key);
-
-  size_t lower = 0;
-  size_t upper = vec.size();
-
-  while (upper - lower > 1) {
-    size_t mid = (lower + upper) / 2;
-    if (vec[mid] > key) {
-      upper = mid;
-    } else {
-      lower = mid;
-    }
-  }
-
-  return lower;
-}
-
 class MmapDisposer: public kj::ArrayDisposer {
 protected:
   void disposeImpl(void* firstElement, size_t elementSize, size_t elementCount,
@@ -80,13 +61,35 @@ kj::Array<const char> mmapForRead(kj::StringPtr filename) {
   struct stat stats;
   KJ_SYSCALL(fstat(fd, &stats));
 
-  const void* mapping = mmap(NULL, stats.st_size, PROT_READ, MAP_SHARED, fd, 0);
-  if (mapping == MAP_FAILED) {
-    KJ_FAIL_SYSCALL("mmap", errno, filename);
-  }
+  if (S_ISREG(stats.st_mode)) {
+    if (stats.st_size == 0) {
+      // mmap()ing zero bytes will fail.
+      return nullptr;
+    }
 
-  return kj::Array<const char>(
-      reinterpret_cast<const char*>(mapping), stats.st_size, mmapDisposer);
+    // Regular file.  Just mmap() it.
+    const void* mapping = mmap(NULL, stats.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    if (mapping == MAP_FAILED) {
+      KJ_FAIL_SYSCALL("mmap", errno, filename);
+    }
+
+    return kj::Array<const char>(
+        reinterpret_cast<const char*>(mapping), stats.st_size, mmapDisposer);
+  } else {
+    // This could be a stream of some sort, like a pipe.  Fall back to read().
+    // TODO(cleanup):  This does a lot of copies.  Not sure I care.
+    kj::Vector<char> data(8192);
+
+    char buffer[4096];
+    for (;;) {
+      ssize_t n;
+      KJ_SYSCALL(n = read(fd, buffer, sizeof(buffer)));
+      if (n == 0) break;
+      data.addAll(buffer, buffer + n);
+    }
+
+    return data.releaseAsArray();
+  }
 }
 
 static char* canonicalizePath(char* path) {
@@ -211,12 +214,12 @@ private:
   kj::MutexGuarded<std::map<kj::StringPtr, kj::Own<Module>>> modules;
 };
 
-class ModuleLoader::ModuleImpl: public Module {
+class ModuleLoader::ModuleImpl final: public Module {
 public:
   ModuleImpl(const ModuleLoader::Impl& loader, kj::String localName, kj::String sourceName)
       : loader(loader), localName(kj::mv(localName)), sourceName(kj::mv(sourceName)) {}
 
-  kj::StringPtr getLocalName() const override {
+  kj::StringPtr getLocalName() const {
     return localName;
   }
 
@@ -227,15 +230,8 @@ public:
   Orphan<ParsedFile> loadContent(Orphanage orphanage) const override {
     kj::Array<const char> content = mmapForRead(localName);
 
-    lineBreaks.get([&](kj::SpaceFor<kj::Vector<uint>>& space) {
-      auto vec = space.construct(content.size() / 40);
-      vec->add(0);
-      for (const char* pos = content.begin(); pos < content.end(); ++pos) {
-        if (*pos == '\n') {
-          vec->add(pos + 1 - content.begin());
-        }
-      }
-      return vec;
+    lineBreaks.get([&](kj::SpaceFor<LineBreakTable>& space) {
+      return space.construct(content);
     });
 
     MallocMessageBuilder lexedBuilder;
@@ -257,25 +253,15 @@ public:
 
   void addError(uint32_t startByte, uint32_t endByte, kj::StringPtr message) const override {
     auto& lines = lineBreaks.get(
-        [](kj::SpaceFor<kj::Vector<uint>>& space) {
+        [](kj::SpaceFor<LineBreakTable>& space) -> kj::Own<LineBreakTable> {
           KJ_FAIL_REQUIRE("Can't report errors until loadContent() is called.");
-          return space.construct();
         });
 
-    // TODO(someday):  This counts tabs as single characters.  Do we care?
-    uint startLine = findLargestElementBefore(lines, startByte);
-    uint startCol = startByte - lines[startLine];
-    uint endLine = findLargestElementBefore(lines, endByte);
-    uint endCol = endByte - lines[endLine];
-
     loader.getErrorReporter().addError(
-        localName,
-        GlobalErrorReporter::SourcePos { startByte, startLine, startCol },
-        GlobalErrorReporter::SourcePos { endByte, endLine, endCol },
-        message);
+        localName, lines.toSourcePos(startByte), lines.toSourcePos(endByte), message);
   }
 
-  bool hadErrors() const {
+  bool hadErrors() const override {
     return loader.getErrorReporter().hadErrors();
   }
 
@@ -284,9 +270,7 @@ private:
   kj::String localName;
   kj::String sourceName;
 
-  kj::Lazy<kj::Vector<uint>> lineBreaks;
-  // Byte offsets of the first byte in each source line.  The first element is always zero.
-  // Initialized the first time the module is loaded.
+  kj::Lazy<LineBreakTable> lineBreaks;
 };
 
 // =======================================================================================

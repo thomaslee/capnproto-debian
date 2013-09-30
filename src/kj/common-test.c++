@@ -27,6 +27,16 @@
 namespace kj {
 namespace {
 
+TEST(Common, Size) {
+  int arr[] = {12, 34, 56, 78};
+
+  size_t expected = 0;
+  for (size_t i: indices(arr)) {
+    EXPECT_EQ(expected++, i);
+  }
+  EXPECT_EQ(4, expected);
+}
+
 TEST(Common, Maybe) {
   {
     Maybe<int> m = 123;
@@ -203,9 +213,9 @@ TEST(Common, Downcast) {
   Foo& foo = bar;
 
   EXPECT_EQ(&bar, &downcast<Bar>(foo));
-#if !defined(NDEBUG) && !KJ_NO_RTTI
+#if defined(KJ_DEBUG) && !KJ_NO_RTTI
 #if KJ_NO_EXCEPTIONS
-#ifndef NDEBUG
+#ifdef KJ_DEBUG
   EXPECT_DEATH_IF_SUPPORTED(downcast<Baz>(foo), "Value cannot be downcast");
 #endif
 #else

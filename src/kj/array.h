@@ -129,8 +129,8 @@ class Array {
   // single objects.
 
 public:
-  inline Array(): ptr(nullptr), size_(0) {}
-  inline Array(decltype(nullptr)): ptr(nullptr), size_(0) {}
+  inline Array(): ptr(nullptr), size_(0), disposer(nullptr) {}
+  inline Array(decltype(nullptr)): ptr(nullptr), size_(0), disposer(nullptr) {}
   inline Array(Array&& other) noexcept
       : ptr(other.ptr), size_(other.size_), disposer(other.disposer) {
     other.ptr = nullptr;
@@ -466,15 +466,15 @@ private:
 };
 
 // =======================================================================================
-// KJ_MAP_ARRAY
+// KJ_MAP
 
-#define KJ_MAP(array, elementName) \
+#define KJ_MAP(elementName, array) \
   ::kj::_::Mapper<KJ_DECLTYPE_REF(array)>(array) * [&](decltype(*(array).begin()) elementName)
 // Applies some function to every element of an array, returning an Array of the results,  with
 // nice syntax.  Example:
 //
 //     StringPtr foo = "abcd";
-//     Array<char> bar = KJ_MAP(foo, c) -> char { return c + 1; };
+//     Array<char> bar = KJ_MAP(c, foo) -> char { return c + 1; };
 //     KJ_ASSERT(str(bar) == "bcde");
 
 namespace _ {  // private

@@ -56,8 +56,9 @@ build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = capnp$(EXEEXT) capnpc-capnp$(EXEEXT) \
 	capnpc-c++$(EXEEXT)
-check_PROGRAMS = capnp-test$(EXEEXT)
-TESTS = capnp-test$(EXEEXT)
+check_PROGRAMS = capnp-test$(EXEEXT) capnp-evolution-test$(EXEEXT)
+TESTS = capnp-test$(EXEEXT) capnp-evolution-test$(EXEEXT) \
+	src/capnp/compiler/capnp-test.sh
 subdir = .
 SUBDIRS =
 DIST_COMMON = $(am__configure_deps) $(dist_includecapnp_DATA) \
@@ -113,34 +114,50 @@ am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" \
 	"$(DESTDIR)$(includekjdir)" "$(DESTDIR)$(includekjparsedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 am__DEPENDENCIES_1 =
-libcapnp_la_DEPENDENCIES = $(am__DEPENDENCIES_1)
+libcapnp_la_DEPENDENCIES = libkj.la $(am__DEPENDENCIES_1)
 am__dirstamp = $(am__leading_dot)dirstamp
-am_libcapnp_la_OBJECTS = src/kj/common.lo src/kj/units.lo \
-	src/kj/memory.lo src/kj/array.lo src/kj/string.lo \
-	src/kj/string-tree.lo src/kj/exception.lo src/kj/debug.lo \
-	src/kj/arena.lo src/kj/io.lo src/kj/mutex.lo src/kj/thread.lo \
-	src/kj/main.lo src/kj/parse/char.lo src/capnp/c++.capnp.lo \
-	src/capnp/blob.lo src/capnp/arena.lo src/capnp/layout.lo \
-	src/capnp/list.lo src/capnp/message.lo \
-	src/capnp/schema.capnp.lo src/capnp/schema.lo \
-	src/capnp/schema-loader.lo src/capnp/dynamic.lo \
-	src/capnp/stringify.lo src/capnp/serialize.lo \
-	src/capnp/serialize-packed.lo src/capnp/compiler/md5.lo \
+am_libcapnp_la_OBJECTS = src/capnp/c++.capnp.lo src/capnp/blob.lo \
+	src/capnp/arena.lo src/capnp/layout.lo src/capnp/list.lo \
+	src/capnp/message.lo src/capnp/schema.capnp.lo \
+	src/capnp/schema.lo src/capnp/schema-loader.lo \
+	src/capnp/dynamic.lo src/capnp/stringify.lo \
+	src/capnp/serialize.lo src/capnp/serialize-packed.lo
+libcapnp_la_OBJECTS = $(am_libcapnp_la_OBJECTS)
+libcapnp_la_LINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
+	$(CXXFLAGS) $(libcapnp_la_LDFLAGS) $(LDFLAGS) -o $@
+libcapnpc_la_DEPENDENCIES = libcapnp.la libkj.la $(am__DEPENDENCIES_1)
+am_libcapnpc_la_OBJECTS = src/capnp/compiler/md5.lo \
 	src/capnp/compiler/error-reporter.lo \
 	src/capnp/compiler/lexer.capnp.lo src/capnp/compiler/lexer.lo \
 	src/capnp/compiler/grammar.capnp.lo \
 	src/capnp/compiler/parser.lo \
 	src/capnp/compiler/node-translator.lo \
-	src/capnp/compiler/compiler.lo \
-	src/capnp/compiler/module-loader.lo
-libcapnp_la_OBJECTS = $(am_libcapnp_la_OBJECTS)
-libcapnp_la_LINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) \
+	src/capnp/compiler/compiler.lo src/capnp/schema-parser.lo
+libcapnpc_la_OBJECTS = $(am_libcapnpc_la_OBJECTS)
+libcapnpc_la_LINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
-	$(CXXFLAGS) $(libcapnp_la_LDFLAGS) $(LDFLAGS) -o $@
+	$(CXXFLAGS) $(libcapnpc_la_LDFLAGS) $(LDFLAGS) -o $@
+libkj_la_DEPENDENCIES = $(am__DEPENDENCIES_1)
+am_libkj_la_OBJECTS = src/kj/common.lo src/kj/units.lo \
+	src/kj/memory.lo src/kj/array.lo src/kj/string.lo \
+	src/kj/string-tree.lo src/kj/exception.lo src/kj/debug.lo \
+	src/kj/arena.lo src/kj/io.lo src/kj/mutex.lo src/kj/thread.lo \
+	src/kj/main.lo src/kj/parse/char.lo
+libkj_la_OBJECTS = $(am_libkj_la_OBJECTS)
+libkj_la_LINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
+	$(CXXFLAGS) $(libkj_la_LDFLAGS) $(LDFLAGS) -o $@
 PROGRAMS = $(bin_PROGRAMS)
-am_capnp_OBJECTS = src/capnp/compiler/capnp.$(OBJEXT)
+am_capnp_OBJECTS = src/capnp/compiler/module-loader.$(OBJEXT) \
+	src/capnp/compiler/capnp.$(OBJEXT)
 capnp_OBJECTS = $(am_capnp_OBJECTS)
-capnp_DEPENDENCIES = $(am__DEPENDENCIES_1) libcapnp.la
+capnp_DEPENDENCIES = libcapnpc.la libcapnp.la libkj.la \
+	$(am__DEPENDENCIES_1)
+am_capnp_evolution_test_OBJECTS =  \
+	src/capnp/compiler/evolution-test.$(OBJEXT)
+capnp_evolution_test_OBJECTS = $(am_capnp_evolution_test_OBJECTS)
+capnp_evolution_test_DEPENDENCIES = libcapnpc.la libcapnp.la libkj.la
 am_capnp_test_OBJECTS = src/kj/capnp_test-common-test.$(OBJEXT) \
 	src/kj/capnp_test-memory-test.$(OBJEXT) \
 	src/kj/capnp_test-array-test.$(OBJEXT) \
@@ -155,6 +172,7 @@ am_capnp_test_OBJECTS = src/kj/capnp_test-common-test.$(OBJEXT) \
 	src/kj/capnp_test-mutex-test.$(OBJEXT) \
 	src/kj/parse/capnp_test-common-test.$(OBJEXT) \
 	src/kj/parse/capnp_test-char-test.$(OBJEXT) \
+	src/capnp/capnp_test-common-test.$(OBJEXT) \
 	src/capnp/capnp_test-blob-test.$(OBJEXT) \
 	src/capnp/capnp_test-endian-test.$(OBJEXT) \
 	src/capnp/capnp_test-endian-fallback-test.$(OBJEXT) \
@@ -173,18 +191,19 @@ am_capnp_test_OBJECTS = src/kj/capnp_test-common-test.$(OBJEXT) \
 	src/capnp/compiler/capnp_test-lexer-test.$(OBJEXT) \
 	src/capnp/compiler/capnp_test-md5-test.$(OBJEXT)
 am__objects_1 = src/capnp/capnp_test-test.capnp.$(OBJEXT) \
-	src/capnp/capnp_test-test-import.capnp.$(OBJEXT)
+	src/capnp/capnp_test-test-import.capnp.$(OBJEXT) \
+	src/capnp/capnp_test-test-import2.capnp.$(OBJEXT)
 nodist_capnp_test_OBJECTS = $(am__objects_1)
 capnp_test_OBJECTS = $(am_capnp_test_OBJECTS) \
 	$(nodist_capnp_test_OBJECTS)
 capnp_test_DEPENDENCIES = gtest/lib/libgtest.la \
-	gtest/lib/libgtest_main.la libcapnp.la
+	gtest/lib/libgtest_main.la libcapnpc.la libcapnp.la libkj.la
 am_capnpc_c___OBJECTS = src/capnp/compiler/capnpc-c++.$(OBJEXT)
 capnpc_c___OBJECTS = $(am_capnpc_c___OBJECTS)
-capnpc_c___DEPENDENCIES = $(am__DEPENDENCIES_1) libcapnp.la
+capnpc_c___DEPENDENCIES = libcapnp.la libkj.la $(am__DEPENDENCIES_1)
 am_capnpc_capnp_OBJECTS = src/capnp/compiler/capnpc-capnp.$(OBJEXT)
 capnpc_capnp_OBJECTS = $(am_capnpc_capnp_OBJECTS)
-capnpc_capnp_DEPENDENCIES = $(am__DEPENDENCIES_1) libcapnp.la
+capnpc_capnp_DEPENDENCIES = libcapnp.la libkj.la $(am__DEPENDENCIES_1)
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/build-aux/depcomp
 am__depfiles_maybe = depfiles
@@ -207,12 +226,15 @@ CCLD = $(CC)
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
 	$(LDFLAGS) -o $@
-SOURCES = $(libcapnp_la_SOURCES) $(capnp_SOURCES) \
-	$(capnp_test_SOURCES) $(nodist_capnp_test_SOURCES) \
-	$(capnpc_c___SOURCES) $(capnpc_capnp_SOURCES)
-DIST_SOURCES = $(libcapnp_la_SOURCES) $(capnp_SOURCES) \
-	$(capnp_test_SOURCES) $(capnpc_c___SOURCES) \
+SOURCES = $(libcapnp_la_SOURCES) $(libcapnpc_la_SOURCES) \
+	$(libkj_la_SOURCES) $(capnp_SOURCES) \
+	$(capnp_evolution_test_SOURCES) $(capnp_test_SOURCES) \
+	$(nodist_capnp_test_SOURCES) $(capnpc_c___SOURCES) \
 	$(capnpc_capnp_SOURCES)
+DIST_SOURCES = $(libcapnp_la_SOURCES) $(libcapnpc_la_SOURCES) \
+	$(libkj_la_SOURCES) $(capnp_SOURCES) \
+	$(capnp_evolution_test_SOURCES) $(capnp_test_SOURCES) \
+	$(capnpc_c___SOURCES) $(capnpc_capnp_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive dvi-recursive \
 	html-recursive info-recursive install-data-recursive \
 	install-dvi-recursive install-exec-recursive \
@@ -412,7 +434,17 @@ AM_LDFLAGS = $(PTHREAD_CFLAGS)
 EXTRA_DIST = \
   README.txt                                                                 \
   LICENSE.txt                                                                \
-  $(test_capnpc_inputs)
+  $(test_capnpc_inputs)                                                      \
+  src/capnp/compiler/capnp-test.sh                                           \
+  src/capnp/testdata/segmented-packed                                        \
+  src/capnp/testdata/errors.capnp.nobuild                                    \
+  src/capnp/testdata/short.txt                                               \
+  src/capnp/testdata/flat                                                    \
+  src/capnp/testdata/binary                                                  \
+  src/capnp/testdata/errors.txt                                              \
+  src/capnp/testdata/segmented                                               \
+  src/capnp/testdata/packed                                                  \
+  src/capnp/testdata/pretty.txt
 
 CLEANFILES = $(test_capnpc_outputs) test_capnpc_middleman
 
@@ -493,16 +525,17 @@ includecapnp_HEADERS = \
   src/capnp/schema.capnp.h                                     \
   src/capnp/schema.h                                           \
   src/capnp/schema-loader.h                                    \
+  src/capnp/schema-parser.h                                    \
   src/capnp/dynamic.h                                          \
   src/capnp/pretty-print.h                                     \
   src/capnp/serialize.h                                        \
   src/capnp/serialize-packed.h                                 \
   src/capnp/generated-header-support.h
 
-lib_LTLIBRARIES = libcapnp.la
-libcapnp_la_LIBADD = $(PTHREAD_LIBS)
-libcapnp_la_LDFLAGS = -release $(VERSION) -export-dynamic -no-undefined
-libcapnp_la_SOURCES = \
+lib_LTLIBRARIES = libkj.la libcapnp.la libcapnpc.la
+libkj_la_LIBADD = $(PTHREAD_LIBS)
+libkj_la_LDFLAGS = -release $(VERSION) -export-dynamic -no-undefined
+libkj_la_SOURCES = \
   src/kj/common.c++                                            \
   src/kj/units.c++                                             \
   src/kj/memory.c++                                            \
@@ -516,7 +549,11 @@ libcapnp_la_SOURCES = \
   src/kj/mutex.c++                                             \
   src/kj/thread.c++                                            \
   src/kj/main.c++                                              \
-  src/kj/parse/char.c++                                        \
+  src/kj/parse/char.c++
+
+libcapnp_la_LIBADD = libkj.la $(PTHREAD_LIBS)
+libcapnp_la_LDFLAGS = -release $(VERSION) -export-dynamic -no-undefined
+libcapnp_la_SOURCES = \
   src/capnp/c++.capnp.c++                                      \
   src/capnp/blob.c++                                           \
   src/capnp/arena.h                                            \
@@ -530,7 +567,11 @@ libcapnp_la_SOURCES = \
   src/capnp/dynamic.c++                                        \
   src/capnp/stringify.c++                                      \
   src/capnp/serialize.c++                                      \
-  src/capnp/serialize-packed.c++                               \
+  src/capnp/serialize-packed.c++
+
+libcapnpc_la_LIBADD = libcapnp.la libkj.la $(PTHREAD_LIBS)
+libcapnpc_la_LDFLAGS = -release $(VERSION) -export-dynamic -no-undefined
+libcapnpc_la_SOURCES = \
   src/capnp/compiler/md5.h                                     \
   src/capnp/compiler/md5.c++                                   \
   src/capnp/compiler/error-reporter.h                          \
@@ -547,14 +588,17 @@ libcapnp_la_SOURCES = \
   src/capnp/compiler/node-translator.c++                       \
   src/capnp/compiler/compiler.h                                \
   src/capnp/compiler/compiler.c++                              \
-  src/capnp/compiler/module-loader.h                           \
-  src/capnp/compiler/module-loader.c++
+  src/capnp/schema-parser.c++
 
-capnp_LDADD = $(PTHREAD_LIBS) libcapnp.la
-capnp_SOURCES = src/capnp/compiler/capnp.c++
-capnpc_capnp_LDADD = $(PTHREAD_LIBS) libcapnp.la
+capnp_LDADD = libcapnpc.la libcapnp.la libkj.la $(PTHREAD_LIBS)
+capnp_SOURCES = \
+  src/capnp/compiler/module-loader.h                           \
+  src/capnp/compiler/module-loader.c++                         \
+  src/capnp/compiler/capnp.c++
+
+capnpc_capnp_LDADD = libcapnp.la libkj.la $(PTHREAD_LIBS)
 capnpc_capnp_SOURCES = src/capnp/compiler/capnpc-capnp.c++
-capnpc_c___LDADD = $(PTHREAD_LIBS) libcapnp.la
+capnpc_c___LDADD = libcapnp.la libkj.la $(PTHREAD_LIBS)
 capnpc_c___SOURCES = src/capnp/compiler/capnpc-c++.c++
 
 # Source files intentionally not included in the dist at this time:
@@ -565,16 +609,19 @@ capnpc_c___SOURCES = src/capnp/compiler/capnpc-c++.c++
 # Tests ==============================================================
 test_capnpc_inputs = \
   src/capnp/test.capnp                                         \
-  src/capnp/test-import.capnp
+  src/capnp/test-import.capnp                                  \
+  src/capnp/test-import2.capnp
 
 test_capnpc_outputs = \
   src/capnp/test.capnp.c++                                     \
   src/capnp/test.capnp.h                                       \
   src/capnp/test-import.capnp.c++                              \
-  src/capnp/test-import.capnp.h
+  src/capnp/test-import.capnp.h                                \
+  src/capnp/test-import2.capnp.c++                             \
+  src/capnp/test-import2.capnp.h
 
 BUILT_SOURCES = $(test_capnpc_outputs)
-capnp_test_LDADD = gtest/lib/libgtest.la gtest/lib/libgtest_main.la libcapnp.la
+capnp_test_LDADD = gtest/lib/libgtest.la gtest/lib/libgtest_main.la libcapnpc.la libcapnp.la libkj.la
 capnp_test_CPPFLAGS = -Igtest/include -I$(srcdir)/gtest/include
 capnp_test_SOURCES = \
   src/kj/common-test.c++                                       \
@@ -591,6 +638,7 @@ capnp_test_SOURCES = \
   src/kj/mutex-test.c++                                        \
   src/kj/parse/common-test.c++                                 \
   src/kj/parse/char-test.c++                                   \
+  src/capnp/common-test.c++                                    \
   src/capnp/blob-test.c++                                      \
   src/capnp/endian-test.c++                                    \
   src/capnp/endian-fallback-test.c++                           \
@@ -611,6 +659,8 @@ capnp_test_SOURCES = \
   src/capnp/compiler/md5-test.c++
 
 nodist_capnp_test_SOURCES = $(test_capnpc_outputs)
+capnp_evolution_test_LDADD = libcapnpc.la libcapnp.la libkj.la
+capnp_evolution_test_SOURCES = src/capnp/compiler/evolution-test.c++
 all: $(BUILT_SOURCES) config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -697,6 +747,69 @@ clean-libLTLIBRARIES:
 	  echo "rm -f \"$${dir}/so_locations\""; \
 	  rm -f "$${dir}/so_locations"; \
 	done
+src/capnp/$(am__dirstamp):
+	@$(MKDIR_P) src/capnp
+	@: > src/capnp/$(am__dirstamp)
+src/capnp/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) src/capnp/$(DEPDIR)
+	@: > src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/c++.capnp.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/blob.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/arena.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/layout.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/list.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/message.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/schema.capnp.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/schema.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/schema-loader.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/dynamic.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/stringify.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/serialize.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/serialize-packed.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+libcapnp.la: $(libcapnp_la_OBJECTS) $(libcapnp_la_DEPENDENCIES) $(EXTRA_libcapnp_la_DEPENDENCIES) 
+	$(libcapnp_la_LINK) -rpath $(libdir) $(libcapnp_la_OBJECTS) $(libcapnp_la_LIBADD) $(LIBS)
+src/capnp/compiler/$(am__dirstamp):
+	@$(MKDIR_P) src/capnp/compiler
+	@: > src/capnp/compiler/$(am__dirstamp)
+src/capnp/compiler/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) src/capnp/compiler/$(DEPDIR)
+	@: > src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compiler/md5.lo: src/capnp/compiler/$(am__dirstamp) \
+	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compiler/error-reporter.lo:  \
+	src/capnp/compiler/$(am__dirstamp) \
+	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compiler/lexer.capnp.lo: src/capnp/compiler/$(am__dirstamp) \
+	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compiler/lexer.lo: src/capnp/compiler/$(am__dirstamp) \
+	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compiler/grammar.capnp.lo:  \
+	src/capnp/compiler/$(am__dirstamp) \
+	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compiler/parser.lo: src/capnp/compiler/$(am__dirstamp) \
+	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compiler/node-translator.lo:  \
+	src/capnp/compiler/$(am__dirstamp) \
+	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compiler/compiler.lo: src/capnp/compiler/$(am__dirstamp) \
+	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
+src/capnp/schema-parser.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+libcapnpc.la: $(libcapnpc_la_OBJECTS) $(libcapnpc_la_DEPENDENCIES) $(EXTRA_libcapnpc_la_DEPENDENCIES) 
+	$(libcapnpc_la_LINK) -rpath $(libdir) $(libcapnpc_la_OBJECTS) $(libcapnpc_la_LIBADD) $(LIBS)
 src/kj/$(am__dirstamp):
 	@$(MKDIR_P) src/kj
 	@: > src/kj/$(am__dirstamp)
@@ -736,68 +849,8 @@ src/kj/parse/$(DEPDIR)/$(am__dirstamp):
 	@: > src/kj/parse/$(DEPDIR)/$(am__dirstamp)
 src/kj/parse/char.lo: src/kj/parse/$(am__dirstamp) \
 	src/kj/parse/$(DEPDIR)/$(am__dirstamp)
-src/capnp/$(am__dirstamp):
-	@$(MKDIR_P) src/capnp
-	@: > src/capnp/$(am__dirstamp)
-src/capnp/$(DEPDIR)/$(am__dirstamp):
-	@$(MKDIR_P) src/capnp/$(DEPDIR)
-	@: > src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/c++.capnp.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/blob.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/arena.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/layout.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/list.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/message.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/schema.capnp.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/schema.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/schema-loader.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/dynamic.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/stringify.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/serialize.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/serialize-packed.lo: src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/compiler/$(am__dirstamp):
-	@$(MKDIR_P) src/capnp/compiler
-	@: > src/capnp/compiler/$(am__dirstamp)
-src/capnp/compiler/$(DEPDIR)/$(am__dirstamp):
-	@$(MKDIR_P) src/capnp/compiler/$(DEPDIR)
-	@: > src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-src/capnp/compiler/md5.lo: src/capnp/compiler/$(am__dirstamp) \
-	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-src/capnp/compiler/error-reporter.lo:  \
-	src/capnp/compiler/$(am__dirstamp) \
-	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-src/capnp/compiler/lexer.capnp.lo: src/capnp/compiler/$(am__dirstamp) \
-	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-src/capnp/compiler/lexer.lo: src/capnp/compiler/$(am__dirstamp) \
-	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-src/capnp/compiler/grammar.capnp.lo:  \
-	src/capnp/compiler/$(am__dirstamp) \
-	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-src/capnp/compiler/parser.lo: src/capnp/compiler/$(am__dirstamp) \
-	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-src/capnp/compiler/node-translator.lo:  \
-	src/capnp/compiler/$(am__dirstamp) \
-	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-src/capnp/compiler/compiler.lo: src/capnp/compiler/$(am__dirstamp) \
-	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-src/capnp/compiler/module-loader.lo:  \
-	src/capnp/compiler/$(am__dirstamp) \
-	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-libcapnp.la: $(libcapnp_la_OBJECTS) $(libcapnp_la_DEPENDENCIES) $(EXTRA_libcapnp_la_DEPENDENCIES) 
-	$(libcapnp_la_LINK) -rpath $(libdir) $(libcapnp_la_OBJECTS) $(libcapnp_la_LIBADD) $(LIBS)
+libkj.la: $(libkj_la_OBJECTS) $(libkj_la_DEPENDENCIES) $(EXTRA_libkj_la_DEPENDENCIES) 
+	$(libkj_la_LINK) -rpath $(libdir) $(libkj_la_OBJECTS) $(libkj_la_LIBADD) $(LIBS)
 install-binPROGRAMS: $(bin_PROGRAMS)
 	@$(NORMAL_INSTALL)
 	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
@@ -853,12 +906,21 @@ clean-checkPROGRAMS:
 	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
 	echo " rm -f" $$list; \
 	rm -f $$list
+src/capnp/compiler/module-loader.$(OBJEXT):  \
+	src/capnp/compiler/$(am__dirstamp) \
+	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
 src/capnp/compiler/capnp.$(OBJEXT):  \
 	src/capnp/compiler/$(am__dirstamp) \
 	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
 capnp$(EXEEXT): $(capnp_OBJECTS) $(capnp_DEPENDENCIES) $(EXTRA_capnp_DEPENDENCIES) 
 	@rm -f capnp$(EXEEXT)
 	$(CXXLINK) $(capnp_OBJECTS) $(capnp_LDADD) $(LIBS)
+src/capnp/compiler/evolution-test.$(OBJEXT):  \
+	src/capnp/compiler/$(am__dirstamp) \
+	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
+capnp-evolution-test$(EXEEXT): $(capnp_evolution_test_OBJECTS) $(capnp_evolution_test_DEPENDENCIES) $(EXTRA_capnp_evolution_test_DEPENDENCIES) 
+	@rm -f capnp-evolution-test$(EXEEXT)
+	$(CXXLINK) $(capnp_evolution_test_OBJECTS) $(capnp_evolution_test_LDADD) $(LIBS)
 src/kj/capnp_test-common-test.$(OBJEXT): src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/capnp_test-memory-test.$(OBJEXT): src/kj/$(am__dirstamp) \
@@ -889,6 +951,8 @@ src/kj/parse/capnp_test-common-test.$(OBJEXT):  \
 src/kj/parse/capnp_test-char-test.$(OBJEXT):  \
 	src/kj/parse/$(am__dirstamp) \
 	src/kj/parse/$(DEPDIR)/$(am__dirstamp)
+src/capnp/capnp_test-common-test.$(OBJEXT): src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-blob-test.$(OBJEXT): src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-endian-test.$(OBJEXT): src/capnp/$(am__dirstamp) \
@@ -929,6 +993,8 @@ src/capnp/capnp_test-test.capnp.$(OBJEXT): src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-test-import.capnp.$(OBJEXT):  \
 	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/capnp_test-test-import2.capnp.$(OBJEXT):  \
+	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
 capnp-test$(EXEEXT): $(capnp_test_OBJECTS) $(capnp_test_DEPENDENCIES) $(EXTRA_capnp_test_DEPENDENCIES) 
 	@rm -f capnp-test$(EXEEXT)
 	$(CXXLINK) $(capnp_test_OBJECTS) $(capnp_test_LDADD) $(LIBS)
@@ -954,6 +1020,7 @@ mostlyclean-compile:
 	-rm -f src/capnp/c++.capnp.$(OBJEXT)
 	-rm -f src/capnp/c++.capnp.lo
 	-rm -f src/capnp/capnp_test-blob-test.$(OBJEXT)
+	-rm -f src/capnp/capnp_test-common-test.$(OBJEXT)
 	-rm -f src/capnp/capnp_test-dynamic-test.$(OBJEXT)
 	-rm -f src/capnp/capnp_test-encoding-test.$(OBJEXT)
 	-rm -f src/capnp/capnp_test-endian-fallback-test.$(OBJEXT)
@@ -968,6 +1035,7 @@ mostlyclean-compile:
 	-rm -f src/capnp/capnp_test-serialize-test.$(OBJEXT)
 	-rm -f src/capnp/capnp_test-stringify-test.$(OBJEXT)
 	-rm -f src/capnp/capnp_test-test-import.capnp.$(OBJEXT)
+	-rm -f src/capnp/capnp_test-test-import2.capnp.$(OBJEXT)
 	-rm -f src/capnp/capnp_test-test-util.$(OBJEXT)
 	-rm -f src/capnp/capnp_test-test.capnp.$(OBJEXT)
 	-rm -f src/capnp/compiler/capnp.$(OBJEXT)
@@ -979,6 +1047,7 @@ mostlyclean-compile:
 	-rm -f src/capnp/compiler/compiler.lo
 	-rm -f src/capnp/compiler/error-reporter.$(OBJEXT)
 	-rm -f src/capnp/compiler/error-reporter.lo
+	-rm -f src/capnp/compiler/evolution-test.$(OBJEXT)
 	-rm -f src/capnp/compiler/grammar.capnp.$(OBJEXT)
 	-rm -f src/capnp/compiler/grammar.capnp.lo
 	-rm -f src/capnp/compiler/lexer.$(OBJEXT)
@@ -988,7 +1057,6 @@ mostlyclean-compile:
 	-rm -f src/capnp/compiler/md5.$(OBJEXT)
 	-rm -f src/capnp/compiler/md5.lo
 	-rm -f src/capnp/compiler/module-loader.$(OBJEXT)
-	-rm -f src/capnp/compiler/module-loader.lo
 	-rm -f src/capnp/compiler/node-translator.$(OBJEXT)
 	-rm -f src/capnp/compiler/node-translator.lo
 	-rm -f src/capnp/compiler/parser.$(OBJEXT)
@@ -1003,6 +1071,8 @@ mostlyclean-compile:
 	-rm -f src/capnp/message.lo
 	-rm -f src/capnp/schema-loader.$(OBJEXT)
 	-rm -f src/capnp/schema-loader.lo
+	-rm -f src/capnp/schema-parser.$(OBJEXT)
+	-rm -f src/capnp/schema-parser.lo
 	-rm -f src/capnp/schema.$(OBJEXT)
 	-rm -f src/capnp/schema.capnp.$(OBJEXT)
 	-rm -f src/capnp/schema.capnp.lo
@@ -1063,6 +1133,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/blob.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/c++.capnp.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-blob-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-common-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-dynamic-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-encoding-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-endian-fallback-test.Po@am__quote@
@@ -1077,6 +1148,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-serialize-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-stringify-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-test-import.capnp.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-test-util.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-test.capnp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/dynamic.Plo@am__quote@
@@ -1084,6 +1156,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/list.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/message.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/schema-loader.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/schema-parser.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/schema.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/schema.capnp.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/serialize-packed.Plo@am__quote@
@@ -1096,11 +1169,12 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/capnpc-capnp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/compiler.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/error-reporter.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/evolution-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/grammar.capnp.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/lexer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/lexer.capnp.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/md5.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/module-loader.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/module-loader.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/node-translator.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/parser.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/arena.Plo@am__quote@
@@ -1351,6 +1425,20 @@ src/kj/parse/capnp_test-char-test.obj: src/kj/parse/char-test.c++
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='src/kj/parse/char-test.c++' object='src/kj/parse/capnp_test-char-test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/kj/parse/capnp_test-char-test.obj `if test -f 'src/kj/parse/char-test.c++'; then $(CYGPATH_W) 'src/kj/parse/char-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/kj/parse/char-test.c++'; fi`
+
+src/capnp/capnp_test-common-test.o: src/capnp/common-test.c++
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-common-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-common-test.Tpo -c -o src/capnp/capnp_test-common-test.o `test -f 'src/capnp/common-test.c++' || echo '$(srcdir)/'`src/capnp/common-test.c++
+@am__fastdepCXX_TRUE@	$(am__mv) src/capnp/$(DEPDIR)/capnp_test-common-test.Tpo src/capnp/$(DEPDIR)/capnp_test-common-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='src/capnp/common-test.c++' object='src/capnp/capnp_test-common-test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-common-test.o `test -f 'src/capnp/common-test.c++' || echo '$(srcdir)/'`src/capnp/common-test.c++
+
+src/capnp/capnp_test-common-test.obj: src/capnp/common-test.c++
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-common-test.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-common-test.Tpo -c -o src/capnp/capnp_test-common-test.obj `if test -f 'src/capnp/common-test.c++'; then $(CYGPATH_W) 'src/capnp/common-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/common-test.c++'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) src/capnp/$(DEPDIR)/capnp_test-common-test.Tpo src/capnp/$(DEPDIR)/capnp_test-common-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='src/capnp/common-test.c++' object='src/capnp/capnp_test-common-test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-common-test.obj `if test -f 'src/capnp/common-test.c++'; then $(CYGPATH_W) 'src/capnp/common-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/common-test.c++'; fi`
 
 src/capnp/capnp_test-blob-test.o: src/capnp/blob-test.c++
 @am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-blob-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-blob-test.Tpo -c -o src/capnp/capnp_test-blob-test.o `test -f 'src/capnp/blob-test.c++' || echo '$(srcdir)/'`src/capnp/blob-test.c++
@@ -1617,6 +1705,20 @@ src/capnp/capnp_test-test-import.capnp.obj: src/capnp/test-import.capnp.c++
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='src/capnp/test-import.capnp.c++' object='src/capnp/capnp_test-test-import.capnp.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test-import.capnp.obj `if test -f 'src/capnp/test-import.capnp.c++'; then $(CYGPATH_W) 'src/capnp/test-import.capnp.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test-import.capnp.c++'; fi`
+
+src/capnp/capnp_test-test-import2.capnp.o: src/capnp/test-import2.capnp.c++
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-test-import2.capnp.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Tpo -c -o src/capnp/capnp_test-test-import2.capnp.o `test -f 'src/capnp/test-import2.capnp.c++' || echo '$(srcdir)/'`src/capnp/test-import2.capnp.c++
+@am__fastdepCXX_TRUE@	$(am__mv) src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Tpo src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='src/capnp/test-import2.capnp.c++' object='src/capnp/capnp_test-test-import2.capnp.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test-import2.capnp.o `test -f 'src/capnp/test-import2.capnp.c++' || echo '$(srcdir)/'`src/capnp/test-import2.capnp.c++
+
+src/capnp/capnp_test-test-import2.capnp.obj: src/capnp/test-import2.capnp.c++
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-test-import2.capnp.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Tpo -c -o src/capnp/capnp_test-test-import2.capnp.obj `if test -f 'src/capnp/test-import2.capnp.c++'; then $(CYGPATH_W) 'src/capnp/test-import2.capnp.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test-import2.capnp.c++'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Tpo src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='src/capnp/test-import2.capnp.c++' object='src/capnp/capnp_test-test-import2.capnp.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test-import2.capnp.obj `if test -f 'src/capnp/test-import2.capnp.c++'; then $(CYGPATH_W) 'src/capnp/test-import2.capnp.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test-import2.capnp.c++'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -2338,11 +2440,16 @@ maintainer-clean-local:
 
 # Symlink capnpc -> capnp.  The capnp binary will behave like the old capnpc
 # binary (i.e. like "capnp compile") when invoked via this symlink.
+#
+# Also attempt to run ldconfig, because otherwise users get confused.  If
+# it fails (e.g. because the platform doesn't have it, or because the
+# user doesn't have root privileges), don't worry about it.
 install-exec-hook:
-	ln -s capnp $(DESTDIR)$(bindir)/capnpc
+	ln -sf capnp $(DESTDIR)$(bindir)/capnpc
+	ldconfig < /dev/null > /dev/null 2>&1 || true
 
 uninstall-hook:
-	rm $(DESTDIR)$(bindir)/capnpc
+	rm -f $(DESTDIR)$(bindir)/capnpc
 
 @USE_EXTERNAL_CAPNP_TRUE@test_capnpc_middleman: $(test_capnpc_inputs)
 @USE_EXTERNAL_CAPNP_TRUE@	$(CAPNP) compile --src-prefix=$(srcdir)/src -o$(CAPNPC_CXX):src -I$(srcdir)/src $^

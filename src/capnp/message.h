@@ -27,8 +27,6 @@
 #include "common.h"
 #include "layout.h"
 
-#include "list.h"  // TODO(cleanup):  For FromReader.  Move elsewhere?
-
 #ifndef CAPNP_MESSAGE_H_
 #define CAPNP_MESSAGE_H_
 
@@ -40,6 +38,9 @@ namespace _ {  // private
 }
 
 class StructSchema;
+class Orphanage;
+template <typename T>
+class Orphan;
 
 // =======================================================================================
 
@@ -123,7 +124,7 @@ private:
   // because we don't want clients to have to #include arena.h, which itself includes a bunch of
   // big STL headers.  We don't use a pointer to a ReaderArena because that would require an
   // extra malloc on every message which could be expensive when processing small messages.
-  void* arenaSpace[15];
+  void* arenaSpace[15 + sizeof(kj::MutexGuarded<void*>) / sizeof(void*)];
   bool allocatedArena;
 
   _::ReaderArena* arena() { return reinterpret_cast<_::ReaderArena*>(arenaSpace); }
@@ -179,6 +180,10 @@ public:
   // RootType in this case must be DynamicStruct, and you must #include <capnp/dynamic.h> to
   // use this.
 
+  template <typename T>
+  void adoptRoot(Orphan<T>&& orphan);
+  // Like setRoot() but adopts the orphan without copying.
+
   kj::ArrayPtr<const kj::ArrayPtr<const word>> getSegmentsForOutput();
 
   Orphanage getOrphanage();
@@ -202,6 +207,7 @@ private:
   _::StructBuilder initRoot(_::StructSize size);
   void setRootInternal(_::StructReader reader);
   _::StructBuilder getRoot(_::StructSize size);
+  void adoptRootInternal(_::OrphanBuilder orphan);
 };
 
 template <typename RootType>
@@ -234,7 +240,7 @@ template <typename Reader>
 void copyToUnchecked(Reader&& reader, kj::ArrayPtr<word> uncheckedBuffer);
 // Copy the content of the given reader into the given buffer, such that it can safely be passed to
 // readMessageUnchecked().  The buffer's size must be exactly reader.totalSizeInWords() + 1,
-// otherwise an exception will be thrown.
+// otherwise an exception will be thrown.  The buffer must be zero'd before calling.
 
 template <typename Type>
 static typename Type::Reader defaultValue();
@@ -332,7 +338,7 @@ private:
 
 class FlatMessageBuilder: public MessageBuilder {
   // A message builder implementation which allocates from a single flat array, throwing an
-  // exception if it runs out of space.
+  // exception if it runs out of space.  The array must be zero'd before use.
 
 public:
   explicit FlatMessageBuilder(kj::ArrayPtr<word> array);
@@ -371,7 +377,8 @@ inline typename RootType::Builder MessageBuilder::initRoot() {
 template <typename Reader>
 inline void MessageBuilder::setRoot(Reader&& value) {
   typedef FromReader<Reader> RootType;
-  static_assert(kind<RootType>() == Kind::STRUCT, "Root type must be a Cap'n Proto struct type.");
+  static_assert(kind<RootType>() == Kind::STRUCT,
+                "Parameter must be a Reader for a Cap'n Proto struct type.");
   setRootInternal(value._reader);
 }
 
@@ -379,6 +386,12 @@ template <typename RootType>
 inline typename RootType::Builder MessageBuilder::getRoot() {
   static_assert(kind<RootType>() == Kind::STRUCT, "Root type must be a Cap'n Proto struct type.");
   return typename RootType::Builder(getRoot(_::structSize<RootType>()));
+}
+
+template <typename T>
+void MessageBuilder::adoptRoot(Orphan<T>&& orphan) {
+  static_assert(kind<T>() == Kind::STRUCT, "Root type must be a Cap'n Proto struct type.");
+  adoptRootInternal(kj::mv(orphan.builder));
 }
 
 template <typename RootType>
@@ -391,12 +404,6 @@ void copyToUnchecked(Reader&& reader, kj::ArrayPtr<word> uncheckedBuffer) {
   FlatMessageBuilder builder(uncheckedBuffer);
   builder.setRoot(kj::fwd<Reader>(reader));
   builder.requireFilled();
-}
-
-template <typename Type>
-static typename Type::Reader defaultValue() {
-  // TODO(soon):  Correctly handle lists.  Maybe primitives too?
-  return typename Type::Reader(_::StructReader());
 }
 
 }  // namespace capnp

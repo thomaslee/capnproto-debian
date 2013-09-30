@@ -43,6 +43,14 @@ void parseFile(List<Statement>::Reader statements, ParsedFile::Builder result,
 uint64_t generateRandomId();
 // Generate a new random unique ID.  This lives here mostly for lack of a better location.
 
+uint64_t generateChildId(uint64_t parentId, kj::StringPtr childName);
+// Generate the ID for a child node given its parent ID and name.
+
+uint64_t generateGroupId(uint64_t parentId, uint16_t groupIndex);
+// Generate the ID for a group within a struct.
+//
+// TODO(cleanup):  Move generate*Id() somewhere more sensible.
+
 class CapnpParser {
   // Advanced parser interface.  This interface exposes the inner parsers so that you can embed
   // them into your own parsers.
@@ -109,7 +117,7 @@ public:
     Parser<Orphan<Declaration::AnnotationApplication>> annotation;
     Parser<Orphan<LocatedInteger>> uid;
     Parser<Orphan<LocatedInteger>> ordinal;
-    Parser<Orphan<Declaration::Method::Param>> param;
+    Parser<Orphan<Declaration::Param>> param;
 
     DeclParser usingDecl;
     DeclParser constDecl;

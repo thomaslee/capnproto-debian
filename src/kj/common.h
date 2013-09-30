@@ -98,6 +98,18 @@ typedef unsigned char byte;
   #endif
 #endif
 
+#if __OPTIMIZE__ && !defined(NDEBUG) && !defined(DEBUG) && !defined(KJ_DEBUG)
+#warning "You've enabled optimization but not NDEBUG. Usually optimized builds should #define \
+NDEBUG to disable debug asserts, so I am #defining it for you. If you actually want debug asserts, \
+please #define DEBUG or KJ_DEBUG. To make this warning go away, #define NDEBUG yourself, e.g. with \
+the compiler flag -DNDEBUG."
+#define NDEBUG 1
+#endif
+
+#if !defined(NDEBUG) && !defined(KJ_DEBUG)
+#define KJ_DEBUG
+#endif
+
 #define KJ_DISALLOW_COPY(classname) \
   classname(const classname&) = delete; \
   classname& operator=(const classname&) = delete
@@ -109,12 +121,12 @@ typedef unsigned char byte;
 // expect the condition to be true/false enough of the time that it's worth hard-coding branch
 // prediction.
 
-#if defined(NDEBUG) && !__NO_INLINE__
-#define KJ_ALWAYS_INLINE(prototype) inline prototype __attribute__((always_inline))
-// Force a function to always be inlined.  Apply only to the prototype, not to the definition.
-#else
+#if defined(KJ_DEBUG) || __NO_INLINE__
 #define KJ_ALWAYS_INLINE(prototype) inline prototype
 // Don't force inline in debug mode.
+#else
+#define KJ_ALWAYS_INLINE(prototype) inline prototype __attribute__((always_inline))
+// Force a function to always be inlined.  Apply only to the prototype, not to the definition.
 #endif
 
 #define KJ_NORETURN __attribute__((noreturn))
@@ -138,9 +150,7 @@ void unreachable() KJ_NORETURN;
 
 }  // namespace _ (private)
 
-#ifdef NDEBUG
-#define KJ_IREQUIRE(condition, ...)
-#else
+#ifdef KJ_DEBUG
 #define KJ_IREQUIRE(condition, ...) \
     if (KJ_LIKELY(condition)); else ::kj::_::inlineRequireFailure( \
         __FILE__, __LINE__, #condition, #__VA_ARGS__, ##__VA_ARGS__)
@@ -148,6 +158,8 @@ void unreachable() KJ_NORETURN;
 // check preconditions inside inline methods.  KJ_IREQUIRE is particularly useful in that
 // it will be enabled depending on whether the application is compiled in debug mode rather than
 // whether libkj is.
+#else
+#define KJ_IREQUIRE(condition, ...)
 #endif
 
 #define KJ_UNREACHABLE ::kj::_::unreachable();
@@ -185,8 +197,6 @@ void unreachable() KJ_NORETURN;
   ::kj::ArrayPtr<type> name = name##_isOnStack ? \
       kj::arrayPtr(name##_stack, name##_size) : name##_heap
 #endif
-
-#define KJ_ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 
 #define KJ_CONCAT_(x, y) x##y
 #define KJ_CONCAT(x, y) KJ_CONCAT_(x, y)
@@ -325,6 +335,13 @@ inline constexpr auto min(T&& a, U&& b) -> decltype(a < b ? a : b) { return a < 
 template <typename T, typename U>
 inline constexpr auto max(T&& a, U&& b) -> decltype(a > b ? a : b) { return a > b ? a : b; }
 
+template <typename T, size_t s>
+inline constexpr size_t size(T (&arr)[s]) { return s; }
+template <typename T>
+inline constexpr size_t size(T&& arr) { return arr.size(); }
+// Returns the size of the parameter, whether the parameter is a regular C array or a container
+// with a `.size()` method.
+
 // =======================================================================================
 // Useful fake containers
 
@@ -338,11 +355,24 @@ public:
     Iterator() = default;
     inline Iterator(const T& value): value(value) {}
 
-    inline const T& operator*() const { return value; }
+    inline const T&  operator* () const { return value; }
+    inline const T&  operator[](size_t index) const { return value + index; }
     inline Iterator& operator++() { ++value; return *this; }
-    inline Iterator operator++(int) { return Iterator(value++); }
+    inline Iterator  operator++(int) { return Iterator(value++); }
+    inline Iterator& operator--() { --value; return *this; }
+    inline Iterator  operator--(int) { return Iterator(value--); }
+    inline Iterator& operator+=(ptrdiff_t amount) { value += amount; return *this; }
+    inline Iterator& operator-=(ptrdiff_t amount) { value -= amount; return *this; }
+    inline Iterator  operator+ (ptrdiff_t amount) const { return Iterator(value + amount); }
+    inline Iterator  operator- (ptrdiff_t amount) const { return Iterator(value - amount); }
+    inline ptrdiff_t operator- (const Iterator& other) const { return value - other.value; }
+
     inline bool operator==(const Iterator& other) const { return value == other.value; }
     inline bool operator!=(const Iterator& other) const { return value != other.value; }
+    inline bool operator<=(const Iterator& other) const { return value <= other.value; }
+    inline bool operator>=(const Iterator& other) const { return value >= other.value; }
+    inline bool operator< (const Iterator& other) const { return value <  other.value; }
+    inline bool operator> (const Iterator& other) const { return value >  other.value; }
 
   private:
     T value;
@@ -359,12 +389,21 @@ private:
 };
 
 template <typename T>
-inline constexpr Range<Decay<T>> range(T&& begin, T&& end) { return Range<Decay<T>>(begin, end); }
+inline constexpr Range<Decay<T>> range(T begin, T end) { return Range<Decay<T>>(begin, end); }
 // Returns a fake iterable container containing all values of T from `begin` (inclusive) to `end`
 // (exclusive).  Example:
 //
 //     // Prints 1, 2, 3, 4, 5, 6, 7, 8, 9.
 //     for (int i: kj::range(1, 10)) { print(i); }
+
+template <typename T>
+inline constexpr Range<size_t> indices(T&& container) {
+  // Shortcut for iterating over the indices of a container:
+  //
+  //     for (size_t i: kj::indices(myArray)) { handle(myArray[i]); }
+
+  return range<size_t>(0, kj::size(container));
+}
 
 template <typename T>
 class Repeat {
@@ -376,11 +415,24 @@ public:
     Iterator() = default;
     inline Iterator(const T& value, size_t index): value(value), index(index) {}
 
-    inline const T& operator*() const { return value; }
+    inline const T&  operator* () const { return value; }
+    inline const T&  operator[](ptrdiff_t index) const { return value; }
     inline Iterator& operator++() { ++index; return *this; }
-    inline Iterator operator++(int) { return Iterator(value, index++); }
+    inline Iterator  operator++(int) { return Iterator(value, index++); }
+    inline Iterator& operator--() { --index; return *this; }
+    inline Iterator  operator--(int) { return Iterator(value, index--); }
+    inline Iterator& operator+=(ptrdiff_t amount) { index += amount; return *this; }
+    inline Iterator& operator-=(ptrdiff_t amount) { index -= amount; return *this; }
+    inline Iterator  operator+ (ptrdiff_t amount) const { return Iterator(value, index + amount); }
+    inline Iterator  operator- (ptrdiff_t amount) const { return Iterator(value, index - amount); }
+    inline ptrdiff_t operator- (const Iterator& other) const { return index - other.index; }
+
     inline bool operator==(const Iterator& other) const { return index == other.index; }
     inline bool operator!=(const Iterator& other) const { return index != other.index; }
+    inline bool operator<=(const Iterator& other) const { return index <= other.index; }
+    inline bool operator>=(const Iterator& other) const { return index >= other.index; }
+    inline bool operator< (const Iterator& other) const { return index <  other.index; }
+    inline bool operator> (const Iterator& other) const { return index >  other.index; }
 
   private:
     T value;
@@ -600,6 +652,10 @@ inline T* readMaybe(Maybe<T&>&& maybe) { return maybe.ptr; }
 template <typename T>
 inline T* readMaybe(const Maybe<T&>& maybe) { return maybe.ptr; }
 
+template <typename T>
+inline T* readMaybe(T* ptr) { return ptr; }
+// Allow KJ_IF_MAYBE to work on regular pointers.
+
 }  // namespace _ (private)
 
 #define KJ_IF_MAYBE(name, exp) if (auto name = ::kj::_::readMaybe(exp))
@@ -733,6 +789,10 @@ public:
   inline constexpr ArrayPtr(decltype(nullptr)): ptr(nullptr), size_(0) {}
   inline constexpr ArrayPtr(T* ptr, size_t size): ptr(ptr), size_(size) {}
   inline constexpr ArrayPtr(T* begin, T* end): ptr(begin), size_(end - begin) {}
+
+  template <size_t size>
+  inline constexpr ArrayPtr(T (&native)[size]): ptr(native), size_(size) {}
+  // Construct an ArrayPtr from a native C-style array.
 
   inline operator ArrayPtr<const T>() const {
     return ArrayPtr<const T>(ptr, size_);

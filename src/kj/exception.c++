@@ -32,7 +32,7 @@
 #include <execinfo.h>
 #endif
 
-#if defined(__linux__) && !defined(NDEBUG)
+#if defined(__linux__) && defined(KJ_DEBUG)
 #include <stdio.h>
 #include <pthread.h>
 #endif
@@ -42,7 +42,7 @@ namespace kj {
 namespace {
 
 String getStackSymbols(ArrayPtr<void* const> trace) {
-#if defined(__linux__) && !defined(NDEBUG)
+#if defined(__linux__) && defined(KJ_DEBUG)
   // We want to generate a human-readable stack trace.
 
   // TODO(someday):  It would be really great if we could avoid farming out to addr2line and do
@@ -82,7 +82,7 @@ String getStackSymbols(ArrayPtr<void* const> trace) {
 
   char line[512];
   size_t i = 0;
-  while (i < KJ_ARRAY_SIZE(lines) && fgets(line, sizeof(line), p) != nullptr) {
+  while (i < kj::size(lines) && fgets(line, sizeof(line), p) != nullptr) {
     // Don't include exception-handling infrastructure in stack trace.
     if (i == 0 &&
         (strstr(line, "kj/common.c++") != nullptr ||
@@ -184,9 +184,25 @@ Exception::Exception(Nature nature, Durability durability, const char* file, int
 #endif
 }
 
+Exception::Exception(Nature nature, Durability durability, String file, int line,
+                     String description) noexcept
+    : ownFile(kj::mv(file)), file(ownFile.cStr()), line(line), nature(nature),
+      durability(durability), description(mv(description)) {
+#ifdef __CYGWIN__
+  traceCount = 0;
+#else
+  traceCount = backtrace(trace, 16);
+#endif
+}
+
 Exception::Exception(const Exception& other) noexcept
     : file(other.file), line(other.line), nature(other.nature), durability(other.durability),
-      description(str(other.description)), traceCount(other.traceCount) {
+      description(heapString(other.description)), traceCount(other.traceCount) {
+  if (file == other.ownFile.cStr()) {
+    ownFile = heapString(other.ownFile);
+    file = ownFile.cStr();
+  }
+
   memcpy(trace, other.trace, sizeof(trace[0]) * traceCount);
 
   KJ_IF_MAYBE(c, other.context) {
@@ -235,48 +251,12 @@ namespace {
 
 thread_local ExceptionCallback* threadLocalCallback = nullptr;
 
-class RepeatChar {
-  // A pseudo-sequence of characters that is actually just one character repeated.
-  //
-  // TODO(cleanup):  Put this somewhere reusable.  Maybe templatize it too.
-
-public:
-  inline RepeatChar(char c, uint size): c(c), size_(size) {}
-
-  class Iterator {
-  public:
-    Iterator() = default;
-    inline Iterator(char c, uint index): c(c), index(index) {}
-
-    inline Iterator& operator++() { ++index; return *this; }
-    inline Iterator operator++(int) { ++index; return Iterator(c, index - 1); }
-
-    inline char operator*() const { return c; }
-
-    inline bool operator==(const Iterator& other) const { return index == other.index; }
-    inline bool operator!=(const Iterator& other) const { return index != other.index; }
-
-  private:
-    char c;
-    uint index;
-  };
-
-  inline uint size() const { return size_; }
-  inline Iterator begin() const { return Iterator(c, 0); }
-  inline Iterator end() const { return Iterator(c, size_); }
-
-private:
-  char c;
-  uint size_;
-};
-inline RepeatChar KJ_STRINGIFY(RepeatChar value) { return value; }
-
 }  // namespace
 
 ExceptionCallback::ExceptionCallback(): next(getExceptionCallback()) {
   char stackVar;
   ptrdiff_t offset = reinterpret_cast<char*>(this) - &stackVar;
-  KJ_ASSERT(offset < 4096 && offset > -4096,
+  KJ_ASSERT(offset < 65536 && offset > -65536,
             "ExceptionCallback must be allocated on the stack.");
 
   threadLocalCallback = this;
@@ -310,7 +290,12 @@ public:
 #if KJ_NO_EXCEPTIONS
     logException(mv(exception));
 #else
-    throw ExceptionImpl(mv(exception));
+    if (std::uncaught_exception()) {
+      // Bad time to throw an exception.  Just log instead.
+      logException(mv(exception));
+    } else {
+      throw ExceptionImpl(mv(exception));
+    }
 #endif
   }
 
@@ -323,7 +308,7 @@ public:
   }
 
   void logMessage(const char* file, int line, int contextDepth, String&& text) override {
-    text = str(RepeatChar('_', contextDepth), file, ":", line, ": ", mv(text));
+    text = str(kj::repeat('_', contextDepth), file, ":", line, ": ", mv(text));
 
     StringPtr textPtr = text;
 
