@@ -3,8 +3,10 @@ capnproto (0.3.0-1) unstable; urgency=low
   * Fix Vcs-Git URL
   * Imported Upstream version 0.3.0
   * Bump Debian script versions for runtime library
+  * Packaging for libkj-0.3.0 and libkj-dev
+  * Package libcapnpc-0.3.0.so in libcapnp-0.3.0
 
- -- Tom Lee <debian@tomlee.co>  Mon, 30 Sep 2013 04:53:55 -0700
+ -- Tom Lee <debian@tomlee.co>  Mon, 12 Nov 2013 09:57:01 -0700
 
 capnproto (0.2.1-1) unstable; urgency=low
 
