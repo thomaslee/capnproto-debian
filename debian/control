@@ -60,7 +60,7 @@ Description: Cap'n Proto C++ library
  of the rougher aspects of Protocol Buffers & introduces a number of new
  features to boot.
  .
- This package contains the runtime library needed for C++ applications.
+ This package contains the runtime libraries needed for C++ applications.
 
 Package: libcapnp-dev
 Architecture: any
