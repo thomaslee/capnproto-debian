@@ -1,3 +1,3 @@
 libcapnp-0.3.0 binary: no-symbols-control-file usr/lib/libcapnp-0.3.0.so
-libcapnpc-0.3.0 binary: no-symbols-control-file usr/lib/libcapnpc-0.3.0.so
-libkj-0.3.0 binary: no-symbols-control-file usr/lib/libkj-0.3.0.so
+libcapnp-0.3.0 binary: no-symbols-control-file usr/lib/libcapnpc-0.3.0.so
+libcapnp-0.3.0 binary: no-symbols-control-file usr/lib/libkj-0.3.0.so
