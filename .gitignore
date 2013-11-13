@@ -22,10 +22,7 @@ Makefile
 *.debhelper
 /debian/capnproto-compiler
 /debian/libcapnp-0.3.0
-/debian/libcapnp-0.3.0
 /debian/libcapnp-dev
-/debian/libkj-0.3.0
-/debian/libkj-dev
 *.substvars
 /capnp-test
 *.swp
