@@ -10,45 +10,10 @@ Homepage: http://kentonv.github.io/capnproto/
 Vcs-Git: git://github.com/thomaslee/capnproto-debian
 Vcs-Browser: http://github.com/thomaslee/capnproto-debian
 
-Package: libkj-0.3.0
-Architecture: any
-Section: libs
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: libkj C++ utility library
- Similar to Protocol Buffers, Cap'n Proto is an efficient means of
- serializing structured data to be transferred across a network or
- written to disk. Users write a Cap'n Proto definition file that
- drives a code generator, which in turn emits C++ code for encoding &
- decoding messages in the Cap'n Proto format.
- .
- In addition to being extremely fast, Cap'n Proto also smooths over some
- of the rougher aspects of Protocol Buffers & introduces a number of new
- features to boot.
- .
- This package contains a library containing useful utility classes.
-
-Package: libkj-dev
-Architecture: any
-Section: libdevel
-Depends: ${misc:Depends}, libkj-0.3.0 (= ${binary:Version})
-Description: libkj C++ utility library (development files)
- Similar to Protocol Buffers, Cap'n Proto is an efficient means of
- serializing structured data to be transferred across a network or
- written to disk. Users write a Cap'n Proto definition file that
- drives a code generator, which in turn emits C++ code for encoding &
- decoding messages in the Cap'n Proto format.
- .
- In addition to being extremely fast, Cap'n Proto also smooths over some
- of the rougher aspects of Protocol Buffers & introduces a number of new
- features to boot.
- .
- This package contains the headers & static libraries for writing C++
- applications using libkj.
-
 Package: libcapnp-0.3.0
 Architecture: any
 Section: libs
-Depends: ${shlibs:Depends}, ${misc:Depends}, libkj-0.3.0 (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Cap'n Proto C++ library
  Similar to Protocol Buffers, Cap'n Proto is an efficient means of
  serializing structured data to be transferred across a network or

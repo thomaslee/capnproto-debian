@@ -2,4 +2,6 @@ usr/lib/libcapnp.a
 usr/lib/libcapnp.so
 usr/lib/libcapnpc.a
 usr/lib/libcapnpc.so
-usr/include/capnp
+usr/lib/libkj.a
+usr/lib/libkj.so
+usr/include
