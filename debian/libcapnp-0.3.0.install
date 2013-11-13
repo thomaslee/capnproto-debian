@@ -1,2 +1,3 @@
 usr/lib/libcapnp-*.so
 usr/lib/libcapnpc-*.so
+usr/lib/libkj-*.so
