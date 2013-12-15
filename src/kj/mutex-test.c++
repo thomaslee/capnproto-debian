@@ -142,5 +142,29 @@ TEST(Mutex, Lazy) {
   EXPECT_EQ(123u, lazy.get([](SpaceFor<uint>& space) { return space.construct(789); }));
 }
 
+TEST(Mutex, LazyException) {
+  Lazy<uint> lazy;
+
+  auto exception = kj::runCatchingExceptions([&]() {
+    lazy.get([&](SpaceFor<uint>& space) -> Own<uint> {
+          KJ_FAIL_ASSERT("foo") { break; }
+          return space.construct(123);
+        });
+  });
+  EXPECT_TRUE(exception != nullptr);
+
+  uint i = lazy.get([&](SpaceFor<uint>& space) -> Own<uint> {
+        return space.construct(456);
+      });
+
+  // Unfortunately, the results differ depending on whether exceptions are enabled.
+  // TODO(someday):  Fix this?  Does it matter?
+#if KJ_NO_EXCEPTIONS
+  EXPECT_EQ(123, i);
+#else
+  EXPECT_EQ(456, i);
+#endif
+}
+
 }  // namespace
 }  // namespace kj

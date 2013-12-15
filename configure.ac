@@ -1,6 +1,6 @@
 ## Process this file with autoconf to produce configure.
 
-AC_INIT([Capn Proto],[0.3.0],[capnproto@googlegroups.com],[capnproto-c++])
+AC_INIT([Capn Proto],[0.4.0],[capnproto@googlegroups.com],[capnproto-c++])
 
 AC_CONFIG_SRCDIR([src/capnp/layout.c++])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -48,6 +48,12 @@ AS_IF([test "$external_capnp" != "no"], [
 ])
 AM_CONDITIONAL([USE_EXTERNAL_CAPNP], [test "$external_capnp" != "no"])
 
+AC_SEARCH_LIBS(sched_yield, rt)
+
+# Users will need to use the same -stdlib as us so we'd better let pkg-config know about it.
+STDLIB_FLAG=`echo "$CXX $CXXFLAGS" | grep -o ' [[-]]stdlib=[[^ ]]*'`
+AC_SUBST([STDLIB_FLAG])
+
 LIBS="$PTHREAD_LIBS $LIBS"
 CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS"
 
@@ -57,5 +63,5 @@ CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS"
 ac_configure_args="$ac_configure_args 'CXX=$CXX'"
 AC_CONFIG_SUBDIRS([gtest])
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile capnp.pc capnp-rpc.pc])
 AC_OUTPUT

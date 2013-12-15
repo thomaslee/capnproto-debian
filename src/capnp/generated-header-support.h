@@ -29,6 +29,8 @@
 #include "layout.h"
 #include "list.h"
 #include "orphan.h"
+#include "pointer-helpers.h"
+#include "any.h"
 #include <kj/string.h>
 #include <kj/string-tree.h>
 
@@ -42,106 +44,6 @@ struct ToDynamic_;   // Defined in dynamic.h, needs to be declared as everyone's
 struct DynamicStruct;  // So that it can be declared a friend.
 
 namespace _ {  // private
-
-template <typename T>
-struct PointerHelpers<T, Kind::STRUCT> {
-  static inline typename T::Reader get(StructReader reader, WirePointerCount index,
-                                       const word* defaultValue = nullptr) {
-    return typename T::Reader(reader.getStructField(index, defaultValue));
-  }
-  static inline typename T::Builder get(StructBuilder builder, WirePointerCount index,
-                                        const word* defaultValue = nullptr) {
-    return typename T::Builder(builder.getStructField(index, structSize<T>(), defaultValue));
-  }
-  static inline void set(StructBuilder builder, WirePointerCount index,
-                         typename T::Reader value) {
-    builder.setStructField(index, value._reader);
-  }
-  static inline typename T::Builder init(StructBuilder builder, WirePointerCount index) {
-    return typename T::Builder(builder.initStructField(index, structSize<T>()));
-  }
-  static inline void adopt(StructBuilder builder, WirePointerCount index, Orphan<T>&& value) {
-    builder.adopt(index, kj::mv(value.builder));
-  }
-  static inline Orphan<T> disown(StructBuilder builder, WirePointerCount index) {
-    return Orphan<T>(builder.disown(index));
-  }
-};
-
-template <typename T>
-struct PointerHelpers<List<T>, Kind::LIST> {
-  static inline typename List<T>::Reader get(StructReader reader, WirePointerCount index,
-                                             const word* defaultValue = nullptr) {
-    return typename List<T>::Reader(List<T>::getAsFieldOf(reader, index, defaultValue));
-  }
-  static inline typename List<T>::Builder get(StructBuilder builder, WirePointerCount index,
-                                              const word* defaultValue = nullptr) {
-    return typename List<T>::Builder(List<T>::getAsFieldOf(builder, index, defaultValue));
-  }
-  static inline void set(StructBuilder builder, WirePointerCount index,
-                         typename List<T>::Reader value) {
-    builder.setListField(index, value.reader);
-  }
-  template <typename U>
-  static void set(StructBuilder builder, WirePointerCount index, std::initializer_list<U> value) {
-    auto l = init(builder, index, value.size());
-    uint i = 0;
-    for (auto& element: value) {
-      l.set(i++, element);
-    }
-  }
-  static inline typename List<T>::Builder init(
-      StructBuilder builder, WirePointerCount index, uint size) {
-    return typename List<T>::Builder(List<T>::initAsFieldOf(builder, index, size));
-  }
-  static inline void adopt(StructBuilder builder, WirePointerCount index, Orphan<List<T>>&& value) {
-    builder.adopt(index, kj::mv(value.builder));
-  }
-  static inline Orphan<List<T>> disown(StructBuilder builder, WirePointerCount index) {
-    return Orphan<List<T>>(builder.disown(index));
-  }
-};
-
-template <typename T>
-struct PointerHelpers<T, Kind::BLOB> {
-  static inline typename T::Reader get(StructReader reader, WirePointerCount index,
-                                       const void* defaultValue = nullptr,
-                                       uint defaultBytes = 0) {
-    return reader.getBlobField<T>(index, defaultValue, defaultBytes * BYTES);
-  }
-  static inline typename T::Builder get(StructBuilder builder, WirePointerCount index,
-                                        const void* defaultValue = nullptr,
-                                        uint defaultBytes = 0) {
-    return builder.getBlobField<T>(index, defaultValue, defaultBytes * BYTES);
-  }
-  static inline void set(StructBuilder builder, WirePointerCount index, typename T::Reader value) {
-    builder.setBlobField<T>(index, value);
-  }
-  static inline typename T::Builder init(StructBuilder builder, WirePointerCount index, uint size) {
-    return builder.initBlobField<T>(index, size * BYTES);
-  }
-  static inline void adopt(StructBuilder builder, WirePointerCount index, Orphan<T>&& value) {
-    builder.adopt(index, kj::mv(value.builder));
-  }
-  static inline Orphan<T> disown(StructBuilder builder, WirePointerCount index) {
-    return Orphan<T>(builder.disown(index));
-  }
-};
-
-struct UncheckedMessage {
-  typedef const word* Reader;
-};
-
-template <>
-struct PointerHelpers<UncheckedMessage> {
-  // Reads an Object field as an unchecked message pointer.  Requires that the containing message is
-  // itself unchecked.  This hack is currently private.  It is used to locate default values within
-  // encoded schemas.
-
-  static inline const word* get(StructReader reader, WirePointerCount index) {
-    return reader.getUncheckedPointer(index);
-  }
-};
 
 struct RawSchema {
   // The generated code defines a constant RawSchema for every compiled declaration.
@@ -206,8 +108,13 @@ inline const RawSchema& rawSchema() {
   return RawSchema_<T>::get();
 }
 
-template <typename T>
-struct TypeId_;
+template <typename T> struct TypeId_;
+
+extern const RawSchema NULL_INTERFACE_SCHEMA;  // defined in schema.c++
+template <> struct TypeId_<Capability> { static constexpr uint64_t typeId = 0x03; };
+template <> struct RawSchema_<Capability> {
+  static inline const RawSchema& get() { return NULL_INTERFACE_SCHEMA; }
+};
 
 template <typename T>
 struct UnionMemberIndex_;
@@ -228,6 +135,7 @@ inline kj::StringTree structString(StructReader reader) {
   return structString(reader, rawSchema<T>());
 }
 
+// TODO(cleanup):  Unify ConstStruct and ConstList.
 template <typename T>
 class ConstStruct {
 public:
@@ -236,7 +144,7 @@ public:
   inline explicit constexpr ConstStruct(const word* ptr): ptr(ptr) {}
 
   inline typename T::Reader get() const {
-    return typename T::Reader(StructReader::readRootUnchecked(ptr));
+    return AnyPointer::Reader(PointerReader::getRootUnchecked(ptr)).getAs<T>();
   }
 
   inline operator typename T::Reader() const { return get(); }
@@ -255,8 +163,7 @@ public:
   inline explicit constexpr ConstList(const word* ptr): ptr(ptr) {}
 
   inline typename List<T>::Reader get() const {
-    return typename List<T>::Reader(ListReader::readRootUnchecked(
-        ptr, elementSizeForType<T>()));
+    return AnyPointer::Reader(PointerReader::getRootUnchecked(ptr)).getAs<List<T>>();
   }
 
   inline operator typename List<T>::Reader() const { return get(); }
@@ -311,6 +218,15 @@ template <typename T>
 inline constexpr uint64_t typeId() { return _::TypeId_<T>::typeId; }
 // typeId<MyType>() returns the type ID as defined in the schema.  Works with structs, enums, and
 // interfaces.
+
+template <typename T>
+inline constexpr uint sizeInWords() {
+  // Return the size, in words, of a Struct type, if allocated free-standing (not in a list).
+  // May be useful for pre-computing space needed in order to precisely allocate messages.
+
+  return (WordCount32(_::structSize<T>().data) +
+      _::structSize<T>().pointers * WORDS_PER_POINTER) / WORDS;
+}
 
 }  // namespace capnp
 

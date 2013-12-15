@@ -29,11 +29,6 @@ namespace capnp {
 namespace _ {  // private
 namespace {
 
-#if KJ_NO_EXCEPTIONS
-#undef EXPECT_ANY_THROW
-#define EXPECT_ANY_THROW(code) EXPECT_DEATH(code, ".")
-#endif
-
 TEST(Schema, Structs) {
   StructSchema schema = Schema::from<TestAllTypes>();
 
@@ -46,8 +41,8 @@ TEST(Schema, Structs) {
   EXPECT_ANY_THROW(schema.getDependency(typeId<TestDefaults>()));
 
   EXPECT_TRUE(schema.asStruct() == schema);
-  EXPECT_ANY_THROW(schema.asEnum());
-  EXPECT_ANY_THROW(schema.asInterface());
+  EXPECT_NONFATAL_FAILURE(schema.asEnum());
+  EXPECT_NONFATAL_FAILURE(schema.asInterface());
 
   ASSERT_EQ(schema.getFields().size(), schema.getProto().getStruct().getFields().size());
   StructSchema::Field field = schema.getFields()[0];
@@ -126,8 +121,8 @@ TEST(Schema, Enums) {
   EXPECT_ANY_THROW(schema.getDependency(typeId<TestAllTypes>()));
   EXPECT_ANY_THROW(schema.getDependency(typeId<TestEnum>()));
 
-  EXPECT_ANY_THROW(schema.asStruct());
-  EXPECT_ANY_THROW(schema.asInterface());
+  EXPECT_NONFATAL_FAILURE(schema.asStruct());
+  EXPECT_NONFATAL_FAILURE(schema.asInterface());
   EXPECT_TRUE(schema.asEnum() == schema);
 
   ASSERT_EQ(schema.getEnumerants().size(),
@@ -248,6 +243,23 @@ TEST(Schema, UnnamedUnion) {
   EXPECT_TRUE(schema.findFieldByName("bar") != nullptr);
   EXPECT_TRUE(schema.findFieldByName("before") != nullptr);
   EXPECT_TRUE(schema.findFieldByName("after") != nullptr);
+}
+
+TEST(Schema, NullSchemas) {
+  EXPECT_EQ(0xff, (uint)Schema().getProto().which());
+  EXPECT_TRUE(StructSchema().getProto().isStruct());
+  EXPECT_TRUE(EnumSchema().getProto().isEnum());
+  EXPECT_TRUE(InterfaceSchema().getProto().isInterface());
+  EXPECT_TRUE(ConstSchema().getProto().isConst());
+
+  EXPECT_EQ("(null schema)", Schema().getProto().getDisplayName());
+  EXPECT_EQ("(null struct schema)", StructSchema().getProto().getDisplayName());
+  EXPECT_EQ("(null enum schema)", EnumSchema().getProto().getDisplayName());
+  EXPECT_EQ("(null interface schema)", InterfaceSchema().getProto().getDisplayName());
+  EXPECT_EQ("(null const schema)", ConstSchema().getProto().getDisplayName());
+
+  EXPECT_TRUE(Schema::from<Capability>() == InterfaceSchema());
+  EXPECT_EQ(InterfaceSchema().getProto().getId(), typeId<Capability>());
 }
 
 }  // namespace

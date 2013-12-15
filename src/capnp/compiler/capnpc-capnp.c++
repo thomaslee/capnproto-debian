@@ -48,6 +48,10 @@
 namespace capnp {
 namespace {
 
+bool hasDiscriminantValue(const schema::Field::Reader& reader) {
+  return reader.getDiscriminantValue() != schema::Field::NO_DISCRIMINANT;
+}
+
 struct Indent {
   uint amount;
   Indent() = default;
@@ -175,12 +179,12 @@ private:
       case schema::Type::LIST:
         return kj::strTree("List(", genType(type.getList().getElementType(), scope), ")");
       case schema::Type::ENUM:
-        return nodeName(scope.getDependency(type.getEnum().getTypeId()), scope);
+        return nodeName(schemaLoader.get(type.getEnum().getTypeId()), scope);
       case schema::Type::STRUCT:
-        return nodeName(scope.getDependency(type.getStruct().getTypeId()), scope);
+        return nodeName(schemaLoader.get(type.getStruct().getTypeId()), scope);
       case schema::Type::INTERFACE:
-        return nodeName(scope.getDependency(type.getInterface().getTypeId()), scope);
-      case schema::Type::OBJECT: return kj::strTree("Object");
+        return nodeName(schemaLoader.get(type.getInterface().getTypeId()), scope);
+      case schema::Type::ANY_POINTER: return kj::strTree("AnyPointer");
     }
     return kj::strTree();
   }
@@ -205,7 +209,7 @@ private:
       case schema::Type::ENUM: return 16;
       case schema::Type::STRUCT: return -1;
       case schema::Type::INTERFACE: return -1;
-      case schema::Type::OBJECT: return -1;
+      case schema::Type::ANY_POINTER: return -1;
     }
     return 0;
   }
@@ -230,7 +234,7 @@ private:
       case schema::Value::ENUM: return value.getEnum() == 0;
       case schema::Value::STRUCT: return !value.hasStruct();
       case schema::Value::INTERFACE: return true;
-      case schema::Value::OBJECT: return true;
+      case schema::Value::ANY_POINTER: return true;
     }
     return true;
   }
@@ -256,13 +260,13 @@ private:
         return kj::strTree(DynamicValue::Reader(value.getData()));
       case schema::Value::LIST: {
         KJ_REQUIRE(type.isList(), "type/value mismatch");
-        auto listValue = value.getList<DynamicList>(
+        auto listValue = value.getList().getAs<DynamicList>(
             ListSchema::of(type.getList().getElementType(), scope));
         return kj::strTree(listValue);
       }
       case schema::Value::ENUM: {
         KJ_REQUIRE(type.isEnum(), "type/value mismatch");
-        auto enumNode = scope.getDependency(type.getEnum().getTypeId()).asEnum().getProto();
+        auto enumNode = schemaLoader.get(type.getEnum().getTypeId()).asEnum().getProto();
         auto enumerants = enumNode.getEnum().getEnumerants();
         KJ_REQUIRE(value.getEnum() < enumerants.size(),
                 "Enum value out-of-range.", value.getEnum(), enumNode.getDisplayName());
@@ -270,14 +274,14 @@ private:
       }
       case schema::Value::STRUCT: {
         KJ_REQUIRE(type.isStruct(), "type/value mismatch");
-        auto structValue = value.getStruct<DynamicStruct>(
-            scope.getDependency(type.getStruct().getTypeId()).asStruct());
+        auto structValue = value.getStruct().getAs<DynamicStruct>(
+            schemaLoader.get(type.getStruct().getTypeId()).asStruct());
         return kj::strTree(structValue);
       }
       case schema::Value::INTERFACE: {
         return kj::strTree("");
       }
-      case schema::Value::OBJECT: {
+      case schema::Value::ANY_POINTER: {
         return kj::strTree("");
       }
     }
@@ -344,7 +348,7 @@ private:
 
     bool seenUnion = false;
     return KJ_MAP(field, sortByCodeOrder(schema.getFields())) {
-      if (field.getProto().hasDiscriminantValue()) {
+      if (hasDiscriminantValue(field.getProto())) {
         if (seenUnion) {
           return kj::strTree();
         } else {
@@ -381,23 +385,42 @@ private:
             ";  # ", size == -1 ? kj::strTree("ptr[", slot.getOffset(), "]")
                                 : kj::strTree("bits[", slot.getOffset() * size, ", ",
                                               (slot.getOffset() + 1) * size, ")"),
-            field.hasDiscriminantValue()
+            hasDiscriminantValue(field)
                 ? kj::strTree(", union tag = ", field.getDiscriminantValue()) : kj::strTree(),
             "\n");
       }
       case schema::Field::GROUP: {
-        auto group = scope.getDependency(field.getGroup().getTypeId()).asStruct();
+        auto group = schemaLoader.get(field.getGroup().getTypeId()).asStruct();
         return kj::strTree(
             indent, field.getName(),
             " :group", genAnnotations(field.getAnnotations(), scope), " {",
-            field.hasDiscriminantValue()
-                ? kj::strTree(", union tag = ", field.getDiscriminantValue()) : kj::strTree(),
+            hasDiscriminantValue(field)
+                ? kj::strTree("  # union tag = ", field.getDiscriminantValue()) : kj::strTree(),
             "\n",
             genStructFields(group, indent.next()),
             indent, "}\n");
       }
     }
     return kj::strTree();
+  }
+
+  kj::StringTree genParamList(InterfaceSchema interface, StructSchema schema) {
+    if (schema.getProto().getScopeId() == 0) {
+      // A named parameter list.
+      return kj::strTree("(", kj::StringTree(
+          KJ_MAP(field, schema.getFields()) {
+            auto proto = field.getProto();
+            auto slot = proto.getSlot();
+
+            return kj::strTree(
+                proto.getName(), " :", genType(slot.getType(), interface),
+                isEmptyValue(slot.getDefaultValue()) ? kj::strTree("") :
+                    kj::strTree(" = ", genValue(
+                        slot.getType(), slot.getDefaultValue(), interface)));
+          }, ", "), ")");
+    } else {
+      return nodeName(schema, interface);
+    }
   }
 
   kj::StringTree genDecl(Schema schema, Text::Reader name, uint64_t scopeId, Indent indent) {
@@ -439,28 +462,17 @@ private:
             indent, "}\n");
       }
       case schema::Node::INTERFACE: {
+        auto interface = schema.asInterface();
         return kj::strTree(
             indent, "interface ", name, " @0x", kj::hex(proto.getId()),
             genAnnotations(schema), " {\n",
-            KJ_MAP(method, sortByCodeOrder(schema.asInterface().getMethods())) {
-              int i = 0;
+            KJ_MAP(method, sortByCodeOrder(interface.getMethods())) {
               auto methodProto = method.getProto();
+              auto params = schemaLoader.get(methodProto.getParamStructType()).asStruct();
+              auto results = schemaLoader.get(methodProto.getResultStructType()).asStruct();
               return kj::strTree(
-                  indent.next(), methodProto.getName(), " @", method.getIndex(), "(",
-                  KJ_MAP(param, methodProto.getParams()) {
-                    bool hasDefault = i >= methodProto.getRequiredParamCount() ||
-                        !isEmptyValue(param.getDefaultValue());
-                    return kj::strTree(
-                        i++ > 0 ? ", " : "",
-                        param.getName(), ": ", genType(param.getType(), schema),
-                        hasDefault
-                            ? kj::strTree(" = ", genValue(
-                                param.getType(), param.getDefaultValue(), schema))
-                            : kj::strTree(),
-                        genAnnotations(param.getAnnotations(), schema));
-                  },
-                  ") :", genType(methodProto.getReturnType(), schema),
-                  genAnnotations(methodProto.getAnnotations(), schema), ";\n");
+                  indent.next(), methodProto.getName(), " @", method.getIndex(), " ",
+                  genParamList(interface, params), " -> ", genParamList(interface, results), ";\n");
             },
             genNestedDecls(schema, indent.next()),
             indent, "}\n");
@@ -494,7 +506,7 @@ private:
 
         if (targetsAll) {
           targets = kj::Vector<kj::String>(1);
-          targets[0] = kj::heapString("*");
+          targets.add(kj::heapString("*"));
         }
 
         return kj::strTree(

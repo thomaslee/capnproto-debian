@@ -156,6 +156,9 @@ public:
   inline ArrayPtr<T> asPtr() {
     return ArrayPtr<T>(ptr, size_);
   }
+  inline ArrayPtr<const T> asPtr() const {
+    return ArrayPtr<T>(ptr, size_);
+  }
 
   inline size_t size() const { return size_; }
   inline T& operator[](size_t index) const {
@@ -256,6 +259,7 @@ inline Array<T> heapArray(size_t size) {
 }
 
 template <typename T> Array<T> heapArray(const T* content, size_t size);
+template <typename T> Array<T> heapArray(ArrayPtr<T> content);
 template <typename T> Array<T> heapArray(ArrayPtr<const T> content);
 template <typename T, typename Iterator> Array<T> heapArray(Iterator begin, Iterator end);
 template <typename T> Array<T> heapArray(std::initializer_list<T> init);
@@ -444,7 +448,7 @@ public:
   inline explicit constexpr CappedArray(size_t s): currentSize(s) {}
 
   inline size_t size() const { return currentSize; }
-  inline void setSize(size_t s) { currentSize = s; }
+  inline void setSize(size_t s) { KJ_IREQUIRE(s <= fixedSize); currentSize = s; }
   inline T* begin() { return content; }
   inline T* end() { return content + currentSize; }
   inline const T* begin() const { return content; }
@@ -566,8 +570,7 @@ T* HeapArrayDisposer::allocateUninitialized(size_t count) {
   return Allocate_<T, true, true>::allocate(0, count);
 }
 
-template <typename Element, typename Iterator,
-          bool trivial = __has_trivial_copy(Element) && __has_trivial_assign(Element)>
+template <typename Element, typename Iterator, bool = canMemcpy<Element>()>
 struct CopyConstructArray_;
 
 template <typename T>
@@ -648,6 +651,13 @@ template <typename T>
 Array<T> heapArray(const T* content, size_t size) {
   ArrayBuilder<T> builder = heapArrayBuilder<T>(size);
   builder.addAll(content, content + size);
+  return builder.finish();
+}
+
+template <typename T>
+Array<T> heapArray(ArrayPtr<T> content) {
+  ArrayBuilder<T> builder = heapArrayBuilder<T>(content.size());
+  builder.addAll(content);
   return builder.finish();
 }
 
