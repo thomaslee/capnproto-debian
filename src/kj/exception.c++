@@ -28,11 +28,12 @@
 #include <stdlib.h>
 #include <exception>
 
-#ifndef __CYGWIN__
+#if __linux__ || __APPLE__
+#define KJ_HAS_BACKTRACE 1
 #include <execinfo.h>
 #endif
 
-#if defined(__linux__) && defined(KJ_DEBUG)
+#if __linux__ && defined(KJ_DEBUG)
 #include <stdio.h>
 #include <pthread.h>
 #endif
@@ -42,7 +43,7 @@ namespace kj {
 namespace {
 
 String getStackSymbols(ArrayPtr<void* const> trace) {
-#if defined(__linux__) && defined(KJ_DEBUG)
+#if __linux__ && defined(KJ_DEBUG)
   // We want to generate a human-readable stack trace.
 
   // TODO(someday):  It would be really great if we could avoid farming out to addr2line and do
@@ -130,8 +131,9 @@ ArrayPtr<const char> KJ_STRINGIFY(Exception::Nature nature) {
 
 ArrayPtr<const char> KJ_STRINGIFY(Exception::Durability durability) {
   static const char* DURABILITY_STRINGS[] = {
+    "permanent",
     "temporary",
-    "permanent"
+    "overloaded"
   };
 
   const char* s = DURABILITY_STRINGS[static_cast<uint>(durability)];
@@ -177,7 +179,7 @@ Exception::Exception(Nature nature, Durability durability, const char* file, int
                      String description) noexcept
     : file(file), line(line), nature(nature), durability(durability),
       description(mv(description)) {
-#ifdef __CYGWIN__
+#ifndef KJ_HAS_BACKTRACE
   traceCount = 0;
 #else
   traceCount = backtrace(trace, 16);
@@ -188,7 +190,7 @@ Exception::Exception(Nature nature, Durability durability, String file, int line
                      String description) noexcept
     : ownFile(kj::mv(file)), file(ownFile.cStr()), line(line), nature(nature),
       durability(durability), description(mv(description)) {
-#ifdef __CYGWIN__
+#ifndef KJ_HAS_BACKTRACE
   traceCount = 0;
 #else
   traceCount = backtrace(trace, 16);
@@ -206,7 +208,7 @@ Exception::Exception(const Exception& other) noexcept
   memcpy(trace, other.trace, sizeof(trace[0]) * traceCount);
 
   KJ_IF_MAYBE(c, other.context) {
-    context = heap(*c);
+    context = heap(**c);
   }
 }
 
@@ -215,7 +217,7 @@ Exception::~Exception() noexcept {}
 Exception::Context::Context(const Context& other) noexcept
     : file(other.file), line(other.line), description(str(other.description)) {
   KJ_IF_MAYBE(n, other.next) {
-    next = heap(*n);
+    next = heap(**n);
   }
 }
 
@@ -245,11 +247,7 @@ const char* ExceptionImpl::what() const noexcept {
 
 namespace {
 
-#if __GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 8)
-#define thread_local __thread
-#endif
-
-thread_local ExceptionCallback* threadLocalCallback = nullptr;
+static __thread ExceptionCallback* threadLocalCallback = nullptr;
 
 }  // namespace
 
@@ -332,7 +330,8 @@ private:
     getExceptionCallback().logMessage(e.getFile(), e.getLine(), 0, str(
         e.getNature(), e.getDurability() == Exception::Durability::TEMPORARY ? " (temporary)" : "",
         e.getDescription() == nullptr ? "" : ": ", e.getDescription(),
-        "\nstack: ", strArray(e.getStackTrace(), " "), "\n"));
+        e.getStackTrace().size() > 0 ? "\nstack: " : "", strArray(e.getStackTrace(), " "),
+        getStackSymbols(e.getStackTrace()), "\n"));
   }
 };
 
@@ -340,6 +339,15 @@ ExceptionCallback& getExceptionCallback() {
   static ExceptionCallback::RootExceptionCallback defaultCallback;
   ExceptionCallback* scoped = threadLocalCallback;
   return scoped != nullptr ? *scoped : defaultCallback;
+}
+
+void throwFatalException(kj::Exception&& exception) {
+  getExceptionCallback().onFatalException(kj::mv(exception));
+  abort();
+}
+
+void throwRecoverableException(kj::Exception&& exception) {
+  getExceptionCallback().onRecoverableException(kj::mv(exception));
 }
 
 // =======================================================================================
@@ -422,7 +430,7 @@ public:
   Maybe<Exception> caught;
 };
 
-Maybe<Exception> runCatchingExceptions(Runnable& runnable) {
+Maybe<Exception> runCatchingExceptions(Runnable& runnable) noexcept {
 #if KJ_NO_EXCEPTIONS
   RecoverableExceptionCatcher catcher;
   runnable.run();

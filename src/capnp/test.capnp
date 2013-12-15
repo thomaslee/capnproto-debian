@@ -160,10 +160,10 @@ struct TestDefaults {
   interfaceList @33 : List(Void);  # TODO
 }
 
-struct TestObject {
-  objectField @0 :Object;
+struct TestAnyPointer {
+  anyPointerField @0 :AnyPointer;
 
-  # Do not add any other fields here!  Some tests rely on objectField being the last pointer
+  # Do not add any other fields here!  Some tests rely on anyPointerField being the last pointer
   # in the struct.
 }
 
@@ -476,8 +476,23 @@ struct TestNewVersion {
 
 struct TestStructUnion {
   un @0! :union {
-    allTypes @1 :TestAllTypes;
-    object @2 :TestObject;
+    struct @1 :SomeStruct;
+    object @2 :TestAnyPointer;
+  }
+
+  struct SomeStruct {
+    someText @0 :Text;
+    moreText @1 :Text;
+  }
+}
+
+struct TestPrintInlineStructs {
+  someText @0 :Text;
+
+  structList @1 :List(InlineStruct);
+  struct InlineStruct {
+    int32Field @0 :Int32;
+    textField @1 :Text;
   }
 }
 
@@ -566,9 +581,101 @@ struct TestConstants {
 const globalInt :UInt32 = 12345;
 const globalText :Text = "foobar";
 const globalStruct :TestAllTypes = (int32Field = 54321);
+const globalPrintableStruct :TestPrintInlineStructs = (someText = "foo");
 const derivedConstant :TestAllTypes = (
     uInt32Field = .globalInt,
     textField = TestConstants.textConst,
     structField = TestConstants.structConst,
     int16List = TestConstants.int16ListConst,
     structList = TestConstants.structListConst);
+
+interface TestInterface {
+  foo @0 (i :UInt32, j :Bool) -> (x :Text);
+  bar @1 () -> ();
+  baz @2 (s: TestAllTypes);
+}
+
+interface TestExtends extends(TestInterface) {
+  qux @0 ();
+  corge @1 TestAllTypes -> ();
+  grault @2 () -> TestAllTypes;
+}
+
+interface TestPipeline {
+  getCap @0 (n: UInt32, inCap :TestInterface) -> (s: Text, outBox :Box);
+  testPointers @1 (cap :TestInterface, obj :AnyPointer, list :List(TestInterface)) -> ();
+
+  struct Box {
+    cap @0 :TestInterface;
+  }
+}
+
+interface TestCallOrder {
+  getCallSequence @0 (expected: UInt32) -> (n: UInt32);
+  # First call returns 0, next returns 1, ...
+  #
+  # The input `expected` is ignored but useful for disambiguating debug logs.
+}
+
+interface TestTailCallee {
+  struct TailResult {
+    i @0 :UInt32;
+    t @1 :Text;
+    c @2 :TestCallOrder;
+  }
+
+  foo @0 (i :Int32, t :Text) -> TailResult;
+}
+
+interface TestTailCaller {
+  foo @0 (i :Int32, callee :TestTailCallee) -> TestTailCallee.TailResult;
+}
+
+interface TestMoreStuff extends(TestCallOrder) {
+  # Catch-all type that contains lots of testing methods.
+
+  callFoo @0 (cap :TestInterface) -> (s: Text);
+  # Call `cap.foo()`, check the result, and return "bar".
+
+  callFooWhenResolved @1 (cap :TestInterface) -> (s: Text);
+  # Like callFoo but waits for `cap` to resolve first.
+
+  neverReturn @2 (cap :TestInterface) -> (capCopy :TestInterface);
+  # Doesn't return.  You should cancel it.
+
+  hold @3 (cap :TestInterface) -> ();
+  # Returns immediately but holds on to the capability.
+
+  callHeld @4 () -> (s: Text);
+  # Calls the capability previously held using `hold` (and keeps holding it).
+
+  getHeld @5 () -> (cap :TestInterface);
+  # Returns the capability previously held using `hold` (and keeps holding it).
+
+  echo @6 (cap :TestCallOrder) -> (cap :TestCallOrder);
+  # Just returns the input cap.
+
+  expectCancel @7 (cap :TestInterface) -> ();
+  # evalLater()-loops forever, holding `cap`.  Must be canceled.
+}
+
+struct TestSturdyRefHostId {
+  host @0 :Text;
+}
+
+struct TestSturdyRefObjectId {
+  tag @0 :Tag;
+  enum Tag {
+    testInterface @0;
+    testExtends @1;
+    testPipeline @2;
+    testTailCallee @3;
+    testTailCaller @4;
+    testMoreStuff @5;
+  }
+}
+
+struct TestProvisionId {}
+struct TestRecipientId {}
+struct TestThirdPartyCapId {}
+struct TestJoinResult {}

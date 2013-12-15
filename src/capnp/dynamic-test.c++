@@ -147,20 +147,22 @@ TEST(DynamicApi, ListListsRead) {
   checkDynamicTestLists(toDynamic(root));
 }
 
-TEST(DynamicApi, GenericObjects) {
+TEST(DynamicApi, AnyPointers) {
   MallocMessageBuilder builder;
-  auto root = builder.getRoot<test::TestObject>();
+  auto root = builder.getRoot<test::TestAnyPointer>();
 
-  initDynamicTestMessage(root.initObjectField<DynamicStruct>(Schema::from<TestAllTypes>()));
-  checkTestMessage(root.asReader().getObjectField<TestAllTypes>());
+  initDynamicTestMessage(
+      root.getAnyPointerField().initAs<DynamicStruct>(Schema::from<TestAllTypes>()));
+  checkTestMessage(root.asReader().getAnyPointerField().getAs<TestAllTypes>());
 
   checkDynamicTestMessage(
-      root.asReader().getObjectField<DynamicStruct>(Schema::from<TestAllTypes>()));
-  checkDynamicTestMessage(root.getObjectField<DynamicStruct>(Schema::from<TestAllTypes>()));
+      root.asReader().getAnyPointerField().getAs<DynamicStruct>(Schema::from<TestAllTypes>()));
+  checkDynamicTestMessage(
+      root.getAnyPointerField().getAs<DynamicStruct>(Schema::from<TestAllTypes>()));
 
   {
     {
-      auto list = root.initObjectField<DynamicList>(Schema::from<List<uint32_t>>(), 4);
+      auto list = root.getAnyPointerField().initAs<DynamicList>(Schema::from<List<uint32_t>>(), 4);
       list.set(0, 123);
       list.set(1, 456);
       list.set(2, 789);
@@ -168,7 +170,7 @@ TEST(DynamicApi, GenericObjects) {
     }
 
     {
-      auto list = root.asReader().getObjectField<List<uint32_t>>();
+      auto list = root.asReader().getAnyPointerField().getAs<List<uint32_t>>();
       ASSERT_EQ(4u, list.size());
       EXPECT_EQ(123u, list[0]);
       EXPECT_EQ(456u, list[1]);
@@ -176,32 +178,40 @@ TEST(DynamicApi, GenericObjects) {
       EXPECT_EQ(123456789u, list[3]);
     }
 
-    checkList<uint32_t>(root.asReader().getObjectField<DynamicList>(Schema::from<List<uint32_t>>()),
-                        {123u, 456u, 789u, 123456789u});
-    checkList<uint32_t>(root.getObjectField<DynamicList>(Schema::from<List<uint32_t>>()),
-                        {123u, 456u, 789u, 123456789u});
+    checkList<uint32_t>(root.asReader().getAnyPointerField().getAs<DynamicList>(
+        Schema::from<List<uint32_t>>()), {123u, 456u, 789u, 123456789u});
+    checkList<uint32_t>(root.getAnyPointerField().getAs<DynamicList>(
+        Schema::from<List<uint32_t>>()), {123u, 456u, 789u, 123456789u});
   }
 }
 
-TEST(DynamicApi, DynamicGenericObjects) {
+TEST(DynamicApi, DynamicAnyPointers) {
   MallocMessageBuilder builder;
-  auto root = builder.getRoot<DynamicStruct>(Schema::from<test::TestObject>());
+  auto root = builder.getRoot<DynamicStruct>(Schema::from<test::TestAnyPointer>());
 
-  initDynamicTestMessage(root.initObject("objectField", Schema::from<TestAllTypes>()));
-  checkTestMessage(root.asReader().as<test::TestObject>().getObjectField<TestAllTypes>());
+  initDynamicTestMessage(
+      root.get("anyPointerField").as<AnyPointer>()
+          .initAs<DynamicStruct>(Schema::from<TestAllTypes>()));
+  checkTestMessage(
+      root.asReader().as<test::TestAnyPointer>().getAnyPointerField().getAs<TestAllTypes>());
 
   checkDynamicTestMessage(
-      root.asReader().get("objectField").as<DynamicObject>().as(Schema::from<TestAllTypes>()));
+      root.asReader().get("anyPointerField").as<AnyPointer>()
+          .getAs<DynamicStruct>(Schema::from<TestAllTypes>()));
   checkDynamicTestMessage(
-      root.asReader().get("objectField").as<DynamicObject>().as(Schema::from<TestAllTypes>()));
+      root.asReader().get("anyPointerField").as<AnyPointer>()
+          .getAs<DynamicStruct>(Schema::from<TestAllTypes>()));
   checkDynamicTestMessage(
-      root.get("objectField").as<DynamicObject>().asReader().as(Schema::from<TestAllTypes>()));
+      root.get("anyPointerField").as<AnyPointer>().asReader()
+          .getAs<DynamicStruct>(Schema::from<TestAllTypes>()));
   checkDynamicTestMessage(
-      root.getObject("objectField", Schema::from<TestAllTypes>()));
+      root.get("anyPointerField").as<AnyPointer>()
+          .getAs<DynamicStruct>(Schema::from<TestAllTypes>()));
 
   {
     {
-      auto list = root.initObject("objectField", Schema::from<List<uint32_t>>(), 4);
+      auto list = root.init("anyPointerField").as<AnyPointer>()
+                      .initAs<DynamicList>(Schema::from<List<uint32_t>>(), 4);
       list.set(0, 123);
       list.set(1, 456);
       list.set(2, 789);
@@ -209,7 +219,8 @@ TEST(DynamicApi, DynamicGenericObjects) {
     }
 
     {
-      auto list = root.asReader().as<test::TestObject>().getObjectField<List<uint32_t>>();
+      auto list = root.asReader().as<test::TestAnyPointer>()
+          .getAnyPointerField().getAs<List<uint32_t>>();
       ASSERT_EQ(4u, list.size());
       EXPECT_EQ(123u, list[0]);
       EXPECT_EQ(456u, list[1]);
@@ -218,16 +229,20 @@ TEST(DynamicApi, DynamicGenericObjects) {
     }
 
     checkList<uint32_t>(
-        root.asReader().get("objectField").as<DynamicObject>().as(Schema::from<List<uint32_t>>()),
+        root.asReader().get("anyPointerField").as<AnyPointer>()
+            .getAs<DynamicList>(Schema::from<List<uint32_t>>()),
         {123u, 456u, 789u, 123456789u});
     checkList<uint32_t>(
-        root.asReader().get("objectField").as<DynamicObject>().as(Schema::from<List<uint32_t>>()),
+        root.asReader().get("anyPointerField").as<AnyPointer>()
+            .getAs<DynamicList>(Schema::from<List<uint32_t>>()),
         {123u, 456u, 789u, 123456789u});
     checkList<uint32_t>(
-        root.get("objectField").as<DynamicObject>().asReader().as(Schema::from<List<uint32_t>>()),
+        root.get("anyPointerField").as<AnyPointer>().asReader()
+            .getAs<DynamicList>(Schema::from<List<uint32_t>>()),
         {123u, 456u, 789u, 123456789u});
     checkList<uint32_t>(
-        root.getObject("objectField", Schema::from<List<uint32_t>>()),
+        root.get("anyPointerField").as<AnyPointer>()
+            .getAs<DynamicList>(Schema::from<List<uint32_t>>()),
         {123u, 456u, 789u, 123456789u});
   }
 }
@@ -297,14 +312,6 @@ TEST(DynamicApi, UnionsRead) {
     }
   }
 }
-
-#if KJ_NO_EXCEPTIONS
-#undef EXPECT_ANY_THROW
-#define EXPECT_ANY_THROW(code) EXPECT_DEATH(code, ".")
-#define EXPECT_NONFATAL_FAILURE(code) code
-#else
-#define EXPECT_NONFATAL_FAILURE EXPECT_ANY_THROW
-#endif
 
 TEST(DynamicApi, UnionsWrite) {
   MallocMessageBuilder builder;
@@ -398,12 +405,14 @@ TEST(DynamicApi, Has) {
   MallocMessageBuilder builder;
   auto root = builder.initRoot<DynamicStruct>(Schema::from<TestDefaults>());
 
-  EXPECT_FALSE(root.has("int32Field"));
+  // Primitive fields are always present even if set to default.
+  EXPECT_TRUE(root.has("int32Field"));
   root.set("int32Field", 123);
   EXPECT_TRUE(root.has("int32Field"));
   root.set("int32Field", -12345678);
-  EXPECT_FALSE(root.has("int32Field"));
+  EXPECT_TRUE(root.has("int32Field"));
 
+  // Pointers are absent until initialized.
   EXPECT_FALSE(root.has("structField"));
   root.init("structField");
   EXPECT_TRUE(root.has("structField"));
@@ -415,8 +424,8 @@ TEST(DynamicApi, HasWhenEmpty) {
   SegmentArrayMessageReader reader(kj::arrayPtr(segments, 1));
   auto root = reader.getRoot<DynamicStruct>(Schema::from<TestDefaults>());
 
-  EXPECT_FALSE(root.has("voidField"));
-  EXPECT_FALSE(root.has("int32Field"));
+  EXPECT_TRUE(root.has("voidField"));
+  EXPECT_TRUE(root.has("int32Field"));
   EXPECT_FALSE(root.has("structField"));
   EXPECT_FALSE(root.has("int32List"));
 }

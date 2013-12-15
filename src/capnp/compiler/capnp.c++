@@ -41,7 +41,6 @@
 #include <sys/wait.h>
 #include <capnp/serialize.h>
 #include <capnp/serialize-packed.h>
-#include <limits>
 #include <errno.h>
 #include <stdlib.h>
 
@@ -269,6 +268,11 @@ public:
     // Strip redundant "./" prefixes to make src-prefix matching more lenient.
     while (file.startsWith("./")) {
       file = file.slice(2);
+
+      // Remove redundant slashes as well (e.g. ".////foo" -> "foo").
+      while (file.startsWith("/")) {
+        file = file.slice(1);
+      }
     }
 
     if (!compilerConstructed) {
@@ -294,7 +298,7 @@ public:
   }
 
 private:
-  kj::Maybe<const Module&> loadModule(kj::StringPtr file) {
+  kj::Maybe<Module&> loadModule(kj::StringPtr file) {
     size_t longestPrefix = 0;
 
     for (auto& prefix: sourcePrefixes) {
@@ -608,9 +612,8 @@ private:
     // Since this is a debug tool, lift the usual security limits.  Worse case is the process
     // crashes or has to be killed.
     ReaderOptions options;
-    options.nestingLimit = std::numeric_limits<decltype(options.nestingLimit)>::max() >> 1;
-    options.traversalLimitInWords =
-        std::numeric_limits<decltype(options.traversalLimitInWords)>::max();
+    options.nestingLimit = kj::maxValue;
+    options.traversalLimitInWords = kj::maxValue;
 
     MessageReaderType reader(input, options);
     kj::String text;
@@ -1193,7 +1196,7 @@ private:
   void writeFlat(DynamicStruct::Reader value, kj::BufferedOutputStream& output) {
     // Always copy the message to a flat array so that the output is predictable (one segment,
     // in canonical order).
-    size_t size = value.totalSizeInWords() + 1;
+    size_t size = value.totalSize().wordCount + 1;
     kj::Array<word> space = kj::heapArray<word>(size);
     memset(space.begin(), 0, size * sizeof(word));
     FlatMessageBuilder flatMessage(space);
@@ -1215,12 +1218,12 @@ private:
                          kj::ArrayPtr<const char> content)
       : globalReporter(globalReporter), lineBreaks(content) {}
 
-    void addError(uint32_t startByte, uint32_t endByte, kj::StringPtr message) const override {
+    void addError(uint32_t startByte, uint32_t endByte, kj::StringPtr message) override {
       globalReporter.addError("<stdin>", lineBreaks.toSourcePos(startByte),
                               lineBreaks.toSourcePos(endByte), message);
     }
 
-    bool hadErrors() const override {
+    bool hadErrors() override {
       return globalReporter.hadErrors();
     }
 
@@ -1231,7 +1234,7 @@ private:
 
   class ValueResolverGlue final: public ValueTranslator::Resolver {
   public:
-    ValueResolverGlue(const SchemaLoader& loader, const ErrorReporter& errorReporter)
+    ValueResolverGlue(const SchemaLoader& loader, ErrorReporter& errorReporter)
         : loader(loader), errorReporter(errorReporter) {}
 
     kj::Maybe<Schema> resolveType(uint64_t id) {
@@ -1263,14 +1266,14 @@ private:
 
   private:
     const SchemaLoader& loader;
-    const ErrorReporter& errorReporter;
+    ErrorReporter& errorReporter;
   };
 
 public:
   // =====================================================================================
 
   void addError(kj::StringPtr file, SourcePos start, SourcePos end,
-                kj::StringPtr message) const override {
+                kj::StringPtr message) override {
     kj::String wholeMessage;
     if (end.line == start.line) {
       if (end.column == start.column) {
@@ -1286,11 +1289,11 @@ public:
     }
 
     context.error(wholeMessage);
-    __atomic_store_n(&hadErrors_, true, __ATOMIC_RELAXED);
+    hadErrors_ = true;
   }
 
-  bool hadErrors() const override {
-    return __atomic_load_n(&hadErrors_, __ATOMIC_RELAXED);
+  bool hadErrors() override {
+    return hadErrors_;
   }
 
 private:
@@ -1323,7 +1326,7 @@ private:
   struct SourceFile {
     uint64_t id;
     kj::StringPtr name;
-    const Module* module;
+    Module* module;
   };
 
   kj::Vector<SourceFile> sourceFiles;
@@ -1334,7 +1337,7 @@ private:
   };
   kj::Vector<OutputDirective> outputs;
 
-  mutable bool hadErrors_ = false;
+  bool hadErrors_ = false;
 };
 
 }  // namespace compiler

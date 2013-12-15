@@ -22,6 +22,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "test-util.h"
+#include <kj/debug.h>
 #include <gtest/gtest.h>
 
 namespace capnp {
@@ -103,14 +104,8 @@ void genericInitTestMessage(Builder builder) {
   builder.setUInt16List({33333u, 44444u});
   builder.setUInt32List({3333333333u});
   builder.setUInt64List({11111111111111111111ull});
-  builder.setFloat32List({5555.5,
-                          std::numeric_limits<float>::infinity(),
-                          -std::numeric_limits<float>::infinity(),
-                          std::numeric_limits<float>::quiet_NaN()});
-  builder.setFloat64List({7777.75,
-                          std::numeric_limits<double>::infinity(),
-                          -std::numeric_limits<double>::infinity(),
-                          std::numeric_limits<double>::quiet_NaN()});
+  builder.setFloat32List({5555.5, kj::inf(), -kj::inf(), kj::nan()});
+  builder.setFloat64List({7777.75, kj::inf(), -kj::inf(), kj::nan()});
   builder.setTextList({"plugh", "xyzzy", "thud"});
   builder.setDataList({data("oops"), data("exhausted"), data("rfc3092")});
   {
@@ -195,14 +190,8 @@ void dynamicInitTestMessage(DynamicStruct::Builder builder) {
   builder.set("uInt16List", {33333u, 44444u});
   builder.set("uInt32List", {3333333333u});
   builder.set("uInt64List", {11111111111111111111ull});
-  builder.set("float32List", {5555.5,
-                          std::numeric_limits<float>::infinity(),
-                          -std::numeric_limits<float>::infinity(),
-                          std::numeric_limits<float>::quiet_NaN()});
-  builder.set("float64List", {7777.75,
-                          std::numeric_limits<double>::infinity(),
-                          -std::numeric_limits<double>::infinity(),
-                          std::numeric_limits<double>::quiet_NaN()});
+  builder.set("float32List", {5555.5, kj::inf(), -kj::inf(), kj::nan()});
+  builder.set("float64List", {7777.75, kj::inf(), -kj::inf(), kj::nan()});
   builder.set("textList", {"plugh", "xyzzy", "thud"});
   builder.set("dataList", {data("oops"), data("exhausted"), data("rfc3092")});
   {
@@ -296,16 +285,16 @@ void genericCheckTestMessage(Reader reader) {
     auto listReader = reader.getFloat32List();
     ASSERT_EQ(4u, listReader.size());
     EXPECT_EQ(5555.5f, listReader[0]);
-    EXPECT_EQ(std::numeric_limits<float>::infinity(), listReader[1]);
-    EXPECT_EQ(-std::numeric_limits<float>::infinity(), listReader[2]);
+    EXPECT_EQ(kj::inf(), listReader[1]);
+    EXPECT_EQ(-kj::inf(), listReader[2]);
     EXPECT_TRUE(isNaN(listReader[3]));
   }
   {
     auto listReader = reader.getFloat64List();
     ASSERT_EQ(4u, listReader.size());
     EXPECT_EQ(7777.75, listReader[0]);
-    EXPECT_EQ(std::numeric_limits<double>::infinity(), listReader[1]);
-    EXPECT_EQ(-std::numeric_limits<double>::infinity(), listReader[2]);
+    EXPECT_EQ(kj::inf(), listReader[1]);
+    EXPECT_EQ(-kj::inf(), listReader[2]);
     EXPECT_TRUE(isNaN(listReader[3]));
   }
   checkList(reader.getTextList(), {"plugh", "xyzzy", "thud"});
@@ -420,16 +409,16 @@ void dynamicCheckTestMessage(Reader reader) {
     auto listReader = reader.get("float32List").as<DynamicList>();
     ASSERT_EQ(4u, listReader.size());
     EXPECT_EQ(5555.5f, listReader[0].as<float>());
-    EXPECT_EQ(std::numeric_limits<float>::infinity(), listReader[1].as<float>());
-    EXPECT_EQ(-std::numeric_limits<float>::infinity(), listReader[2].as<float>());
+    EXPECT_EQ(kj::inf(), listReader[1].as<float>());
+    EXPECT_EQ(-kj::inf(), listReader[2].as<float>());
     EXPECT_TRUE(isNaN(listReader[3].as<float>()));
   }
   {
     auto listReader = reader.get("float64List").as<DynamicList>();
     ASSERT_EQ(4u, listReader.size());
     EXPECT_EQ(7777.75, listReader[0].as<double>());
-    EXPECT_EQ(std::numeric_limits<double>::infinity(), listReader[1].as<double>());
-    EXPECT_EQ(-std::numeric_limits<double>::infinity(), listReader[2].as<double>());
+    EXPECT_EQ(kj::inf(), listReader[1].as<double>());
+    EXPECT_EQ(-kj::inf(), listReader[2].as<double>());
     EXPECT_TRUE(isNaN(listReader[3].as<double>()));
   }
   checkList<Text>(reader.get("textList"), {"plugh", "xyzzy", "thud"});
@@ -866,6 +855,222 @@ void checkDynamicTestMessageAllZero(DynamicStruct::Builder builder) {
 }
 void checkDynamicTestMessageAllZero(DynamicStruct::Reader reader) {
   dynamicCheckTestMessageAllZero(reader);
+}
+
+// =======================================================================================
+// Interface implementations.
+
+TestInterfaceImpl::TestInterfaceImpl(int& callCount): callCount(callCount) {}
+
+kj::Promise<void> TestInterfaceImpl::foo(FooContext context) {
+  ++callCount;
+  auto params = context.getParams();
+  auto result = context.getResults();
+  EXPECT_EQ(123, params.getI());
+  EXPECT_TRUE(params.getJ());
+  result.setX("foo");
+  return kj::READY_NOW;
+}
+
+kj::Promise<void> TestInterfaceImpl::baz(BazContext context) {
+  ++callCount;
+  auto params = context.getParams();
+  checkTestMessage(params.getS());
+  context.releaseParams();
+  EXPECT_ANY_THROW(context.getParams());
+
+  return kj::READY_NOW;
+}
+
+TestExtendsImpl::TestExtendsImpl(int& callCount): callCount(callCount) {}
+
+kj::Promise<void> TestExtendsImpl::foo(FooContext context) {
+  ++callCount;
+  auto params = context.getParams();
+  auto result = context.getResults();
+  EXPECT_EQ(321, params.getI());
+  EXPECT_FALSE(params.getJ());
+  result.setX("bar");
+  return kj::READY_NOW;
+}
+
+kj::Promise<void> TestExtendsImpl::grault(GraultContext context) {
+  ++callCount;
+  context.releaseParams();
+
+  initTestMessage(context.getResults());
+
+  return kj::READY_NOW;
+}
+
+TestPipelineImpl::TestPipelineImpl(int& callCount): callCount(callCount) {}
+
+kj::Promise<void> TestPipelineImpl::getCap(GetCapContext context) {
+  ++callCount;
+
+  auto params = context.getParams();
+  EXPECT_EQ(234, params.getN());
+
+  auto cap = params.getInCap();
+  context.releaseParams();
+
+  auto request = cap.fooRequest();
+  request.setI(123);
+  request.setJ(true);
+
+  return request.send().then(
+      [this,context](Response<test::TestInterface::FooResults>&& response) mutable {
+        EXPECT_EQ("foo", response.getX());
+
+        auto result = context.getResults();
+        result.setS("bar");
+        result.initOutBox().setCap(kj::heap<TestExtendsImpl>(callCount));
+      });
+}
+
+kj::Promise<void> TestCallOrderImpl::getCallSequence(GetCallSequenceContext context) {
+  auto result = context.getResults();
+  result.setN(count++);
+  return kj::READY_NOW;
+}
+
+TestTailCallerImpl::TestTailCallerImpl(int& callCount): callCount(callCount) {}
+
+kj::Promise<void> TestTailCallerImpl::foo(FooContext context) {
+  ++callCount;
+
+  auto params = context.getParams();
+  auto tailRequest = params.getCallee().fooRequest();
+  tailRequest.setI(params.getI());
+  tailRequest.setT("from TestTailCaller");
+  return context.tailCall(kj::mv(tailRequest));
+}
+
+TestTailCalleeImpl::TestTailCalleeImpl(int& callCount): callCount(callCount) {}
+
+kj::Promise<void> TestTailCalleeImpl::foo(FooContext context) {
+  ++callCount;
+
+  auto params = context.getParams();
+  auto results = context.getResults();
+
+  results.setI(params.getI());
+  results.setT(params.getT());
+  results.setC(kj::heap<TestCallOrderImpl>());
+
+  return kj::READY_NOW;
+}
+
+TestMoreStuffImpl::TestMoreStuffImpl(int& callCount): callCount(callCount) {}
+
+kj::Promise<void> TestMoreStuffImpl::getCallSequence(GetCallSequenceContext context) {
+  auto result = context.getResults();
+  result.setN(callCount++);
+  return kj::READY_NOW;
+}
+
+kj::Promise<void> TestMoreStuffImpl::callFoo(CallFooContext context) {
+  ++callCount;
+
+  auto params = context.getParams();
+  auto cap = params.getCap();
+
+  auto request = cap.fooRequest();
+  request.setI(123);
+  request.setJ(true);
+
+  return request.send().then(
+      [context](Response<test::TestInterface::FooResults>&& response) mutable {
+        EXPECT_EQ("foo", response.getX());
+        context.getResults().setS("bar");
+      });
+}
+
+kj::Promise<void> TestMoreStuffImpl::callFooWhenResolved(CallFooWhenResolvedContext context) {
+  ++callCount;
+
+  auto params = context.getParams();
+  auto cap = params.getCap();
+
+  return cap.whenResolved().then([cap,context]() mutable {
+    auto request = cap.fooRequest();
+    request.setI(123);
+    request.setJ(true);
+
+    return request.send().then(
+        [context](Response<test::TestInterface::FooResults>&& response) mutable {
+          EXPECT_EQ("foo", response.getX());
+          context.getResults().setS("bar");
+        });
+  });
+}
+
+kj::Promise<void> TestMoreStuffImpl::neverReturn(NeverReturnContext context) {
+  ++callCount;
+
+  // Attach `cap` to the promise to make sure it is released.
+  auto promise = kj::Promise<void>(kj::NEVER_DONE).attach(context.getParams().getCap());
+
+  // Also attach `cap` to the result struct to make sure that is released.
+  context.getResults().setCapCopy(context.getParams().getCap());
+
+  context.allowCancellation();
+  return kj::mv(promise);
+}
+
+kj::Promise<void> TestMoreStuffImpl::hold(HoldContext context) {
+  ++callCount;
+
+  auto params = context.getParams();
+  clientToHold = params.getCap();
+  return kj::READY_NOW;
+}
+
+kj::Promise<void> TestMoreStuffImpl::callHeld(CallHeldContext context) {
+  ++callCount;
+
+  auto request = clientToHold.fooRequest();
+  request.setI(123);
+  request.setJ(true);
+
+  return request.send().then(
+      [context](Response<test::TestInterface::FooResults>&& response) mutable {
+        EXPECT_EQ("foo", response.getX());
+        context.getResults().setS("bar");
+      });
+}
+
+kj::Promise<void> TestMoreStuffImpl::getHeld(GetHeldContext context) {
+  ++callCount;
+  auto result = context.getResults();
+  result.setCap(clientToHold);
+  return kj::READY_NOW;
+}
+
+kj::Promise<void> TestMoreStuffImpl::echo(EchoContext context) {
+  ++callCount;
+  auto params = context.getParams();
+  auto result = context.getResults();
+  result.setCap(params.getCap());
+  return kj::READY_NOW;
+}
+
+kj::Promise<void> TestMoreStuffImpl::expectCancel(ExpectCancelContext context) {
+  auto cap = context.getParams().getCap();
+  context.allowCancellation();
+  return loop(0, cap, context);
+}
+
+kj::Promise<void> TestMoreStuffImpl::loop(uint depth, test::TestInterface::Client cap,
+                                          ExpectCancelContext context) {
+  if (depth > 100) {
+    ADD_FAILURE() << "Looped too long, giving up.";
+    return kj::READY_NOW;
+  } else {
+    return kj::evalLater([=]() mutable {
+      return loop(depth + 1, cap, context);
+    });
+  }
 }
 
 }  // namespace _ (private)

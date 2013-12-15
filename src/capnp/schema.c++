@@ -27,6 +27,161 @@
 
 namespace capnp {
 
+namespace _ {  // private
+
+// Null schemas generated using the below schema file with:
+//
+//     capnp eval -Isrc null-schemas.capnp node --flat |
+//         hexdump -v -e '8/1 "0x%02x, "' -e '1/8 "\n"'; echo
+//
+// I totally don't understand hexdump format strings and came up with this command based on trial
+// and error.
+//
+//     @0x879863d4b2cc4a1e;
+//
+//     using Node = import "/capnp/schema.capnp".Node;
+//
+//     const node :Node = (
+//         id = 0x0000000000000000,
+//         displayName = "(null schema)");
+//
+//     const struct :Node = (
+//         id = 0x0000000000000001,
+//         displayName = "(null struct schema)",
+//         struct = (
+//             dataWordCount = 0,
+//             pointerCount = 0,
+//             preferredListEncoding = empty));
+//
+//     const enum :Node = (
+//         id = 0x0000000000000002,
+//         displayName = "(null enum schema)",
+//         enum = ());
+//
+//     const interface :Node = (
+//         id = 0x0000000000000003,
+//         displayName = "(null interface schema)",
+//         interface = ());
+//
+//     const const :Node = (
+//         id = 0x0000000000000004,
+//         displayName = "(null const schema)",
+//         const = (type = (void = void), value = (void = void)));
+
+static const AlignedData<13> NULL_SCHEMA_BYTES = {{
+  0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x05, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00,   // union discriminant intentionally mangled
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x11, 0x00, 0x00, 0x00, 0x72, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x28, 0x6e, 0x75, 0x6c, 0x6c, 0x20, 0x73, 0x63,
+  0x68, 0x65, 0x6d, 0x61, 0x29, 0x00, 0x00, 0x00,
+}};
+const RawSchema NULL_SCHEMA = {
+  0x0000000000000000, NULL_SCHEMA_BYTES.words, 13,
+  nullptr, nullptr, 0, 0, nullptr, nullptr, nullptr
+};
+
+static const AlignedData<14> NULL_STRUCT_SCHEMA_BYTES = {{
+  0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x05, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x11, 0x00, 0x00, 0x00, 0xaa, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x28, 0x6e, 0x75, 0x6c, 0x6c, 0x20, 0x73, 0x74,
+  0x72, 0x75, 0x63, 0x74, 0x20, 0x73, 0x63, 0x68,
+  0x65, 0x6d, 0x61, 0x29, 0x00, 0x00, 0x00, 0x00,
+}};
+const RawSchema NULL_STRUCT_SCHEMA = {
+  0x0000000000000001, NULL_STRUCT_SCHEMA_BYTES.words, 14,
+  nullptr, nullptr, 0, 0, nullptr, nullptr, nullptr
+};
+
+static const AlignedData<14> NULL_ENUM_SCHEMA_BYTES = {{
+  0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x05, 0x00,
+  0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x11, 0x00, 0x00, 0x00, 0x9a, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x28, 0x6e, 0x75, 0x6c, 0x6c, 0x20, 0x65, 0x6e,
+  0x75, 0x6d, 0x20, 0x73, 0x63, 0x68, 0x65, 0x6d,
+  0x61, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+}};
+const RawSchema NULL_ENUM_SCHEMA = {
+  0x0000000000000002, NULL_ENUM_SCHEMA_BYTES.words, 14,
+  nullptr, nullptr, 0, 0, nullptr, nullptr, nullptr
+};
+
+static const AlignedData<14> NULL_INTERFACE_SCHEMA_BYTES = {{
+  0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x05, 0x00,
+  0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x11, 0x00, 0x00, 0x00, 0xc2, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x28, 0x6e, 0x75, 0x6c, 0x6c, 0x20, 0x69, 0x6e,
+  0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x20,
+  0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x29, 0x00,
+}};
+const RawSchema NULL_INTERFACE_SCHEMA = {
+  0x0000000000000003, NULL_INTERFACE_SCHEMA_BYTES.words, 14,
+  nullptr, nullptr, 0, 0, nullptr, nullptr, nullptr
+};
+
+static const AlignedData<20> NULL_CONST_SCHEMA_BYTES = {{
+  0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x05, 0x00,
+  0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x11, 0x00, 0x00, 0x00, 0xa2, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x10, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00,
+  0x18, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00,
+  0x28, 0x6e, 0x75, 0x6c, 0x6c, 0x20, 0x63, 0x6f,
+  0x6e, 0x73, 0x74, 0x20, 0x73, 0x63, 0x68, 0x65,
+  0x6d, 0x61, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+}};
+const RawSchema NULL_CONST_SCHEMA = {
+  0x0000000000000004, NULL_CONST_SCHEMA_BYTES.words, 20,
+  nullptr, nullptr, 0, 0, nullptr, nullptr, nullptr
+};
+
+}  // namespace _ (private)
+
+// =======================================================================================
+
 schema::Node::Reader Schema::getProto() const {
   return readMessageUnchecked<schema::Node>(raw->encodedNode);
 }
@@ -61,25 +216,33 @@ Schema Schema::getDependency(uint64_t id) const {
 
 StructSchema Schema::asStruct() const {
   KJ_REQUIRE(getProto().isStruct(), "Tried to use non-struct schema as a struct.",
-             getProto().getDisplayName());
+             getProto().getDisplayName()) {
+    return StructSchema();
+  }
   return StructSchema(raw);
 }
 
 EnumSchema Schema::asEnum() const {
   KJ_REQUIRE(getProto().isEnum(), "Tried to use non-enum schema as an enum.",
-             getProto().getDisplayName());
+             getProto().getDisplayName()) {
+    return EnumSchema();
+  }
   return EnumSchema(raw);
 }
 
 InterfaceSchema Schema::asInterface() const {
   KJ_REQUIRE(getProto().isInterface(), "Tried to use non-interface schema as an interface.",
-             getProto().getDisplayName());
+             getProto().getDisplayName()) {
+    return InterfaceSchema();
+  }
   return InterfaceSchema(raw);
 }
 
 ConstSchema Schema::asConst() const {
   KJ_REQUIRE(getProto().isConst(), "Tried to use non-constant schema as a constant.",
-             getProto().getDisplayName());
+             getProto().getDisplayName()) {
+    return ConstSchema();
+  }
   return ConstSchema(raw);
 }
 
@@ -105,17 +268,17 @@ uint32_t Schema::getSchemaOffset(const schema::Value::Reader& value) const {
       ptr = reinterpret_cast<const word*>(value.getData().begin());
       break;
     case schema::Value::STRUCT:
-      ptr = value.getStruct<_::UncheckedMessage>();
+      ptr = value.getStruct().getAs<_::UncheckedMessage>();
       break;
     case schema::Value::LIST:
-      ptr = value.getList<_::UncheckedMessage>();
+      ptr = value.getList().getAs<_::UncheckedMessage>();
       break;
-    case schema::Value::OBJECT:
-      ptr = value.getObject<_::UncheckedMessage>();
+    case schema::Value::ANY_POINTER:
+      ptr = value.getAnyPointer().getAs<_::UncheckedMessage>();
       break;
     default:
       KJ_FAIL_ASSERT("getDefaultValueSchemaOffset() can only be called on struct, list, "
-                     "and object fields.");
+                     "and any-pointer fields.");
   }
 
   return ptr - raw->encodedNode;
@@ -222,7 +385,38 @@ InterfaceSchema::MethodList InterfaceSchema::getMethods() const {
 }
 
 kj::Maybe<InterfaceSchema::Method> InterfaceSchema::findMethodByName(kj::StringPtr name) const {
-  return findSchemaMemberByName(raw, name, getMethods());
+  uint counter = 0;
+  return findMethodByName(name, counter);
+}
+
+static constexpr uint MAX_SUPERCLASSES = 64;
+
+kj::Maybe<InterfaceSchema::Method> InterfaceSchema::findMethodByName(
+    kj::StringPtr name, uint& counter) const {
+  // Security:  Don't let someone DOS us with a dynamic schema containing cyclic inheritance.
+  KJ_REQUIRE(counter++ < MAX_SUPERCLASSES, "Cyclic or absurdly-large inheritance graph detected.") {
+    return nullptr;
+  }
+
+  auto result = findSchemaMemberByName(raw, name, getMethods());
+
+  if (result == nullptr) {
+    // Search superclasses.
+    // TODO(perf):  This may be somewhat slow, and in the case of lots of diamond dependencies it
+    //   could get pathological.  Arguably we should generate a flat list of transitive
+    //   superclasses to search and store it in the RawSchema.  It's problematic, though, because
+    //   this means that a dynamically-loaded RawSchema cannot be correctly constructed until all
+    //   superclasses have been loaded, which imposes an ordering requirement on SchemaLoader or
+    //   requires updating subclasses whenever a new superclass is loaded.
+    for (auto extendId: getProto().getInterface().getExtends()) {
+      result = getDependency(extendId).asInterface().findMethodByName(name, counter);
+      if (result != nullptr) {
+        break;
+      }
+    }
+  }
+
+  return result;
 }
 
 InterfaceSchema::Method InterfaceSchema::getMethodByName(kj::StringPtr name) const {
@@ -231,6 +425,64 @@ InterfaceSchema::Method InterfaceSchema::getMethodByName(kj::StringPtr name) con
   } else {
     KJ_FAIL_REQUIRE("interface has no such method", name);
   }
+}
+
+bool InterfaceSchema::extends(InterfaceSchema other) const {
+  if (other.raw == &_::NULL_INTERFACE_SCHEMA) {
+    // We consider all interfaces to extend the null schema.
+    return true;
+  }
+  uint counter = 0;
+  return extends(other, counter);
+}
+
+bool InterfaceSchema::extends(InterfaceSchema other, uint& counter) const {
+  // Security:  Don't let someone DOS us with a dynamic schema containing cyclic inheritance.
+  KJ_REQUIRE(counter++ < MAX_SUPERCLASSES, "Cyclic or absurdly-large inheritance graph detected.") {
+    return nullptr;
+  }
+
+  if (other == *this) {
+    return true;
+  }
+
+  // TODO(perf):  This may be somewhat slow.  See findMethodByName() for discussion.
+  for (auto extendId: getProto().getInterface().getExtends()) {
+    if (getDependency(extendId).asInterface().extends(other, counter)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+kj::Maybe<InterfaceSchema> InterfaceSchema::findSuperclass(uint64_t typeId) const {
+  if (typeId == _::NULL_INTERFACE_SCHEMA.id) {
+    // We consider all interfaces to extend the null schema.
+    return InterfaceSchema();
+  }
+  uint counter = 0;
+  return findSuperclass(typeId, counter);
+}
+
+kj::Maybe<InterfaceSchema> InterfaceSchema::findSuperclass(uint64_t typeId, uint& counter) const {
+  // Security:  Don't let someone DOS us with a dynamic schema containing cyclic inheritance.
+  KJ_REQUIRE(counter++ < MAX_SUPERCLASSES, "Cyclic or absurdly-large inheritance graph detected.") {
+    return nullptr;
+  }
+
+  if (typeId == raw->id) {
+    return *this;
+  }
+
+  // TODO(perf):  This may be somewhat slow.  See findMethodByName() for discussion.
+  for (auto extendId: getProto().getInterface().getExtends()) {
+    KJ_IF_MAYBE(result, getDependency(extendId).asInterface().findSuperclass(typeId, counter)) {
+      return *result;
+    }
+  }
+
+  return nullptr;
 }
 
 // -------------------------------------------------------------------
@@ -266,8 +518,8 @@ ListSchema ListSchema::of(schema::Type::Which primitiveType) {
       KJ_FAIL_REQUIRE("Must use one of the other ListSchema::of() overloads for complex types.");
       break;
 
-    case schema::Type::OBJECT:
-      KJ_FAIL_REQUIRE("List(Object) not supported.");
+    case schema::Type::ANY_POINTER:
+      KJ_FAIL_REQUIRE("List(AnyPointer) not supported.");
       break;
   }
 
@@ -304,8 +556,8 @@ ListSchema ListSchema::of(schema::Type::Reader elementType, Schema context) {
     case schema::Type::LIST:
       return of(of(elementType.getList().getElementType(), context));
 
-    case schema::Type::OBJECT:
-      KJ_FAIL_REQUIRE("List(Object) not supported.");
+    case schema::Type::ANY_POINTER:
+      KJ_FAIL_REQUIRE("List(AnyPointer) not supported.");
       return ListSchema();
   }
 

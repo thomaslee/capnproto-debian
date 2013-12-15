@@ -34,7 +34,7 @@ TEST(Common, Size) {
   for (size_t i: indices(arr)) {
     EXPECT_EQ(expected++, i);
   }
-  EXPECT_EQ(4, expected);
+  EXPECT_EQ(4u, expected);
 }
 
 TEST(Common, Maybe) {
@@ -52,6 +52,7 @@ TEST(Common, Maybe) {
     } else {
       ADD_FAILURE();
     }
+    EXPECT_EQ(123, m.orDefault(456));
   }
 
   {
@@ -66,6 +67,7 @@ TEST(Common, Maybe) {
       ADD_FAILURE();
       EXPECT_EQ(0, *v);  // avoid unused warning
     }
+    EXPECT_EQ(456, m.orDefault(456));
   }
 
   int i = 234;
@@ -83,6 +85,7 @@ TEST(Common, Maybe) {
     } else {
       ADD_FAILURE();
     }
+    EXPECT_EQ(234, m.orDefault(456));
   }
 
   {
@@ -97,6 +100,7 @@ TEST(Common, Maybe) {
       ADD_FAILURE();
       EXPECT_EQ(0, *v);  // avoid unused warning
     }
+    EXPECT_EQ(456, m.orDefault(456));
   }
 
   {
@@ -113,6 +117,7 @@ TEST(Common, Maybe) {
     } else {
       ADD_FAILURE();
     }
+    EXPECT_EQ(234, m.orDefault(456));
   }
 
   {
@@ -127,6 +132,7 @@ TEST(Common, Maybe) {
       ADD_FAILURE();
       EXPECT_EQ(0, *v);  // avoid unused warning
     }
+    EXPECT_EQ(456, m.orDefault(456));
   }
 
   {
@@ -256,6 +262,32 @@ TEST(Common, MinMax) {
   EXPECT_EQ(1234567890123456789ll, kj::max('a', 1234567890123456789ll));
 }
 
+TEST(Common, MinMaxValue) {
+  EXPECT_EQ(0x7f, int8_t(maxValue));
+  EXPECT_EQ(0xffu, uint8_t(maxValue));
+  EXPECT_EQ(0x7fff, int16_t(maxValue));
+  EXPECT_EQ(0xffffu, uint16_t(maxValue));
+  EXPECT_EQ(0x7fffffff, int32_t(maxValue));
+  EXPECT_EQ(0xffffffffu, uint32_t(maxValue));
+  EXPECT_EQ(0x7fffffffffffffffll, int64_t(maxValue));
+  EXPECT_EQ(0xffffffffffffffffull, uint64_t(maxValue));
+
+  EXPECT_EQ(-0x80, int8_t(minValue));
+  EXPECT_EQ(0, uint8_t(minValue));
+  EXPECT_EQ(-0x8000, int16_t(minValue));
+  EXPECT_EQ(0, uint16_t(minValue));
+  EXPECT_EQ(-0x80000000, int32_t(minValue));
+  EXPECT_EQ(0, uint32_t(minValue));
+  EXPECT_EQ(-0x8000000000000000ll, int64_t(minValue));
+  EXPECT_EQ(0, uint64_t(minValue));
+
+  double f = inf();
+  EXPECT_TRUE(f * 2 == f);
+
+  f = nan();
+  EXPECT_FALSE(f == f);
+}
+
 TEST(Common, Defer) {
   uint i = 0;
   uint j = 1;
@@ -272,6 +304,22 @@ TEST(Common, Defer) {
   EXPECT_EQ(1u, i);
   EXPECT_EQ(4u, j);
   EXPECT_TRUE(k);
+}
+
+TEST(Common, CanConvert) {
+  static_assert(canConvert<long, int>(), "failure");
+  static_assert(!canConvert<long, void*>(), "failure");
+
+  struct Super {};
+  struct Sub: public Super {};
+
+  static_assert(canConvert<Sub, Super>(), "failure");
+  static_assert(!canConvert<Super, Sub>(), "failure");
+  static_assert(canConvert<Sub*, Super*>(), "failure");
+  static_assert(!canConvert<Super*, Sub*>(), "failure");
+
+  static_assert(canConvert<void*, const void*>(), "failure");
+  static_assert(!canConvert<const void*, void*>(), "failure");
 }
 
 }  // namespace

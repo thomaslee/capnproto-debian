@@ -30,8 +30,14 @@
 #include <kj/debug.h>
 #include <kj/exception.h>
 #include <kj/arena.h>
+#include <kj/vector.h>
+#include <algorithm>
 
 namespace capnp {
+
+bool hasDiscriminantValue(const schema::Field::Reader& reader) {
+  return reader.getDiscriminantValue() != schema::Field::NO_DISCRIMINANT;
+}
 
 class SchemaLoader::InitializerImpl: public _::RawSchema::Initializer {
 public:
@@ -296,7 +302,7 @@ private:
         nextOrdinal = ordinal.getExplicit() + 1;
       }
 
-      if (field.hasDiscriminantValue()) {
+      if (hasDiscriminantValue(field)) {
         VALIDATE_SCHEMA(field.getDiscriminantValue() < sawDiscriminantValue.size() &&
                         !sawDiscriminantValue[field.getDiscriminantValue()],
                         "invalid discriminantValue");
@@ -368,6 +374,10 @@ private:
   }
 
   void validate(const schema::Node::Interface::Reader& interfaceNode) {
+    for (auto extend: interfaceNode.getExtends()) {
+      validateTypeId(extend, schema::Node::INTERFACE);
+    }
+
     auto methods = interfaceNode.getMethods();
     KJ_STACK_ARRAY(bool, sawCodeOrder, methods.size(), 32, 256);
     memset(sawCodeOrder.begin(), 0, sawCodeOrder.size() * sizeof(sawCodeOrder[0]));
@@ -382,17 +392,8 @@ private:
                       "invalid codeOrder");
       sawCodeOrder[method.getCodeOrder()] = true;
 
-      auto params = method.getParams();
-      for (auto param: params) {
-        KJ_CONTEXT("validating parameter", param.getName());
-        uint dummy1;
-        bool dummy2;
-        validate(param.getType(), param.getDefaultValue(), &dummy1, &dummy2);
-      }
-
-      VALIDATE_SCHEMA(method.getRequiredParamCount() <= params.size(),
-                      "invalid requiredParamCount");
-      validate(method.getReturnType());
+      validateTypeId(method.getParamStructType(), schema::Node::STRUCT);
+      validateTypeId(method.getResultStructType(), schema::Node::STRUCT);
     }
   }
 
@@ -437,7 +438,7 @@ private:
       HANDLE_TYPE(ENUM, 16, false)
       HANDLE_TYPE(STRUCT, 0, true)
       HANDLE_TYPE(INTERFACE, 0, true)
-      HANDLE_TYPE(OBJECT, 0, true)
+      HANDLE_TYPE(ANY_POINTER, 0, true)
 #undef HANDLE_TYPE
     }
 
@@ -463,7 +464,7 @@ private:
       case schema::Type::FLOAT64:
       case schema::Type::TEXT:
       case schema::Type::DATA:
-      case schema::Type::OBJECT:
+      case schema::Type::ANY_POINTER:
         break;
 
       case schema::Type::STRUCT:
@@ -691,9 +692,9 @@ private:
 
     // A field that is initially not in a union can be upgraded to be in one, as long as it has
     // discriminant 0.
-    uint discriminant = field.hasDiscriminantValue() ? field.getDiscriminantValue() : 0;
+    uint discriminant = hasDiscriminantValue(field) ? field.getDiscriminantValue() : 0;
     uint replacementDiscriminant =
-        replacement.hasDiscriminantValue() ? replacement.getDiscriminantValue() : 0;
+        hasDiscriminantValue(replacement) ? replacement.getDiscriminantValue() : 0;
     VALIDATE_SCHEMA(discriminant == replacementDiscriminant, "Field discriminant changed.");
 
     switch (field.which()) {
@@ -750,6 +751,43 @@ private:
 
   void checkCompatibility(const schema::Node::Interface::Reader& interfaceNode,
                           const schema::Node::Interface::Reader& replacement) {
+    {
+      // Check superclasses.
+
+      kj::Vector<uint64_t> extends;
+      kj::Vector<uint64_t> replacementExtends;
+      for (uint64_t extend: interfaceNode.getExtends()) {
+        extends.add(extend);
+      }
+      for (uint64_t extend: replacement.getExtends()) {
+        replacementExtends.add(extend);
+      }
+      std::sort(extends.begin(), extends.end());
+      std::sort(replacementExtends.begin(), replacementExtends.end());
+
+      auto iter = extends.begin();
+      auto replacementIter = replacementExtends.begin();
+
+      while (iter != extends.end() || replacementIter != replacementExtends.end()) {
+        if (iter == extends.end()) {
+          replacementIsNewer();
+          break;
+        } else if (replacementIter == replacementExtends.end()) {
+          replacementIsOlder();
+          break;
+        } else if (*iter < *replacementIter) {
+          replacementIsOlder();
+          ++iter;
+        } else if (*iter > *replacementIter) {
+          replacementIsNewer();
+          ++replacementIter;
+        } else {
+          ++iter;
+          ++replacementIter;
+        }
+      }
+    }
+
     auto methods = interfaceNode.getMethods();
     auto replacementMethods = replacement.getMethods();
 
@@ -770,40 +808,11 @@ private:
                           const schema::Method::Reader& replacement) {
     KJ_CONTEXT("comparing method", method.getName());
 
-    auto params = method.getParams();
-    auto replacementParams = replacement.getParams();
-
-    if (replacementParams.size() > params.size()) {
-      replacementIsNewer();
-    } else if (replacementParams.size() < params.size()) {
-      replacementIsOlder();
-    }
-
-    uint count = std::min(params.size(), replacementParams.size());
-    for (uint i = 0; i < count; i++) {
-      auto param = params[i];
-      auto replacementParam = replacementParams[i];
-
-      KJ_CONTEXT("comparing parameter", param.getName());
-
-      checkCompatibility(param.getType(), replacementParam.getType(),
-                         NO_UPGRADE_TO_STRUCT);
-      checkDefaultCompatibility(param.getDefaultValue(), replacementParam.getDefaultValue());
-    }
-
-    // Before checking that the required parameter counts are equal, check if the user added new
-    // parameters without defaulting them, as this is the most common reason for this error and we
-    // can provide a nicer error message.
-    VALIDATE_SCHEMA(replacement.getRequiredParamCount() <= count &&
-                    method.getRequiredParamCount() <= count,
-        "Updated method signature contains additional parameters that lack default values");
-
-    VALIDATE_SCHEMA(replacement.getRequiredParamCount() == method.getRequiredParamCount(),
-        "Updated method signature has different number of required parameters (parameters without "
-        "default values)");
-
-    checkCompatibility(method.getReturnType(), replacement.getReturnType(),
-                       ALLOW_UPGRADE_TO_STRUCT);
+    // TODO(someday):  Allow named parameter list to be replaced by compatible struct type.
+    VALIDATE_SCHEMA(method.getParamStructType() == replacement.getParamStructType(),
+                    "Updated method has different parameters.");
+    VALIDATE_SCHEMA(method.getResultStructType() == replacement.getResultStructType(),
+                    "Updated method has different results.");
   }
 
   void checkCompatibility(const schema::Node::Const::Reader& constNode,
@@ -825,17 +834,17 @@ private:
                           const schema::Type::Reader& replacement,
                           UpgradeToStructMode upgradeToStructMode) {
     if (replacement.which() != type.which()) {
-      // Check for allowed "upgrade" to Data or Object.
+      // Check for allowed "upgrade" to Data or AnyPointer.
       if (replacement.isData() && canUpgradeToData(type)) {
         replacementIsNewer();
         return;
       } else if (type.isData() && canUpgradeToData(replacement)) {
         replacementIsOlder();
         return;
-      } else if (replacement.isObject() && canUpgradeToObject(type)) {
+      } else if (replacement.isAnyPointer() && canUpgradeToAnyPointer(type)) {
         replacementIsNewer();
         return;
-      } else if (type.isObject() && canUpgradeToObject(replacement)) {
+      } else if (type.isAnyPointer() && canUpgradeToAnyPointer(replacement)) {
         replacementIsOlder();
         return;
       }
@@ -868,7 +877,7 @@ private:
       case schema::Type::FLOAT64:
       case schema::Type::TEXT:
       case schema::Type::DATA:
-      case schema::Type::OBJECT:
+      case schema::Type::ANY_POINTER:
         return;
 
       case schema::Type::LIST:
@@ -967,7 +976,7 @@ private:
       case schema::Type::LIST:
       case schema::Type::STRUCT:
       case schema::Type::INTERFACE:
-      case schema::Type::OBJECT:
+      case schema::Type::ANY_POINTER:
         structNode.setDataWordCount(0);
         structNode.setPointerCount(1);
         structNode.setPreferredListEncoding(schema::ElementSize::POINTER);
@@ -1017,10 +1026,10 @@ private:
         case schema::Type::ENUM: value.setEnum(0); break;
         case schema::Type::TEXT: value.adoptText(Orphan<Text>()); break;
         case schema::Type::DATA: value.adoptData(Orphan<Data>()); break;
-        case schema::Type::LIST: value.adoptList(Orphan<Data>()); break;
-        case schema::Type::STRUCT: value.adoptStruct(Orphan<Data>()); break;
+        case schema::Type::LIST: value.initList(); break;
+        case schema::Type::STRUCT: value.initStruct(); break;
         case schema::Type::INTERFACE: value.setInterface(); break;
-        case schema::Type::OBJECT: value.adoptObject(Orphan<Data>()); break;
+        case schema::Type::ANY_POINTER: value.initAnyPointer(); break;
       }
     }
 
@@ -1043,7 +1052,7 @@ private:
     }
   }
 
-  bool canUpgradeToObject(const schema::Type::Reader& type) {
+  bool canUpgradeToAnyPointer(const schema::Type::Reader& type) {
     switch (type.which()) {
       case schema::Type::VOID:
       case schema::Type::BOOL:
@@ -1065,7 +1074,7 @@ private:
       case schema::Type::LIST:
       case schema::Type::STRUCT:
       case schema::Type::INTERFACE:
-      case schema::Type::OBJECT:
+      case schema::Type::ANY_POINTER:
         return true;
     }
 
@@ -1107,7 +1116,7 @@ private:
       case schema::Value::LIST:
       case schema::Value::STRUCT:
       case schema::Value::INTERFACE:
-      case schema::Value::OBJECT:
+      case schema::Value::ANY_POINTER:
         // It's not a big deal if default values for pointers change, and it would be difficult for
         // us to compare these defaults here, so just let it slide.
         break;
@@ -1319,7 +1328,7 @@ void SchemaLoader::Impl::requireStructSize(uint64_t id, uint dataWordCount, uint
 }
 
 kj::ArrayPtr<word> SchemaLoader::Impl::makeUncheckedNode(schema::Node::Reader node) {
-  size_t size = node.totalSizeInWords() + 1;
+  size_t size = node.totalSize().wordCount + 1;
   kj::ArrayPtr<word> result = arena.allocateArray<word>(size);
   memset(result.begin(), 0, size * sizeof(word));
   copyToUnchecked(node, result);

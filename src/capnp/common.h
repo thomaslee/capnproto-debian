@@ -34,7 +34,7 @@
 namespace capnp {
 
 #define CAPNP_VERSION_MAJOR 0
-#define CAPNP_VERSION_MINOR 3
+#define CAPNP_VERSION_MINOR 4
 #define CAPNP_VERSION_MICRO 0
 
 #define CAPNP_VERSION \
@@ -99,21 +99,45 @@ inline constexpr Kind kind() {
 template <typename T, Kind k = kind<T>()>
 struct List;
 
+template <typename T> struct ListElementType_;
+template <typename T> struct ListElementType_<List<T>> { typedef T Type; };
+template <typename T> using ListElementType = typename ListElementType_<T>::Type;
+
 namespace _ {  // private
 template <typename T, Kind k> struct Kind_<List<T, k>> { static constexpr Kind kind = Kind::LIST; };
+}  // namespace _ (private)
+
+struct Capability {
+  // A capability without type-safe methods.  Typed capability clients wrap `Client` and typed
+  // capability servers subclass `Server` to dispatch to the regular, typed methods.
+  //
+  // Contents defined in capability.h.  Declared here just so we can specialize Kind_.
+
+  class Client;
+  class Server;
+};
+
+namespace _ {  // private
+template <> struct Kind_<Capability> { static constexpr Kind kind = Kind::INTERFACE; };
 }  // namespace _ (private)
 
 template <typename T, Kind k = kind<T>()> struct ReaderFor_ { typedef typename T::Reader Type; };
 template <typename T> struct ReaderFor_<T, Kind::PRIMITIVE> { typedef T Type; };
 template <typename T> struct ReaderFor_<T, Kind::ENUM> { typedef T Type; };
+template <typename T> struct ReaderFor_<T, Kind::INTERFACE> { typedef typename T::Client Type; };
 template <typename T> using ReaderFor = typename ReaderFor_<T>::Type;
 // The type returned by List<T>::Reader::operator[].
 
 template <typename T, Kind k = kind<T>()> struct BuilderFor_ { typedef typename T::Builder Type; };
 template <typename T> struct BuilderFor_<T, Kind::PRIMITIVE> { typedef T Type; };
 template <typename T> struct BuilderFor_<T, Kind::ENUM> { typedef T Type; };
+template <typename T> struct BuilderFor_<T, Kind::INTERFACE> { typedef typename T::Client Type; };
 template <typename T> using BuilderFor = typename BuilderFor_<T>::Type;
 // The type returned by List<T>::Builder::operator[].
+
+template <typename T, Kind k = kind<T>()> struct PipelineFor_ { typedef typename T::Pipeline Type;};
+template <typename T> struct PipelineFor_<T, Kind::INTERFACE> { typedef typename T::Client Type; };
+template <typename T> using PipelineFor = typename PipelineFor_<T>::Type;
 
 template <typename T, Kind k = kind<T>()> struct TypeIfEnum_;
 template <typename T> struct TypeIfEnum_<T, Kind::ENUM> { typedef T Type; };
@@ -129,10 +153,24 @@ template <typename T>
 using FromBuilder = typename kj::Decay<T>::Builds;
 // FromBuilder<MyType::Builder> = MyType (for any Cap'n Proto type).
 
+template <typename T>
+using FromClient = typename kj::Decay<T>::Calls;
+// FromReader<MyType::Client> = MyType (for any Cap'n Proto interface type).
+
+template <typename T>
+using FromServer = typename kj::Decay<T>::Serves;
+// FromBuilder<MyType::Server> = MyType (for any Cap'n Proto interface type).
+
 namespace _ {  // private
 template <typename T, Kind k = kind<T>()>
 struct PointerHelpers;
 }  // namespace _ (private)
+
+struct MessageSize {
+  // Size of a message.  Every struct type has a method `.totalSize()` that returns this.
+  uint64_t wordCount;
+  uint capCount;
+};
 
 // =======================================================================================
 // Raw memory types and measures

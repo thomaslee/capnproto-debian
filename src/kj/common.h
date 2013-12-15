@@ -25,8 +25,6 @@
 //
 // This defines very simple utilities that are widely applicable.
 
-#include <stddef.h>
-
 #ifndef KJ_COMMON_H_
 #define KJ_COMMON_H_
 
@@ -69,6 +67,9 @@
 #endif
 #endif
 
+#include <stddef.h>
+#include <initializer_list>
+
 // =======================================================================================
 
 namespace kj {
@@ -98,16 +99,18 @@ typedef unsigned char byte;
   #endif
 #endif
 
-#if __OPTIMIZE__ && !defined(NDEBUG) && !defined(DEBUG) && !defined(KJ_DEBUG)
-#warning "You've enabled optimization but not NDEBUG. Usually optimized builds should #define \
-NDEBUG to disable debug asserts, so I am #defining it for you. If you actually want debug asserts, \
-please #define DEBUG or KJ_DEBUG. To make this warning go away, #define NDEBUG yourself, e.g. with \
-the compiler flag -DNDEBUG."
-#define NDEBUG 1
-#endif
-
-#if !defined(NDEBUG) && !defined(KJ_DEBUG)
+#if !defined(KJ_DEBUG) && !defined(KJ_NDEBUG)
+// Heuristically decide whether to enable debug mode.  If DEBUG or NDEBUG is defined, use that.
+// Otherwise, fall back to checking whether optimization is enabled.
+#if defined(DEBUG)
 #define KJ_DEBUG
+#elif defined(NDEBUG)
+#define KJ_NDEBUG
+#elif __OPTIMIZE__
+#define KJ_NDEBUG
+#else
+#define KJ_DEBUG
+#endif
 #endif
 
 #define KJ_DISALLOW_COPY(classname) \
@@ -132,6 +135,8 @@ the compiler flag -DNDEBUG."
 #define KJ_NORETURN __attribute__((noreturn))
 #define KJ_UNUSED __attribute__((unused))
 
+#define KJ_WARN_UNUSED_RESULT __attribute__((warn_unused_result))
+
 #if __clang__
 #define KJ_UNUSED_MEMBER __attribute__((unused))
 // Inhibits "unused" warning for member variables.  Only Clang produces such a warning, while GCC
@@ -145,6 +150,9 @@ namespace _ {  // private
 void inlineRequireFailure(
     const char* file, int line, const char* expectation, const char* macroArgs,
     const char* message = nullptr) KJ_NORETURN;
+void inlineAssertFailure(
+    const char* file, int line, const char* expectation, const char* macroArgs,
+    const char* message = nullptr) KJ_NORETURN;
 
 void unreachable() KJ_NORETURN;
 
@@ -154,12 +162,19 @@ void unreachable() KJ_NORETURN;
 #define KJ_IREQUIRE(condition, ...) \
     if (KJ_LIKELY(condition)); else ::kj::_::inlineRequireFailure( \
         __FILE__, __LINE__, #condition, #__VA_ARGS__, ##__VA_ARGS__)
-// Version of KJ_REQUIRE() which is safe to use in headers that are #included by users.  Used to
+// Version of KJ_DREQUIRE() which is safe to use in headers that are #included by users.  Used to
 // check preconditions inside inline methods.  KJ_IREQUIRE is particularly useful in that
 // it will be enabled depending on whether the application is compiled in debug mode rather than
 // whether libkj is.
+
+#define KJ_IASSERT(condition, ...) \
+    if (KJ_LIKELY(condition)); else ::kj::_::inlineAssertFailure( \
+        __FILE__, __LINE__, #condition, #__VA_ARGS__, ##__VA_ARGS__)
+// Version of KJ_DASSERT() which is safe to use in headers that are #included by users.  Used to
+// check state inside inline and templated methods.
 #else
 #define KJ_IREQUIRE(condition, ...)
+#define KJ_IASSERT(condition, ...)
 #endif
 
 #define KJ_UNREACHABLE ::kj::_::unreachable();
@@ -319,6 +334,40 @@ T refIfLvalue(T&&);
 //     KJ_DECLTYPE_REF(i) i3(i);                  // i3 has type int&.
 //     KJ_DECLTYPE_REF(kj::mv(i)) i4(kj::mv(i));  // i4 has type int.
 
+template <typename T>
+struct CanConvert_ {
+  static int sfinae(T);
+  static bool sfinae(...);
+};
+
+template <typename T, typename U>
+constexpr bool canConvert() {
+  return sizeof(CanConvert_<U>::sfinae(instance<T>())) == sizeof(int);
+}
+
+#if __clang__
+template <typename T>
+constexpr bool canMemcpy() {
+  // Returns true if T can be copied using memcpy instead of using the copy constructor or
+  // assignment operator.
+
+  // Clang unhelpfully defines __has_trivial_{copy,assign}(T) to be true if the copy constructor /
+  // assign operator are deleted, on the basis that a strict reading of the definition of "trivial"
+  // according to the standard says that deleted functions are in fact trivial.  Meanwhile Clang
+  // provides these admittedly-better intrinsics, but GCC does not.
+  return __is_trivially_constructible(T, const T&) && __is_trivially_assignable(T, const T&);
+}
+#else
+template <typename T>
+constexpr bool canMemcpy() {
+  // Returns true if T can be copied using memcpy instead of using the copy constructor or
+  // assignment operator.
+
+  // GCC defines these to mean what we want them to mean.
+  return __has_trivial_copy(T) && __has_trivial_assign(T);
+}
+#endif
+
 // =======================================================================================
 // Equivalents to std::move() and std::forward(), since these are very commonly needed and the
 // std header <utility> pulls in lots of other stuff.
@@ -329,6 +378,10 @@ T refIfLvalue(T&&);
 
 template<typename T> constexpr T&& mv(T& t) noexcept { return static_cast<T&&>(t); }
 template<typename T> constexpr T&& fwd(NoInfer<T>& t) noexcept { return static_cast<T&&>(t); }
+
+template<typename T> constexpr T cp(T& t) noexcept { return t; }
+template<typename T> constexpr T cp(const T& t) noexcept { return t; }
+// Useful to force a copy, particularly to pass into a function that expects T&&.
 
 template <typename T, typename U>
 inline constexpr auto min(T&& a, U&& b) -> decltype(a < b ? a : b) { return a < b ? a : b; }
@@ -341,6 +394,69 @@ template <typename T>
 inline constexpr size_t size(T&& arr) { return arr.size(); }
 // Returns the size of the parameter, whether the parameter is a regular C array or a container
 // with a `.size()` method.
+
+class MaxValue_ {
+private:
+  template <typename T>
+  inline constexpr T maxSigned() const {
+    return (1ull << (sizeof(T) * 8 - 1)) - 1;
+  }
+  template <typename T>
+  inline constexpr T maxUnsigned() const {
+    return ~static_cast<T>(0u);
+  }
+
+public:
+#define _kJ_HANDLE_TYPE(T) \
+  inline constexpr operator   signed T() const { return MaxValue_::maxSigned  <  signed T>(); } \
+  inline constexpr operator unsigned T() const { return MaxValue_::maxUnsigned<unsigned T>(); }
+  _kJ_HANDLE_TYPE(char)
+  _kJ_HANDLE_TYPE(short)
+  _kJ_HANDLE_TYPE(int)
+  _kJ_HANDLE_TYPE(long)
+  _kJ_HANDLE_TYPE(long long)
+#undef _kJ_HANDLE_TYPE
+};
+
+class MinValue_ {
+private:
+  template <typename T>
+  inline constexpr T minSigned() const {
+    return 1ull << (sizeof(T) * 8 - 1);
+  }
+  template <typename T>
+  inline constexpr T minUnsigned() const {
+    return 0u;
+  }
+
+public:
+#define _kJ_HANDLE_TYPE(T) \
+  inline constexpr operator   signed T() const { return MinValue_::minSigned  <  signed T>(); } \
+  inline constexpr operator unsigned T() const { return MinValue_::minUnsigned<unsigned T>(); }
+  _kJ_HANDLE_TYPE(char)
+  _kJ_HANDLE_TYPE(short)
+  _kJ_HANDLE_TYPE(int)
+  _kJ_HANDLE_TYPE(long)
+  _kJ_HANDLE_TYPE(long long)
+#undef _kJ_HANDLE_TYPE
+};
+
+static constexpr MaxValue_ maxValue = MaxValue_();
+// A special constant which, when cast to an integer type, takes on the maximum possible value of
+// that type.  This is useful to use as e.g. a parameter to a function because it will be robust
+// in the face of changes to the parameter's type.
+//
+// `char` is not supported, but `signed char` and `unsigned char` are.
+
+static constexpr MinValue_ minValue = MinValue_();
+// A special constant which, when cast to an integer type, takes on the minimum possible value
+// of that type.  This is useful to use as e.g. a parameter to a function because it will be robust
+// in the face of changes to the parameter's type.
+//
+// `char` is not supported, but `signed char` and `unsigned char` are.
+
+inline constexpr float inf() { return __builtin_huge_valf(); }
+inline constexpr float nan() { return __builtin_nanf(""); }
 
 // =======================================================================================
 // Useful fake containers
@@ -590,12 +706,14 @@ private:  // internal interface used by friends only
 
   inline NullableValue& operator=(NullableValue&& other) {
     if (&other != this) {
+      // Careful about throwing destructors/constructors here.
       if (isSet) {
+        isSet = false;
         dtor(value);
       }
-      isSet = other.isSet;
-      if (isSet) {
+      if (other.isSet) {
         ctor(value, kj::mv(other.value));
+        isSet = true;
       }
     }
     return *this;
@@ -603,12 +721,14 @@ private:  // internal interface used by friends only
 
   inline NullableValue& operator=(NullableValue& other) {
     if (&other != this) {
+      // Careful about throwing destructors/constructors here.
       if (isSet) {
+        isSet = false;
         dtor(value);
       }
-      isSet = other.isSet;
-      if (isSet) {
+      if (other.isSet) {
         ctor(value, other.value);
+        isSet = true;
       }
     }
     return *this;
@@ -616,12 +736,14 @@ private:  // internal interface used by friends only
 
   inline NullableValue& operator=(const NullableValue& other) {
     if (&other != this) {
+      // Careful about throwing destructors/constructors here.
       if (isSet) {
+        isSet = false;
         dtor(value);
       }
-      isSet = other.isSet;
-      if (isSet) {
+      if (other.isSet) {
         ctor(value, other.value);
+        isSet = true;
       }
     }
     return *this;
@@ -697,6 +819,21 @@ public:
   inline bool operator==(decltype(nullptr)) const { return ptr == nullptr; }
   inline bool operator!=(decltype(nullptr)) const { return ptr != nullptr; }
 
+  T& orDefault(T& defaultValue) {
+    if (ptr == nullptr) {
+      return defaultValue;
+    } else {
+      return *ptr;
+    }
+  }
+  const T& orDefault(const T& defaultValue) const {
+    if (ptr == nullptr) {
+      return defaultValue;
+    } else {
+      return *ptr;
+    }
+  }
+
   template <typename Func>
   auto map(Func&& f) -> Maybe<decltype(f(instance<T&>()))> {
     if (ptr == nullptr) {
@@ -744,8 +881,8 @@ public:
   inline Maybe(const Maybe<const U&>& other) noexcept: ptr(other.ptr) {}
   inline Maybe(decltype(nullptr)) noexcept: ptr(nullptr) {}
 
-  inline Maybe& operator=(T& other) noexcept { ptr = &other; }
-  inline Maybe& operator=(T* other) noexcept { ptr = other; }
+  inline Maybe& operator=(T& other) noexcept { ptr = &other; return *this; }
+  inline Maybe& operator=(T* other) noexcept { ptr = other; return *this; }
   template <typename U>
   inline Maybe& operator=(Maybe<U&>& other) noexcept { ptr = other.ptr; return *this; }
   template <typename U>
@@ -753,6 +890,21 @@ public:
 
   inline bool operator==(decltype(nullptr)) const { return ptr == nullptr; }
   inline bool operator!=(decltype(nullptr)) const { return ptr != nullptr; }
+
+  T& orDefault(T& defaultValue) {
+    if (ptr == nullptr) {
+      return defaultValue;
+    } else {
+      return *ptr;
+    }
+  }
+  const T& orDefault(const T& defaultValue) const {
+    if (ptr == nullptr) {
+      return defaultValue;
+    } else {
+      return *ptr;
+    }
+  }
 
   template <typename Func>
   auto map(Func&& f) -> Maybe<decltype(f(instance<T&>()))> {
@@ -789,6 +941,8 @@ public:
   inline constexpr ArrayPtr(decltype(nullptr)): ptr(nullptr), size_(0) {}
   inline constexpr ArrayPtr(T* ptr, size_t size): ptr(ptr), size_(size) {}
   inline constexpr ArrayPtr(T* begin, T* end): ptr(begin), size_(end - begin) {}
+  inline constexpr ArrayPtr(std::initializer_list<RemoveConstOrDisable<T>> init)
+      : ptr(init.begin()), size_(init.size()) {}
 
   template <size_t size>
   inline constexpr ArrayPtr(T (&native)[size]): ptr(native), size_(size) {}
