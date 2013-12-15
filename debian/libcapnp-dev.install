@@ -1,7 +1,11 @@
 usr/lib/libcapnp.a
 usr/lib/libcapnp.so
+usr/lib/libcapnp-rpc.a
+usr/lib/libcapnp-rpc.so
 usr/lib/libcapnpc.a
 usr/lib/libcapnpc.so
 usr/lib/libkj.a
 usr/lib/libkj.so
+usr/lib/libkj-async.a
+usr/lib/libkj-async.so
 usr/include

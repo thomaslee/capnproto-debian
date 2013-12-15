@@ -1,3 +1,10 @@
+capnproto (0.4.0-1) unstable; urgency=low
+
+  * Updated packaging, include libkj-async and libcapnp-rpc.
+  * Imported Upstream version 0.4.0
+
+ -- Tom Lee <debian@tomlee.co>  Sun, 15 Dec 2013 10:41:21 -0700
+
 capnproto (0.3.0-1) unstable; urgency=low
 
   * Fix Vcs-Git URL
