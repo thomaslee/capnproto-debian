@@ -21,7 +21,7 @@ Makefile
 *.log
 *.debhelper
 /debian/capnproto-compiler
-/debian/libcapnp-0.3.0
+/debian/libcapnp-0.4.0
 /debian/libcapnp-dev
 *.substvars
 /capnp-test
@@ -33,7 +33,7 @@ Makefile
 /test_capnpc_middleman
 gtest-config
 /debian/capnproto
-/.pc
+/*.pc
 tags
 vgdump
 autom4te.cache
