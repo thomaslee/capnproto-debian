@@ -8,4 +8,5 @@ usr/lib/libkj.a
 usr/lib/libkj.so
 usr/lib/libkj-async.a
 usr/lib/libkj-async.so
+usr/lib/pkgconfig
 usr/include
