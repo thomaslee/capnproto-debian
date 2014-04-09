@@ -1,3 +1,11 @@
+capnproto (0.4.1-1) unstable; urgency=low
+
+  * Applying a downstream patch for ppc64el (Closes: 735232)
+  * Install capnp.pc and capnp-rpc.pc to the correct location
+  * Imported Upstream version 0.4.1
+
+ -- Tom Lee <debian@tomlee.co>  Wed, 09 Apr 2014 12:00:31 -0700
+
 capnproto (0.4.0-1) unstable; urgency=low
 
   * Updated packaging, include libkj-async and libcapnp-rpc.
