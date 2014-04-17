@@ -1,0 +1,18 @@
+Description: Fix upstream bug in call to __builtin_nan(...)
+ Upstream confirmed this to be the likely cause of test failures on the
+ meps64el architecture reported in bug #743402.
+ .
+ Fix coming in upstream release 0.4.1++.
+Bug-Debian: http://bugs.debian.org/743402
+Last-Update: 2014-04-16
+--- a/src/kj/common.h
++++ b/src/kj/common.h
+@@ -456,7 +456,7 @@
+ // `char` is not supported, but `signed char` and `unsigned char` are.
+ 
+ inline constexpr float inf() { return __builtin_huge_valf(); }
+-inline constexpr float nan() { return __builtin_nanf(""); }
++inline constexpr float nan() { return __builtin_nanf("0"); }
+ 
+ // =======================================================================================
+ // Useful fake containers
