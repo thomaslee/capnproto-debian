@@ -1,4 +1,4 @@
 version=3
 
-http://kentonv.github.io/capnproto/install.html http://capnproto.org/capnproto-c\+\+-(.+)\.tar\.gz
+http://kentonv.github.io/capnproto/install.html https?://capnproto.org/capnproto-c\+\+-(.+)\.tar\.gz
 
