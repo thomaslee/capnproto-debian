@@ -1,3 +1,11 @@
+capnproto (0.5.1-1) unstable; urgency=low
+
+  * Imported Upstream version 0.5.1
+  * Remove the (now unnecessary) MIPS NaN patch
+  * Update Standards-Version to 3.9.6
+
+ -- Tom Lee <debian@tomlee.co>  Mon, 26 Jan 2015 21:40:25 -0800
+
 capnproto (0.4.1-2) unstable; urgency=low
 
   * Applying upstream patch for NaN on mips64el (Closes: 743402)
