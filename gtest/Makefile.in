@@ -97,17 +97,10 @@ DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/scripts/gtest-config.in \
 	$(top_srcdir)/build-aux/depcomp $(pkginclude_HEADERS) \
 	$(pkginclude_internal_HEADERS) \
-<<<<<<< HEAD
-	$(top_srcdir)/build-aux/test-driver COPYING README \
-	build-aux/compile build-aux/config.guess build-aux/config.sub \
-	build-aux/depcomp build-aux/install-sh build-aux/missing \
-	build-aux/ltmain.sh $(top_srcdir)/build-aux/compile \
-=======
 	$(top_srcdir)/build-aux/test-driver README build-aux/compile \
 	build-aux/config.guess build-aux/config.sub build-aux/depcomp \
 	build-aux/install-sh build-aux/missing build-aux/ltmain.sh \
 	$(top_srcdir)/build-aux/compile \
->>>>>>> upstream/0.5.1
 	$(top_srcdir)/build-aux/config.guess \
 	$(top_srcdir)/build-aux/config.sub \
 	$(top_srcdir)/build-aux/install-sh \

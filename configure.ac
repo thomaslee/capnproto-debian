@@ -1,10 +1,6 @@
 ## Process this file with autoconf to produce configure.
 
-<<<<<<< HEAD
-AC_INIT([Capn Proto],[0.4.1],[capnproto@googlegroups.com],[capnproto-c++])
-=======
 AC_INIT([Capn Proto],[0.5.1],[capnproto@googlegroups.com],[capnproto-c++])
->>>>>>> upstream/0.5.1
 
 AC_CONFIG_SRCDIR([src/capnp/layout.c++])
 AC_CONFIG_AUX_DIR([build-aux])

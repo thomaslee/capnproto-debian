@@ -1311,6 +1311,7 @@ src/capnp/dynamic.lo: src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/stringify.lo: src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
+
 libcapnp.la: $(libcapnp_la_OBJECTS) $(libcapnp_la_DEPENDENCIES) $(EXTRA_libcapnp_la_DEPENDENCIES) 
 	$(AM_V_CXXLD)$(libcapnp_la_LINK) $(am_libcapnp_la_rpath) $(libcapnp_la_OBJECTS) $(libcapnp_la_LIBADD) $(LIBS)
 src/capnp/compiler/$(am__dirstamp):

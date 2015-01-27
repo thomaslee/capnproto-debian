@@ -1,14 +1,8 @@
 #! /bin/sh
 # Configuration validation subroutine script.
-<<<<<<< HEAD
-#   Copyright 1992-2013 Free Software Foundation, Inc.
-
-timestamp='2013-08-10'
-=======
 #   Copyright 1992-2014 Free Software Foundation, Inc.
 
 timestamp='2014-09-11'
->>>>>>> upstream/0.5.1
 
 # This file is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by
@@ -74,11 +68,7 @@ Report bugs and patches to <config-patches@gnu.org>."
 version="\
 GNU config.sub ($timestamp)
 
-<<<<<<< HEAD
-Copyright 1992-2013 Free Software Foundation, Inc.
-=======
 Copyright 1992-2014 Free Software Foundation, Inc.
->>>>>>> upstream/0.5.1
 
 This is free software; see the source for copying conditions.  There is NO
 warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
@@ -308,19 +298,11 @@ case $basic_machine in
 	| nds32 | nds32le | nds32be \
 	| nios | nios2 | nios2eb | nios2el \
 	| ns16k | ns32k \
-<<<<<<< HEAD
-	| open8 \
-	| or1k | or32 \
-	| pdp10 | pdp11 | pj | pjl \
-	| powerpc | powerpc64 | powerpc64le | powerpcle \
-	| pyramid \
-=======
 	| open8 | or1k | or1knd | or32 \
 	| pdp10 | pdp11 | pj | pjl \
 	| powerpc | powerpc64 | powerpc64le | powerpcle \
 	| pyramid \
 	| riscv32 | riscv64 \
->>>>>>> upstream/0.5.1
 	| rl78 | rx \
 	| score \
 	| sh | sh[1234] | sh[24]a | sh[24]aeb | sh[23]e | sh[34]eb | sheb | shbe | shle | sh[1234]le | sh3ele \
@@ -345,11 +327,7 @@ case $basic_machine in
 	c6x)
 		basic_machine=tic6x-unknown
 		;;
-<<<<<<< HEAD
-	m6811 | m68hc11 | m6812 | m68hc12 | m68hcs12x | picochip)
-=======
 	m6811 | m68hc11 | m6812 | m68hc12 | m68hcs12x | nvptx | picochip)
->>>>>>> upstream/0.5.1
 		basic_machine=$basic_machine-unknown
 		os=-none
 		;;
@@ -1400,11 +1378,7 @@ case $os in
 	      | -cygwin* | -msys* | -pe* | -psos* | -moss* | -proelf* | -rtems* \
 	      | -mingw32* | -mingw64* | -linux-gnu* | -linux-android* \
 	      | -linux-newlib* | -linux-musl* | -linux-uclibc* \
-<<<<<<< HEAD
-	      | -uxpv* | -beos* | -mpeix* | -udk* \
-=======
 	      | -uxpv* | -beos* | -mpeix* | -udk* | -moxiebox* \
->>>>>>> upstream/0.5.1
 	      | -interix* | -uwin* | -mks* | -rhapsody* | -darwin* | -opened* \
 	      | -openstep* | -oskit* | -conix* | -pw32* | -nonstopux* \
 	      | -storm-chaos* | -tops10* | -tenex* | -tops20* | -its* \
@@ -1627,9 +1601,6 @@ case $basic_machine in
 		os=-elf
 		;;
 	mips*-*)
-		os=-elf
-		;;
-	or1k-*)
 		os=-elf
 		;;
 	or32-*)
