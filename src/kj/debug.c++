@@ -1,31 +1,33 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "debug.h"
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
 #include <errno.h>
+
+#if _WIN32
+#define strerror_r(errno,buf,len) strerror_s(buf,len,errno)
+#endif
 
 namespace kj {
 namespace _ {  // private
@@ -47,14 +49,103 @@ ArrayPtr<const char> KJ_STRINGIFY(Debug::Severity severity) {
 
 namespace {
 
+Exception::Type typeOfErrno(int error) {
+  switch (error) {
+#ifdef EDQUOT
+    case EDQUOT:
+#endif
+#ifdef EMFILE
+    case EMFILE:
+#endif
+#ifdef ENFILE
+    case ENFILE:
+#endif
+#ifdef ENOBUFS
+    case ENOBUFS:
+#endif
+#ifdef ENOLCK
+    case ENOLCK:
+#endif
+#ifdef ENOMEM
+    case ENOMEM:
+#endif
+#ifdef ENOSPC
+    case ENOSPC:
+#endif
+#ifdef ETIMEDOUT
+    case ETIMEDOUT:
+#endif
+#ifdef EUSERS
+    case EUSERS:
+#endif
+      return Exception::Type::OVERLOADED;
+
+#ifdef ENOTCONN
+    case ENOTCONN:
+#endif
+#ifdef ECONNABORTED
+    case ECONNABORTED:
+#endif
+#ifdef ECONNREFUSED
+    case ECONNREFUSED:
+#endif
+#ifdef ECONNRESET
+    case ECONNRESET:
+#endif
+#ifdef EHOSTDOWN
+    case EHOSTDOWN:
+#endif
+#ifdef EHOSTUNREACH
+    case EHOSTUNREACH:
+#endif
+#ifdef ENETDOWN
+    case ENETDOWN:
+#endif
+#ifdef ENETRESET
+    case ENETRESET:
+#endif
+#ifdef ENETUNREACH
+    case ENETUNREACH:
+#endif
+#ifdef ENONET
+    case ENONET:
+#endif
+#ifdef EPIPE
+    case EPIPE:
+#endif
+      return Exception::Type::DISCONNECTED;
+
+#ifdef ENOSYS
+    case ENOSYS:
+#endif
+#ifdef ENOTSUP
+    case ENOTSUP:
+#endif
+#if defined(EOPNOTSUPP) && EOPNOTSUPP != ENOTSUP
+    case EOPNOTSUPP:
+#endif
+#ifdef ENOPROTOOPT
+    case ENOPROTOOPT:
+#endif
+#ifdef ENOTSOCK
+    // This is really saying "syscall not implemented for non-sockets".
+    case ENOTSOCK:
+#endif
+      return Exception::Type::UNIMPLEMENTED;
+
+    default:
+      return Exception::Type::FAILED;
+  }
+}
+
 enum DescriptionStyle {
   LOG,
   ASSERTION,
   SYSCALL
 };
 
-static String makeDescription(DescriptionStyle style, const char* code, int errorNumber,
-                              const char* macroArgs, ArrayPtr<String> argValues) {
+static String makeDescriptionImpl(DescriptionStyle style, const char* code, int errorNumber,
+                                  const char* macroArgs, ArrayPtr<String> argValues) {
   KJ_STACK_ARRAY(ArrayPtr<const char>, argNames, argValues.size(), 8, 64);
 
   if (argValues.size() > 0) {
@@ -191,7 +282,7 @@ static String makeDescription(DescriptionStyle style, const char* code, int erro
 void Debug::logInternal(const char* file, int line, Severity severity, const char* macroArgs,
                         ArrayPtr<String> argValues) {
   getExceptionCallback().logMessage(file, line, 0,
-      str(severity, ": ", makeDescription(LOG, nullptr, 0, macroArgs, argValues), '\n'));
+      str(severity, ": ", makeDescriptionImpl(LOG, nullptr, 0, macroArgs, argValues), '\n'));
 }
 
 Debug::Fault::~Fault() noexcept(false) {
@@ -211,15 +302,21 @@ void Debug::Fault::fatal() {
 }
 
 void Debug::Fault::init(
-    const char* file, int line, Exception::Nature nature, int errorNumber,
+    const char* file, int line, Exception::Type type,
     const char* condition, const char* macroArgs, ArrayPtr<String> argValues) {
-  exception = new Exception(nature, Exception::Durability::PERMANENT, file, line,
-      makeDescription(nature == Exception::Nature::OS_ERROR ? SYSCALL : ASSERTION,
-                      condition, errorNumber, macroArgs, argValues));
+  exception = new Exception(type, file, line,
+      makeDescriptionImpl(ASSERTION, condition, 0, macroArgs, argValues));
 }
 
-String Debug::makeContextDescriptionInternal(const char* macroArgs, ArrayPtr<String> argValues) {
-  return makeDescription(LOG, nullptr, 0, macroArgs, argValues);
+void Debug::Fault::init(
+    const char* file, int line, int osErrorNumber,
+    const char* condition, const char* macroArgs, ArrayPtr<String> argValues) {
+  exception = new Exception(typeOfErrno(osErrorNumber), file, line,
+      makeDescriptionImpl(SYSCALL, condition, osErrorNumber, macroArgs, argValues));
+}
+
+String Debug::makeDescriptionInternal(const char* macroArgs, ArrayPtr<String> argValues) {
+  return makeDescriptionImpl(LOG, nullptr, 0, macroArgs, argValues);
 }
 
 int Debug::getOsErrorNumber(bool nonblocking) {

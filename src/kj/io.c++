@@ -1,32 +1,34 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "io.h"
 #include "debug.h"
-#include <unistd.h>
-#include <sys/uio.h>
+#include "miniposix.h"
 #include <algorithm>
 #include <errno.h>
+#include <limits.h>
+
+#if !_WIN32
+#include <sys/uio.h>
+#endif
 
 namespace kj {
 
@@ -236,7 +238,7 @@ AutoCloseFd::~AutoCloseFd() noexcept(false) {
   if (fd >= 0) {
     unwindDetector.catchExceptionsIfUnwinding([&]() {
       // Don't use SYSCALL() here because close() should not be repeated on EINTR.
-      if (close(fd) < 0) {
+      if (miniposix::close(fd) < 0) {
         KJ_FAIL_SYSCALL("close", errno, fd) {
           break;
         }
@@ -253,8 +255,8 @@ size_t FdInputStream::tryRead(void* buffer, size_t minBytes, size_t maxBytes) {
   byte* max = pos + maxBytes;
 
   while (pos < min) {
-    ssize_t n;
-    KJ_SYSCALL(n = ::read(fd, pos, max - pos), fd);
+    miniposix::ssize_t n;
+    KJ_SYSCALL(n = miniposix::read(fd, pos, max - pos), fd);
     if (n == 0) {
       break;
     }
@@ -270,8 +272,8 @@ void FdOutputStream::write(const void* buffer, size_t size) {
   const char* pos = reinterpret_cast<const char*>(buffer);
 
   while (size > 0) {
-    ssize_t n;
-    KJ_SYSCALL(n = ::write(fd, pos, size), fd);
+    miniposix::ssize_t n;
+    KJ_SYSCALL(n = miniposix::write(fd, pos, size), fd);
     KJ_ASSERT(n > 0, "write() returned zero.");
     pos += n;
     size -= n;
@@ -279,6 +281,26 @@ void FdOutputStream::write(const void* buffer, size_t size) {
 }
 
 void FdOutputStream::write(ArrayPtr<const ArrayPtr<const byte>> pieces) {
+#if _WIN32
+  // Windows has no reasonable writev(). It has WriteFileGather, but this call has the unreasonable
+  // restriction that each segment must be page-aligned. So, fall back to write().
+
+  for (auto piece: pieces) {
+    write(piece.begin(), piece.size());
+  }
+
+#else
+  // Apparently, there is a maximum number of iovecs allowed per call.  I don't understand why.
+  // Also, most platforms define IOV_MAX but Linux defines only UIO_MAXIOV.  Unfortunately, Solaris
+  // defines a constant UIO_MAXIOV with a different meaning, so we check for IOV_MAX first.
+#if !defined(IOV_MAX) && defined(UIO_MAXIOV)
+#define IOV_MAX UIO_MAXIOV
+#endif
+  while (pieces.size() > IOV_MAX) {
+    write(pieces.slice(0, IOV_MAX));
+    pieces = pieces.slice(IOV_MAX, pieces.size());
+  }
+
   KJ_STACK_ARRAY(struct iovec, iov, pieces.size(), 16, 128);
 
   for (uint i = 0; i < pieces.size(); i++) {
@@ -289,26 +311,32 @@ void FdOutputStream::write(ArrayPtr<const ArrayPtr<const byte>> pieces) {
 
   struct iovec* current = iov.begin();
 
-  // Make sure we don't do anything on an empty write.
+  // Advance past any leading empty buffers so that a write full of only empty buffers does not
+  // cause a syscall at all.
   while (current < iov.end() && current->iov_len == 0) {
     ++current;
   }
 
   while (current < iov.end()) {
+    // Issue the write.
     ssize_t n = 0;
     KJ_SYSCALL(n = ::writev(fd, current, iov.end() - current), fd);
     KJ_ASSERT(n > 0, "writev() returned zero.");
 
-    while (n > 0 && static_cast<size_t>(n) >= current->iov_len) {
+    // Advance past all buffers that were fully-written.
+    while (current < iov.end() && static_cast<size_t>(n) >= current->iov_len) {
       n -= current->iov_len;
       ++current;
     }
 
+    // If we only partially-wrote one of the buffers, adjust the pointer and size to include only
+    // the unwritten part.
     if (n > 0) {
       current->iov_base = reinterpret_cast<byte*>(current->iov_base) + n;
       current->iov_len -= n;
     }
   }
+#endif
 }
 
 }  // namespace kj

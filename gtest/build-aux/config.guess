@@ -1,8 +1,14 @@
 #! /bin/sh
 # Attempt to guess a canonical system name.
+<<<<<<< HEAD
 #   Copyright 1992-2013 Free Software Foundation, Inc.
 
 timestamp='2013-06-10'
+=======
+#   Copyright 1992-2014 Free Software Foundation, Inc.
+
+timestamp='2014-03-23'
+>>>>>>> upstream/0.5.1
 
 # This file is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by
@@ -50,7 +56,11 @@ version="\
 GNU config.guess ($timestamp)
 
 Originally written by Per Bothner.
+<<<<<<< HEAD
 Copyright 1992-2013 Free Software Foundation, Inc.
+=======
+Copyright 1992-2014 Free Software Foundation, Inc.
+>>>>>>> upstream/0.5.1
 
 This is free software; see the source for copying conditions.  There is NO
 warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
@@ -149,7 +159,11 @@ Linux|GNU|GNU/*)
 	LIBC=gnu
 	#endif
 	EOF
+<<<<<<< HEAD
 	eval `$CC_FOR_BUILD -E $dummy.c 2>/dev/null | grep '^LIBC'`
+=======
+	eval `$CC_FOR_BUILD -E $dummy.c 2>/dev/null | grep '^LIBC' | sed 's, ,,g'`
+>>>>>>> upstream/0.5.1
 	;;
 esac
 
@@ -826,7 +840,11 @@ EOF
     *:MINGW*:*)
 	echo ${UNAME_MACHINE}-pc-mingw32
 	exit ;;
+<<<<<<< HEAD
     i*:MSYS*:*)
+=======
+    *:MSYS*:*)
+>>>>>>> upstream/0.5.1
 	echo ${UNAME_MACHINE}-pc-msys
 	exit ;;
     i*:windows32*:*)
@@ -969,10 +987,17 @@ EOF
 	eval `$CC_FOR_BUILD -E $dummy.c 2>/dev/null | grep '^CPU'`
 	test x"${CPU}" != x && { echo "${CPU}-unknown-linux-${LIBC}"; exit; }
 	;;
+<<<<<<< HEAD
     or1k:Linux:*:*)
 	echo ${UNAME_MACHINE}-unknown-linux-${LIBC}
 	exit ;;
     or32:Linux:*:*)
+=======
+    openrisc*:Linux:*:*)
+	echo or1k-unknown-linux-${LIBC}
+	exit ;;
+    or32:Linux:*:* | or1k*:Linux:*:*)
+>>>>>>> upstream/0.5.1
 	echo ${UNAME_MACHINE}-unknown-linux-${LIBC}
 	exit ;;
     padre:Linux:*:*)
@@ -1260,6 +1285,7 @@ EOF
 	if test "$UNAME_PROCESSOR" = unknown ; then
 	    UNAME_PROCESSOR=powerpc
 	fi
+<<<<<<< HEAD
 	if [ "$CC_FOR_BUILD" != 'no_compiler_found' ]; then
 	    if (echo '#ifdef __LP64__'; echo IS_64BIT_ARCH; echo '#endif') | \
 		(CCOPTS= $CC_FOR_BUILD -E - 2>/dev/null) | \
@@ -1270,6 +1296,28 @@ EOF
 		    powerpc) UNAME_PROCESSOR=powerpc64 ;;
 		esac
 	    fi
+=======
+	if test `echo "$UNAME_RELEASE" | sed -e 's/\..*//'` -le 10 ; then
+	    if [ "$CC_FOR_BUILD" != 'no_compiler_found' ]; then
+		if (echo '#ifdef __LP64__'; echo IS_64BIT_ARCH; echo '#endif') | \
+		    (CCOPTS= $CC_FOR_BUILD -E - 2>/dev/null) | \
+		    grep IS_64BIT_ARCH >/dev/null
+		then
+		    case $UNAME_PROCESSOR in
+			i386) UNAME_PROCESSOR=x86_64 ;;
+			powerpc) UNAME_PROCESSOR=powerpc64 ;;
+		    esac
+		fi
+	    fi
+	elif test "$UNAME_PROCESSOR" = i386 ; then
+	    # Avoid executing cc on OS X 10.9, as it ships with a stub
+	    # that puts up a graphical alert prompting to install
+	    # developer tools.  Any system running Mac OS X 10.7 or
+	    # later (Darwin 11 and later) is required to have a 64-bit
+	    # processor. This is not true of the ARM version of Darwin
+	    # that Apple uses in portable devices.
+	    UNAME_PROCESSOR=x86_64
+>>>>>>> upstream/0.5.1
 	fi
 	echo ${UNAME_PROCESSOR}-apple-darwin${UNAME_RELEASE}
 	exit ;;
@@ -1358,6 +1406,7 @@ EOF
 	exit ;;
     x86_64:VMkernel:*:*)
 	echo ${UNAME_MACHINE}-unknown-esx
+<<<<<<< HEAD
 	exit ;;
 esac
 
@@ -1499,15 +1548,10 @@ then
 	exit ;;
     c34*)
 	echo c34-convex-bsd
+=======
+>>>>>>> upstream/0.5.1
 	exit ;;
-    c38*)
-	echo c38-convex-bsd
-	exit ;;
-    c4*)
-	echo c4-convex-bsd
-	exit ;;
-    esac
-fi
+esac
 
 cat >&2 <<EOF
 $0: unable to guess system type

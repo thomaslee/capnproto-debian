@@ -1,30 +1,31 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "async-io.h"
 #include "async-unix.h"
 #include "debug.h"
 #include <gtest/gtest.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 namespace kj {
 namespace {
@@ -71,6 +72,20 @@ String tryParse(WaitScope& waitScope, Network& network, StringPtr text, uint por
   return network.parseAddress(text, portHint).wait(waitScope)->toString();
 }
 
+bool hasIpv6() {
+  // Can getaddrinfo() parse ipv6 addresses? This is only true if ipv6 is configured on at least
+  // one interface. (The loopback interface usually has it even if others don't... but not always.)
+  struct addrinfo* list;
+  int status = getaddrinfo("::", nullptr, nullptr, &list);
+  if (status == 0) {
+    freeaddrinfo(list);
+    return true;
+  } else {
+    KJ_FAIL_ASSERT("foo");
+    return false;
+  }
+}
+
 TEST(AsyncIo, AddressParsing) {
   auto ioContext = setupAsyncIo();
   auto& w = ioContext.waitScope;
@@ -78,18 +93,27 @@ TEST(AsyncIo, AddressParsing) {
 
   EXPECT_EQ("*:0", tryParse(w, network, "*"));
   EXPECT_EQ("*:123", tryParse(w, network, "*:123"));
-  EXPECT_EQ("[::]:123", tryParse(w, network, "0::0", 123));
   EXPECT_EQ("0.0.0.0:0", tryParse(w, network, "0.0.0.0"));
   EXPECT_EQ("1.2.3.4:5678", tryParse(w, network, "1.2.3.4", 5678));
-  EXPECT_EQ("[12ab:cd::34]:321", tryParse(w, network, "[12ab:cd:0::0:34]:321", 432));
 
   EXPECT_EQ("unix:foo/bar/baz", tryParse(w, network, "unix:foo/bar/baz"));
 
   // We can parse services by name...
+#if !__ANDROID__  // Service names not supported on Android for some reason?
   EXPECT_EQ("1.2.3.4:80", tryParse(w, network, "1.2.3.4:http", 5678));
-  EXPECT_EQ("[::]:80", tryParse(w, network, "[::]:http", 5678));
-  EXPECT_EQ("[12ab:cd::34]:80", tryParse(w, network, "[12ab:cd::34]:http", 5678));
   EXPECT_EQ("*:80", tryParse(w, network, "*:http", 5678));
+#endif
+
+  // IPv6 tests. Annoyingly, these don't work on machines that don't have IPv6 configured on any
+  // interfaces.
+  if (hasIpv6()) {
+    EXPECT_EQ("[::]:123", tryParse(w, network, "0::0", 123));
+    EXPECT_EQ("[12ab:cd::34]:321", tryParse(w, network, "[12ab:cd:0::0:34]:321", 432));
+#if !__ANDROID__  // Service names not supported on Android for some reason?
+    EXPECT_EQ("[::]:80", tryParse(w, network, "[::]:http", 5678));
+    EXPECT_EQ("[12ab:cd::34]:80", tryParse(w, network, "[12ab:cd::34]:http", 5678));
+#endif
+  }
 
   // It would be nice to test DNS lookup here but the test would not be very hermetic.  Even
   // localhost can map to different addresses depending on whether IPv6 is enabled.  We do
@@ -182,6 +206,19 @@ TEST(AsyncIo, PipeThreadDisconnects) {
 
   // Expect disconnect.
   EXPECT_EQ(0, pipeThread.pipe->tryRead(buf, 1, 1).wait(ioContext.waitScope));
+}
+
+TEST(AsyncIo, Timeouts) {
+  auto ioContext = setupAsyncIo();
+
+  Timer& timer = ioContext.provider->getTimer();
+
+  auto promise1 = timer.timeoutAfter(10 * MILLISECONDS, kj::Promise<void>(kj::NEVER_DONE));
+  auto promise2 = timer.timeoutAfter(100 * MILLISECONDS, kj::Promise<int>(123));
+
+  EXPECT_TRUE(promise1.then([]() { return false; }, [](kj::Exception&& e) { return true; })
+      .wait(ioContext.waitScope));
+  EXPECT_EQ(123, promise2.wait(ioContext.waitScope));
 }
 
 }  // namespace

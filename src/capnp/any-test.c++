@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "any.h"
 #include "message.h"
@@ -106,6 +104,106 @@ TEST(Any, AnyPointer) {
       checkTestMessageAllZero(list[1]);
     }
   }
+}
+
+TEST(Any, AnyStruct) {
+  MallocMessageBuilder builder;
+  auto root = builder.getRoot<test::TestAnyPointer>();
+
+  initTestMessage(root.getAnyPointerField().initAs<TestAllTypes>());
+  checkTestMessage(root.getAnyPointerField().getAs<TestAllTypes>());
+  checkTestMessage(root.asReader().getAnyPointerField().getAs<TestAllTypes>());
+
+  EXPECT_EQ(48, root.getAnyPointerField().getAs<AnyStruct>().getDataSection().size());
+  EXPECT_EQ(20, root.getAnyPointerField().getAs<AnyStruct>().getPointerSection().size());
+
+  EXPECT_EQ(48, root.getAnyPointerField().asReader().getAs<AnyStruct>().getDataSection().size());
+  EXPECT_EQ(20, root.getAnyPointerField().asReader().getAs<AnyStruct>().getPointerSection().size());
+
+  auto b = toAny(root.getAnyPointerField().getAs<TestAllTypes>());
+  EXPECT_EQ(48, b.getDataSection().size());
+  EXPECT_EQ(20, b.getPointerSection().size());
+
+#if !_MSC_VER  // TODO(msvc): ICE on the necessary constructor; see any.h.
+  b = root.getAnyPointerField().getAs<TestAllTypes>();
+  EXPECT_EQ(48, b.getDataSection().size());
+  EXPECT_EQ(20, b.getPointerSection().size());
+#endif
+
+  auto r = toAny(root.getAnyPointerField().getAs<TestAllTypes>().asReader());
+  EXPECT_EQ(48, r.getDataSection().size());
+  EXPECT_EQ(20, r.getPointerSection().size());
+
+  r = toAny(root.getAnyPointerField().getAs<TestAllTypes>()).asReader();
+  EXPECT_EQ(48, r.getDataSection().size());
+  EXPECT_EQ(20, r.getPointerSection().size());
+
+#if !_MSC_VER  // TODO(msvc): ICE on the necessary constructor; see any.h.
+  r = root.getAnyPointerField().getAs<TestAllTypes>().asReader();
+  EXPECT_EQ(48, r.getDataSection().size());
+  EXPECT_EQ(20, r.getPointerSection().size());
+#endif
+
+  {
+    MallocMessageBuilder b2;
+    auto root2 = b2.getRoot<test::TestAnyPointer>();
+    auto sb = root2.getAnyPointerField().initAsAnyStruct(
+        r.getDataSection().size() / 8, r.getPointerSection().size());
+
+    EXPECT_EQ(48, sb.getDataSection().size());
+    EXPECT_EQ(20, sb.getPointerSection().size());
+
+    // TODO: is there a higher-level API for this?
+    memcpy(sb.getDataSection().begin(), r.getDataSection().begin(), r.getDataSection().size());
+  }
+}
+
+TEST(Any, AnyList) {
+  MallocMessageBuilder builder;
+  auto root = builder.getRoot<test::TestAnyPointer>();
+  List<TestAllTypes>::Builder b = root.getAnyPointerField().initAs<List<TestAllTypes>>(2);
+  initTestMessage(b[0]);
+
+  auto ptr = root.getAnyPointerField().getAs<AnyList>();
+
+  EXPECT_EQ(2, ptr.size());
+  EXPECT_EQ(48, ptr.as<List<AnyStruct>>()[0].getDataSection().size());
+  EXPECT_EQ(20, ptr.as<List<AnyStruct>>()[0].getPointerSection().size());
+
+  auto readPtr = root.getAnyPointerField().asReader().getAs<AnyList>();
+
+  EXPECT_EQ(2, readPtr.size());
+  EXPECT_EQ(48, readPtr.as<List<AnyStruct>>()[0].getDataSection().size());
+  EXPECT_EQ(20, readPtr.as<List<AnyStruct>>()[0].getPointerSection().size());
+
+  auto alb = toAny(root.getAnyPointerField().getAs<List<TestAllTypes>>());
+  EXPECT_EQ(2, alb.size());
+  EXPECT_EQ(48, alb.as<List<AnyStruct>>()[0].getDataSection().size());
+  EXPECT_EQ(20, alb.as<List<AnyStruct>>()[0].getPointerSection().size());
+
+#if !_MSC_VER  // TODO(msvc): ICE on the necessary constructor; see any.h.
+  alb = root.getAnyPointerField().getAs<List<TestAllTypes>>();
+  EXPECT_EQ(2, alb.size());
+  EXPECT_EQ(48, alb.as<List<AnyStruct>>()[0].getDataSection().size());
+  EXPECT_EQ(20, alb.as<List<AnyStruct>>()[0].getPointerSection().size());
+#endif
+
+  auto alr = toAny(root.getAnyPointerField().getAs<List<TestAllTypes>>().asReader());
+  EXPECT_EQ(2, alr.size());
+  EXPECT_EQ(48, alr.as<List<AnyStruct>>()[0].getDataSection().size());
+  EXPECT_EQ(20, alr.as<List<AnyStruct>>()[0].getPointerSection().size());
+
+  alr = toAny(root.getAnyPointerField().getAs<List<TestAllTypes>>()).asReader();
+  EXPECT_EQ(2, alr.size());
+  EXPECT_EQ(48, alr.as<List<AnyStruct>>()[0].getDataSection().size());
+  EXPECT_EQ(20, alr.as<List<AnyStruct>>()[0].getPointerSection().size());
+
+#if !_MSC_VER  // TODO(msvc): ICE on the necessary constructor; see any.h.
+  alr = root.getAnyPointerField().getAs<List<TestAllTypes>>().asReader();
+  EXPECT_EQ(2, alr.size());
+  EXPECT_EQ(48, alr.as<List<AnyStruct>>()[0].getDataSection().size());
+  EXPECT_EQ(20, alr.as<List<AnyStruct>>()[0].getPointerSection().size());
+#endif
 }
 
 }  // namespace

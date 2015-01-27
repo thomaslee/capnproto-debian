@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "serialize.h"
 #include "layout.h"
@@ -51,15 +49,17 @@ FlatArrayMessageReader::FlatArrayMessageReader(
     return;
   }
 
-  uint segmentSize = table[1].get();
+  {
+    uint segmentSize = table[1].get();
 
-  KJ_REQUIRE(array.size() >= offset + segmentSize,
-             "Message ends prematurely in first segment.") {
-    return;
+    KJ_REQUIRE(array.size() >= offset + segmentSize,
+               "Message ends prematurely in first segment.") {
+      return;
+    }
+
+    segment0 = array.slice(offset, offset + segmentSize);
+    offset += segmentSize;
   }
-
-  segment0 = array.slice(offset, offset + segmentSize);
-  offset += segmentSize;
 
   if (segmentCount > 1) {
     moreSegments = kj::heapArray<kj::ArrayPtr<const word>>(segmentCount - 1);
@@ -90,16 +90,15 @@ kj::ArrayPtr<const word> FlatArrayMessageReader::getSegment(uint id) {
   }
 }
 
+kj::ArrayPtr<const word> initMessageBuilderFromFlatArrayCopy(
+    kj::ArrayPtr<const word> array, MessageBuilder& target, ReaderOptions options) {
+  FlatArrayMessageReader reader(array, options);
+  target.setRoot(reader.getRoot<AnyPointer>());
+  return kj::arrayPtr(reader.getEnd(), array.end());
+}
+
 kj::Array<word> messageToFlatArray(kj::ArrayPtr<const kj::ArrayPtr<const word>> segments) {
-  KJ_REQUIRE(segments.size() > 0, "Tried to serialize uninitialized message.");
-
-  size_t totalSize = segments.size() / 2 + 1;
-
-  for (auto& segment: segments) {
-    totalSize += segment.size();
-  }
-
-  kj::Array<word> result = kj::heapArray<word>(totalSize);
+  kj::Array<word> result = kj::heapArray<word>(computeSerializedSizeInWords(segments));
 
   _::WireValue<uint32_t>* table =
       reinterpret_cast<_::WireValue<uint32_t>*>(result.begin());
@@ -130,6 +129,18 @@ kj::Array<word> messageToFlatArray(kj::ArrayPtr<const kj::ArrayPtr<const word>> 
   return kj::mv(result);
 }
 
+size_t computeSerializedSizeInWords(kj::ArrayPtr<const kj::ArrayPtr<const word>> segments) {
+  KJ_REQUIRE(segments.size() > 0, "Tried to serialize uninitialized message.");
+
+  size_t totalSize = segments.size() / 2 + 1;
+
+  for (auto& segment: segments) {
+    totalSize += segment.size();
+  }
+
+  return totalSize;
+}
+
 // =======================================================================================
 
 InputStreamMessageReader::InputStreamMessageReader(
@@ -152,9 +163,9 @@ InputStreamMessageReader::InputStreamMessageReader(
   }
 
   // Read sizes for all segments except the first.  Include padding if necessary.
-  _::WireValue<uint32_t> moreSizes[segmentCount & ~1];
+  KJ_STACK_ARRAY(_::WireValue<uint32_t>, moreSizes, segmentCount & ~1, 16, 64);
   if (segmentCount > 1) {
-    inputStream.read(moreSizes, sizeof(moreSizes));
+    inputStream.read(moreSizes.begin(), moreSizes.size() * sizeof(moreSizes[0]));
     for (uint i = 0; i < segmentCount - 1; i++) {
       totalWords += moreSizes[i].get();
     }
@@ -195,7 +206,7 @@ InputStreamMessageReader::InputStreamMessageReader(
   if (segmentCount == 1) {
     inputStream.read(scratchSpace.begin(), totalWords * sizeof(word));
   } else if (segmentCount > 1) {
-    readPos = reinterpret_cast<byte*>(scratchSpace.begin());
+    readPos = scratchSpace.asBytes().begin();
     readPos += inputStream.read(readPos, segment0Size * sizeof(word), totalWords * sizeof(word));
   }
 }
@@ -232,12 +243,18 @@ kj::ArrayPtr<const word> InputStreamMessageReader::getSegment(uint id) {
   return segment;
 }
 
+void readMessageCopy(kj::InputStream& input, MessageBuilder& target,
+                     ReaderOptions options, kj::ArrayPtr<word> scratchSpace) {
+  InputStreamMessageReader message(input, options, scratchSpace);
+  target.setRoot(message.getRoot<AnyPointer>());
+}
+
 // -------------------------------------------------------------------
 
 void writeMessage(kj::OutputStream& output, kj::ArrayPtr<const kj::ArrayPtr<const word>> segments) {
   KJ_REQUIRE(segments.size() > 0, "Tried to serialize uninitialized message.");
 
-  _::WireValue<uint32_t> table[(segments.size() + 2) & ~size_t(1)];
+  KJ_STACK_ARRAY(_::WireValue<uint32_t>, table, (segments.size() + 2) & ~size_t(1), 16, 64);
 
   // We write the segment count - 1 because this makes the first word zero for single-segment
   // messages, improving compression.  We don't bother doing this with segment sizes because
@@ -252,22 +269,28 @@ void writeMessage(kj::OutputStream& output, kj::ArrayPtr<const kj::ArrayPtr<cons
   }
 
   KJ_STACK_ARRAY(kj::ArrayPtr<const byte>, pieces, segments.size() + 1, 4, 32);
-  pieces[0] = kj::arrayPtr(reinterpret_cast<byte*>(table), sizeof(table));
+  pieces[0] = table.asBytes();
 
   for (uint i = 0; i < segments.size(); i++) {
-    pieces[i + 1] = kj::arrayPtr(reinterpret_cast<const byte*>(segments[i].begin()),
-                                 reinterpret_cast<const byte*>(segments[i].end()));
+    pieces[i + 1] = segments[i].asBytes();
   }
 
   output.write(pieces);
 }
 
 // =======================================================================================
+
 StreamFdMessageReader::~StreamFdMessageReader() noexcept(false) {}
 
 void writeMessageToFd(int fd, kj::ArrayPtr<const kj::ArrayPtr<const word>> segments) {
   kj::FdOutputStream stream(fd);
   writeMessage(stream, segments);
+}
+
+void readMessageCopyFromFd(int fd, MessageBuilder& target,
+                           ReaderOptions options, kj::ArrayPtr<word> scratchSpace) {
+  kj::FdInputStream stream(fd);
+  readMessageCopy(stream, target, options, scratchSpace);
 }
 
 }  // namespace capnp

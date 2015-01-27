@@ -1,34 +1,39 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #ifndef CAPNP_TEST_UTIL_H_
 #define CAPNP_TEST_UTIL_H_
 
+#if defined(__GNUC__) && !CAPNP_HEADER_WARNINGS
+#pragma GCC system_header
+#endif
+
 #include <capnp/test.capnp.h>
 #include <iostream>
 #include "blob.h"
-#include "dynamic.h"
 #include <gtest/gtest.h>
+
+#if !CAPNP_LITE
+#include "dynamic.h"
+#endif  // !CAPNP_LITE
 
 #if KJ_NO_EXCEPTIONS
 #undef EXPECT_ANY_THROW
@@ -47,10 +52,10 @@
 namespace capnp {
 
 inline std::ostream& operator<<(std::ostream& os, const Data::Reader& value) {
-  return os.write(reinterpret_cast<const char*>(value.begin()), value.size());
+  return os.write(value.asChars().begin(), value.asChars().size());
 }
 inline std::ostream& operator<<(std::ostream& os, const Data::Builder& value) {
-  return os.write(reinterpret_cast<const char*>(value.begin()), value.size());
+  return os.write(value.asChars().begin(), value.asChars().size());
 }
 inline std::ostream& operator<<(std::ostream& os, const Text::Reader& value) {
   return os.write(value.begin(), value.size());
@@ -96,6 +101,7 @@ void checkTestMessage(TestListDefaults::Reader reader);
 void checkTestMessageAllZero(TestAllTypes::Builder builder);
 void checkTestMessageAllZero(TestAllTypes::Reader reader);
 
+#if !CAPNP_LITE
 void initDynamicTestMessage(DynamicStruct::Builder builder);
 void initDynamicTestLists(DynamicStruct::Builder builder);
 void checkDynamicTestMessage(DynamicStruct::Builder builder);
@@ -104,28 +110,46 @@ void checkDynamicTestMessage(DynamicStruct::Reader reader);
 void checkDynamicTestLists(DynamicStruct::Reader reader);
 void checkDynamicTestMessageAllZero(DynamicStruct::Builder builder);
 void checkDynamicTestMessageAllZero(DynamicStruct::Reader reader);
+#endif  // !CAPNP_LITE
 
-template <typename T, typename U>
-void checkList(T reader, std::initializer_list<U> expected) {
+template <typename T>
+inline void checkElement(T a, T b) {
+  EXPECT_EQ(a, b);
+}
+
+template <>
+inline void checkElement<float>(float a, float b) {
+  EXPECT_FLOAT_EQ(a, b);
+}
+
+template <>
+inline void checkElement<double>(double a, double b) {
+  EXPECT_DOUBLE_EQ(a, b);
+}
+
+template <typename T, typename L = typename T::Reads>
+void checkList(T reader, std::initializer_list<decltype(reader[0])> expected) {
   ASSERT_EQ(expected.size(), reader.size());
   for (uint i = 0; i < expected.size(); i++) {
-    EXPECT_EQ(expected.begin()[i], reader[i]);
+    checkElement<decltype(reader[0])>(expected.begin()[i], reader[i]);
   }
 }
 
-template <typename T>
-void checkList(T reader, std::initializer_list<float> expected) {
+template <typename T, typename L = typename T::Builds, bool = false>
+void checkList(T reader, std::initializer_list<decltype(typename L::Reader()[0])> expected) {
   ASSERT_EQ(expected.size(), reader.size());
   for (uint i = 0; i < expected.size(); i++) {
-    EXPECT_FLOAT_EQ(expected.begin()[i], reader[i]);
+    checkElement<decltype(typename L::Reader()[0])>(expected.begin()[i], reader[i]);
   }
 }
 
-template <typename T>
-void checkList(T reader, std::initializer_list<double> expected) {
-  ASSERT_EQ(expected.size(), reader.size());
-  for (uint i = 0; i < expected.size(); i++) {
-    EXPECT_DOUBLE_EQ(expected.begin()[i], reader[i]);
+inline void checkList(List<test::TestOldVersion>::Reader reader,
+                      std::initializer_list<int64_t> expectedData,
+                      std::initializer_list<Text::Reader> expectedPointers) {
+  ASSERT_EQ(expectedData.size(), reader.size());
+  for (uint i = 0; i < expectedData.size(); i++) {
+    EXPECT_EQ(expectedData.begin()[i], reader[i].getOld1());
+    EXPECT_EQ(expectedPointers.begin()[i], reader[i].getOld2());
   }
 }
 
@@ -138,6 +162,7 @@ inline void expectPrimitiveEq(double a, double b) { EXPECT_DOUBLE_EQ(a, b); }
 inline void expectPrimitiveEq(Text::Reader a, Text::Builder b) { EXPECT_EQ(a, b); }
 inline void expectPrimitiveEq(Data::Reader a, Data::Builder b) { EXPECT_EQ(a, b); }
 
+#if !CAPNP_LITE
 template <typename Element, typename T>
 void checkList(T reader, std::initializer_list<ReaderFor<Element>> expected) {
   auto list = reader.as<DynamicList>();
@@ -152,11 +177,14 @@ void checkList(T reader, std::initializer_list<ReaderFor<Element>> expected) {
     expectPrimitiveEq(expected.begin()[i], typed[i]);
   }
 }
+#endif  // !CAPNP_LITE
 
 #undef as
 
 // =======================================================================================
 // Interface implementations.
+
+#if !CAPNP_LITE
 
 class TestInterfaceImpl final: public test::TestInterface::Server {
 public:
@@ -222,7 +250,7 @@ private:
 
 class TestMoreStuffImpl final: public test::TestMoreStuff::Server {
 public:
-  TestMoreStuffImpl(int& callCount);
+  TestMoreStuffImpl(int& callCount, int& handleCount);
 
   kj::Promise<void> getCallSequence(GetCallSequenceContext context) override;
 
@@ -242,8 +270,11 @@ public:
 
   kj::Promise<void> expectCancel(ExpectCancelContext context) override;
 
+  kj::Promise<void> getHandle(GetHandleContext context) override;
+
 private:
   int& callCount;
+  int& handleCount;
   test::TestInterface::Client clientToHold = nullptr;
 
   kj::Promise<void> loop(uint depth, test::TestInterface::Client cap, ExpectCancelContext context);
@@ -269,6 +300,8 @@ private:
   int dummy = 0;
   TestInterfaceImpl impl;
 };
+
+#endif  // !CAPNP_LITE
 
 }  // namespace _ (private)
 }  // namespace capnp

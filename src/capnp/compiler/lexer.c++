@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "lexer.h"
 #include <kj/parse/char.h>
@@ -119,9 +117,16 @@ constexpr auto saveComment =
              p::charsToString(p::many(p::anyOfChars("\n").invert())),
              p::oneOf(p::exactChar<'\n'>(), p::endOfInput));
 
-constexpr auto commentsAndWhitespace =
+constexpr auto utf8Bom =
+    sequence(p::exactChar<'\xef'>(), p::exactChar<'\xbb'>(), p::exactChar<'\xbf'>());
+
+constexpr auto bomsAndWhitespace =
     sequence(p::discardWhitespace,
-             p::discard(p::many(sequence(discardComment, p::discardWhitespace))));
+             p::discard(p::many(sequence(utf8Bom, p::discardWhitespace))));
+
+constexpr auto commentsAndWhitespace =
+    sequence(bomsAndWhitespace,
+             p::discard(p::many(sequence(discardComment, bomsAndWhitespace))));
 
 constexpr auto discardLineWhitespace =
     p::discard(p::many(p::discard(p::whitespaceChar.invert().orAny("\r\n").invert())));
@@ -138,7 +143,7 @@ constexpr auto docComment = p::optional(p::sequence(
 
 }  // namespace
 
-Lexer::Lexer(Orphanage orphanageParam, ErrorReporter& errorReporterParam)
+Lexer::Lexer(Orphanage orphanageParam, ErrorReporter& errorReporter)
     : orphanage(orphanageParam) {
 
   // Note that because passing an lvalue to a parser constructor uses it by-referencee, it's safe
@@ -175,6 +180,12 @@ Lexer::Lexer(Orphanage orphanageParam, ErrorReporter& errorReporterParam)
             initTok(t, loc).setStringLiteral(text);
             return t;
           }),
+      p::transformWithLocation(p::doubleQuotedHexBinary,
+          [this](Location loc, kj::Array<byte> data) -> Orphan<Token> {
+            auto t = orphanage.newOrphan<Token>();
+            initTok(t, loc).setBinaryLiteral(data);
+            return t;
+          }),
       p::transformWithLocation(p::integer,
           [this](Location loc, uint64_t i) -> Orphan<Token> {
             auto t = orphanage.newOrphan<Token>();
@@ -209,8 +220,16 @@ Lexer::Lexer(Orphanage orphanageParam, ErrorReporter& errorReporterParam)
             buildTokenSequenceList(
                 initTok(t, loc).initBracketedList(items.size()), kj::mv(items));
             return t;
-          })
-      ));
+          }),
+      p::transformOrReject(p::transformWithLocation(
+          p::oneOf(sequence(p::exactChar<'\xff'>(), p::exactChar<'\xfe'>()),
+                   sequence(p::exactChar<'\xfe'>(), p::exactChar<'\xff'>()),
+                   sequence(p::exactChar<'\x00'>())),
+          [this, &errorReporter](Location loc) -> kj::Maybe<Orphan<Token>> {
+            errorReporter.addError(loc.begin(), loc.end(),
+                "Non-UTF-8 input detected. Cap'n Proto schema files must be UTF-8 text.");
+            return nullptr;
+          }), [](kj::Maybe<Orphan<Token>> param) { return param; })));
   parsers.tokenSequence = arena.copy(p::sequence(
       commentsAndWhitespace, p::many(p::sequence(token, commentsAndWhitespace))));
 

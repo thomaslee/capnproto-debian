@@ -95,7 +95,7 @@ template <typename T>
 struct ByRef<T&> { typedef T& type; };  // NOLINT
 
 // A handy wrapper for ByRef.
-#define GTEST_BY_REF_(T) typename ::std::gtest_internal::ByRef<T>::type
+#define GTEST_BY_REF_(T) typename ::std::tr1::gtest_internal::ByRef<T>::type
 
 // AddRef<T>::type is T if T is a reference; otherwise it's T&.  This
 // is the same as tr1::add_reference<T>::type.
@@ -105,7 +105,7 @@ template <typename T>
 struct AddRef<T&> { typedef T& type; };  // NOLINT
 
 // A handy wrapper for AddRef.
-#define GTEST_ADD_REF_(T) typename ::std::gtest_internal::AddRef<T>::type
+#define GTEST_ADD_REF_(T) typename ::std::tr1::gtest_internal::AddRef<T>::type
 
 // A helper for implementing get<k>().
 template <int k> class Get;
@@ -118,8 +118,9 @@ struct TupleElement;
 
 $for i [[
 template <GTEST_$(n)_TYPENAMES_(T)>
-struct TupleElement<true, $i, GTEST_$(n)_TUPLE_(T)> [[]]
-{ typedef T$i type; };
+struct TupleElement<true, $i, GTEST_$(n)_TUPLE_(T) > {
+  typedef T$i type;
+};
 
 
 ]]
@@ -198,7 +199,7 @@ $for m [[
 // 6.1.3.2 Tuple creation functions.
 
 // Known limitations: we don't support passing an
-// std::reference_wrapper<T> to make_tuple().  And we don't
+// std::tr1::reference_wrapper<T> to make_tuple().  And we don't
 // implement tie().
 
 inline tuple<> make_tuple() { return tuple<>(); }
@@ -220,7 +221,9 @@ template <typename Tuple> struct tuple_size;
 
 $for j [[
 template <GTEST_$(j)_TYPENAMES_(T)>
-struct tuple_size<GTEST_$(j)_TUPLE_(T)> { static const int value = $j; };
+struct tuple_size<GTEST_$(j)_TUPLE_(T) > {
+  static const int value = $j;
+};
 
 
 ]]
@@ -292,7 +295,7 @@ struct SameSizeTuplePrefixComparator<k, k> {
   template <class Tuple1, class Tuple2>
   static bool Eq(const Tuple1& t1, const Tuple2& t2) {
     return SameSizeTuplePrefixComparator<k - 1, k - 1>::Eq(t1, t2) &&
-        ::std::get<k - 1>(t1) == ::std::get<k - 1>(t2);
+        ::std::tr1::get<k - 1>(t1) == ::std::tr1::get<k - 1>(t2);
   }
 };
 
@@ -302,8 +305,8 @@ template <GTEST_$(n)_TYPENAMES_(T), GTEST_$(n)_TYPENAMES_(U)>
 inline bool operator==(const GTEST_$(n)_TUPLE_(T)& t,
                        const GTEST_$(n)_TUPLE_(U)& u) {
   return gtest_internal::SameSizeTuplePrefixComparator<
-      tuple_size<GTEST_$(n)_TUPLE_(T)>::value,
-      tuple_size<GTEST_$(n)_TUPLE_(U)>::value>::Eq(t, u);
+      tuple_size<GTEST_$(n)_TUPLE_(T) >::value,
+      tuple_size<GTEST_$(n)_TUPLE_(U) >::value>::Eq(t, u);
 }
 
 template <GTEST_$(n)_TYPENAMES_(T), GTEST_$(n)_TYPENAMES_(U)>

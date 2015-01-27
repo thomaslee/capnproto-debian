@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "message.h"
 #include <kj/debug.h>
@@ -305,6 +303,7 @@ TEST(Orphans, ListAnyPointer) {
   checkList(root.asReader().getAnyPointerField().getAs<List<uint32_t>>(), {12u, 34u, 56u});
 }
 
+#if !CAPNP_LITE
 TEST(Orphans, DynamicStruct) {
   MallocMessageBuilder builder;
   auto root = builder.initRoot<test::TestAnyPointer>();
@@ -590,6 +589,7 @@ TEST(Orphans, DynamicDisownGroup) {
   EXPECT_EQ("foo", newBar.getGrault());
   EXPECT_EQ(9876543210987ll, newBar.getGarply());
 }
+#endif  // !CAPNP_LITE
 
 TEST(Orphans, OrphanageFromBuilder) {
   MallocMessageBuilder builder;
@@ -611,6 +611,7 @@ TEST(Orphans, OrphanageFromBuilder) {
     checkTestMessage(root.asReader().getStructField());
   }
 
+#if !CAPNP_LITE
   {
     Orphanage orphanage = Orphanage::getForMessageContaining(toDynamic(root));
     Orphan<TestAllTypes> orphan = orphanage.newOrphan<TestAllTypes>();
@@ -626,6 +627,7 @@ TEST(Orphans, OrphanageFromBuilder) {
     root.adoptStructField(kj::mv(orphan));
     checkTestMessage(root.asReader().getStructField());
   }
+#endif  // !CAPNP_LITE
 }
 
 static bool allZero(const word* begin, const word* end) {
@@ -879,6 +881,157 @@ TEST(Orphans, DisownNull) {
     EXPECT_EQ(0, orphan.get().size());
     EXPECT_TRUE(orphan == nullptr);
   }
+}
+
+TEST(Orphans, ReferenceExternalData) {
+  MallocMessageBuilder builder;
+
+  union {
+    word align;
+    byte data[50];
+  };
+
+  memset(data, 0x55, sizeof(data));
+
+  auto orphan = builder.getOrphanage().referenceExternalData(Data::Builder(data, sizeof(data)));
+
+  // Data was added as a new segment.
+  {
+    auto segments = builder.getSegmentsForOutput();
+    ASSERT_EQ(2, segments.size());
+    EXPECT_EQ(data, segments[1].asBytes().begin());
+    EXPECT_EQ((sizeof(data) + 7) / 8, segments[1].size());
+  }
+
+  // Can't get builder because it's read-only.
+  EXPECT_ANY_THROW(orphan.get());
+
+  // Can get reader.
+  {
+    auto reader = orphan.getReader();
+    EXPECT_EQ(data, reader.begin());
+    EXPECT_EQ(sizeof(data), reader.size());
+  }
+
+  // Adopt into message tree.
+  auto root = builder.getRoot<TestAllTypes>();
+  root.adoptDataField(kj::mv(orphan));
+
+  // Can't get child builder.
+  EXPECT_ANY_THROW(root.getDataField());
+
+  // Can get child reader.
+  {
+    auto reader = root.asReader().getDataField();
+    EXPECT_EQ(data, reader.begin());
+    EXPECT_EQ(sizeof(data), reader.size());
+  }
+
+  // Back to orphan.
+  orphan = root.disownDataField();
+
+  // Now the orphan may be pointing to a far pointer landing pad, so check that it still does the
+  // right things.
+
+  // Can't get builder because it's read-only.
+  EXPECT_ANY_THROW(orphan.get());
+
+  // Can get reader.
+  {
+    auto reader = orphan.getReader();
+    EXPECT_EQ(data, reader.begin());
+    EXPECT_EQ(sizeof(data), reader.size());
+  }
+
+  // Finally, let's abandon the orphan and check that this doesn't zero out the data.
+  orphan = Orphan<Data>();
+
+  for (byte b: data) {
+    EXPECT_EQ(0x55, b);
+  }
+}
+
+TEST(Orphans, ReferenceExternalData_NoZeroOnSet) {
+  // Verify that an external blob is not zeroed by setFoo().
+
+  union {
+    word align;
+    byte data[50];
+  };
+
+  memset(data, 0x55, sizeof(data));
+
+  MallocMessageBuilder builder;
+  auto root = builder.getRoot<TestAllTypes>();
+  root.adoptDataField(builder.getOrphanage().referenceExternalData(
+      Data::Builder(data, sizeof(data))));
+
+  root.setDataField(Data::Builder());
+
+  for (byte b: data) {
+    EXPECT_EQ(0x55, b);
+  }
+}
+
+TEST(Orphans, ReferenceExternalData_NoZeroImmediateAbandon) {
+  // Verify that an external blob is not zeroed when abandoned immediately, without ever being
+  // adopted.
+
+  union {
+    word align;
+    byte data[50];
+  };
+
+  memset(data, 0x55, sizeof(data));
+
+  MallocMessageBuilder builder;
+  builder.getOrphanage().referenceExternalData(Data::Builder(data, sizeof(data)));
+
+  for (byte b: data) {
+    EXPECT_EQ(0x55, b);
+  }
+}
+
+TEST(Orphans, Truncate) {
+  MallocMessageBuilder message;
+  auto orphan = message.getOrphanage().newOrphan<Data>(17);
+  auto builder = orphan.get();
+  memset(builder.begin(), 123, builder.size());
+
+  EXPECT_EQ(4, message.getSegmentsForOutput()[0].size());
+  orphan.truncate(2);
+  EXPECT_EQ(2, message.getSegmentsForOutput()[0].size());
+
+  auto reader = orphan.getReader();
+  EXPECT_EQ(2, reader.size());
+  EXPECT_EQ(builder.begin(), reader.begin());
+
+  EXPECT_EQ(123, builder[0]);
+  EXPECT_EQ(123, builder[1]);
+  EXPECT_EQ(0, builder[2]);
+  EXPECT_EQ(0, builder[3]);
+  EXPECT_EQ(0, builder[16]);
+}
+
+TEST(Orphans, TruncateText) {
+  MallocMessageBuilder message;
+  auto orphan = message.getOrphanage().newOrphan<Text>(17);
+  auto builder = orphan.get();
+  memset(builder.begin(), 'a', builder.size());
+
+  EXPECT_EQ(4, message.getSegmentsForOutput()[0].size());
+  orphan.truncate(2);
+  EXPECT_EQ(2, message.getSegmentsForOutput()[0].size());
+
+  auto reader = orphan.getReader();
+  EXPECT_EQ(2, reader.size());
+  EXPECT_EQ(builder.begin(), reader.begin());
+
+  EXPECT_EQ('a', builder[0]);
+  EXPECT_EQ('a', builder[1]);
+  EXPECT_EQ('\0', builder[2]);
+  EXPECT_EQ('\0', builder[3]);
+  EXPECT_EQ('\0', builder[16]);
 }
 
 }  // namespace

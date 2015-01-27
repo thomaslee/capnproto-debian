@@ -1,31 +1,30 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "serialize.h"
 #include <kj/debug.h>
 #include <gtest/gtest.h>
 #include <string>
 #include <stdlib.h>
+#include <fcntl.h>
 #include "test-util.h"
 
 namespace capnp {
@@ -75,6 +74,14 @@ TEST(Serialize, FlatArray) {
     EXPECT_EQ(serialized.end(), reader.getEnd());
   }
 
+  {
+    MallocMessageBuilder builder2;
+    auto remaining = initMessageBuilderFromFlatArrayCopy(serialized, builder2);
+    checkTestMessage(builder2.getRoot<TestAllTypes>());
+    EXPECT_EQ(serialized.end(), remaining.begin());
+    EXPECT_EQ(serialized.end(), remaining.end());
+  }
+
   kj::Array<word> serializedWithSuffix = kj::heapArray<word>(serialized.size() + 5);
   memcpy(serializedWithSuffix.begin(), serialized.begin(), serialized.size() * sizeof(word));
 
@@ -82,6 +89,14 @@ TEST(Serialize, FlatArray) {
     FlatArrayMessageReader reader(serializedWithSuffix.asPtr());
     checkTestMessage(reader.getRoot<TestAllTypes>());
     EXPECT_EQ(serializedWithSuffix.end() - 5, reader.getEnd());
+  }
+
+  {
+    MallocMessageBuilder builder2;
+    auto remaining = initMessageBuilderFromFlatArrayCopy(serializedWithSuffix, builder2);
+    checkTestMessage(builder2.getRoot<TestAllTypes>());
+    EXPECT_EQ(serializedWithSuffix.end() - 5, remaining.begin());
+    EXPECT_EQ(serializedWithSuffix.end(), remaining.end());
   }
 }
 
@@ -132,8 +147,8 @@ TEST(Serialize, FlatArrayEvenSegmentCount) {
 class TestInputStream: public kj::InputStream {
 public:
   TestInputStream(kj::ArrayPtr<const word> data, bool lazy)
-      : pos(reinterpret_cast<const char*>(data.begin())),
-        end(reinterpret_cast<const char*>(data.end())),
+      : pos(data.asChars().begin()),
+        end(data.asChars().end()),
         lazy(lazy) {}
   ~TestInputStream() {}
 
@@ -236,6 +251,20 @@ TEST(Serialize, InputStreamEvenSegmentCountLazy) {
   checkTestMessage(reader.getRoot<TestAllTypes>());
 }
 
+TEST(Serialize, InputStreamToBuilder) {
+  TestMessageBuilder builder(1);
+  initTestMessage(builder.initRoot<TestAllTypes>());
+
+  kj::Array<word> serialized = messageToFlatArray(builder);
+
+  TestInputStream stream(serialized.asPtr(), false);
+
+  MallocMessageBuilder builder2;
+  readMessageCopy(stream, builder2);
+
+  checkTestMessage(builder2.getRoot<TestAllTypes>());
+}
+
 class TestOutputStream: public kj::OutputStream {
 public:
   TestOutputStream() {}
@@ -245,9 +274,9 @@ public:
     data.append(reinterpret_cast<const char*>(buffer), size);
   }
 
-  const bool dataEquals(kj::ArrayPtr<const word> other) {
+  bool dataEquals(kj::ArrayPtr<const word> other) {
     return data ==
-        std::string(reinterpret_cast<const char*>(other.begin()), other.size() * sizeof(word));
+        std::string(other.asChars().begin(), other.asChars().size());
   }
 
 private:
@@ -290,13 +319,44 @@ TEST(Serialize, WriteMessageEvenSegmentCount) {
   EXPECT_TRUE(output.dataEquals(serialized.asPtr()));
 }
 
+#if _WIN32
+int mkstemp(char *tpl) {
+  char* end = tpl + strlen(tpl);
+  while (end > tpl && *(end-1) == 'X') --end;
+
+  for (;;) {
+    KJ_ASSERT(_mktemp(tpl) == tpl);
+
+    int fd = open(tpl, O_RDWR | O_CREAT | O_EXCL | O_TEMPORARY | O_BINARY, 0700);
+    if (fd >= 0) {
+      return fd;
+    }
+
+    int error = errno;
+    if (error != EEXIST && error != EINTR) {
+      KJ_FAIL_SYSCALL("open(mktemp())", error, tpl);
+    }
+
+    memset(end, 'X', strlen(end));
+  }
+}
+#endif
+
 TEST(Serialize, FileDescriptors) {
+#if _WIN32 || __ANDROID__
+  // TODO(cleanup): Find the Windows temp directory? Seems overly difficult.
+  char filename[] = "capnproto-serialize-test-XXXXXX";
+#else
   char filename[] = "/tmp/capnproto-serialize-test-XXXXXX";
+#endif
   kj::AutoCloseFd tmpfile(mkstemp(filename));
   ASSERT_GE(tmpfile.get(), 0);
 
+#if !_WIN32
   // Unlink the file so that it will be deleted on close.
+  // (For win32, we already handled this is mkstemp().)
   EXPECT_EQ(0, unlink(filename));
+#endif
 
   {
     TestMessageBuilder builder(7);
@@ -342,6 +402,7 @@ TEST(Serialize, RejectTooManySegments) {
   EXPECT_TRUE(e != nullptr) << "Should have thrown an exception.";
 }
 
+#if !__MINGW32__  // Inexplicably crashes when exception is thrown from constructor.
 TEST(Serialize, RejectHugeMessage) {
   // A message whose root struct contains two words of data!
   AlignedData<4> data = {{0,0,0,0,3,0,0,0, 0,0,0,0,2,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0}};
@@ -361,6 +422,7 @@ TEST(Serialize, RejectHugeMessage) {
 
   EXPECT_TRUE(e != nullptr) << "Should have thrown an exception.";
 }
+#endif  // !__MINGW32__
 
 // TODO(test):  Test error cases.
 
