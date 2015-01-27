@@ -1,38 +1,44 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "debug.h"
 #include "exception.h"
 #include <gtest/gtest.h>
 #include <string>
 #include <stdio.h>
-#include <unistd.h>
 #include <signal.h>
 #include <errno.h>
 #include <string.h>
 #include <exception>
-#include <sys/types.h>
+
+#include "miniposix.h"
+
+#if !_WIN32
 #include <sys/wait.h>
+#endif
+
+#if _MSC_VER
+#pragma warning(disable: 4996)
+// Warns that sprintf() is buffer-overrunny. Yeah, I know, it's cool.
+#endif
 
 namespace kj {
 namespace _ {  // private
@@ -52,6 +58,11 @@ public:
     // This is called when exceptions are disabled.  We fork the process instead and then expect
     // the child to die.
 
+#if _WIN32
+    // Windows doesn't support fork() or anything like it. Just skip the test.
+    return false;
+
+#else
     int pipeFds[2];
     KJ_SYSCALL(pipe(pipeFds));
     pid_t child = fork();
@@ -100,6 +111,7 @@ public:
 
       return false;
     }
+#endif  // _WIN32, else
   }
 
   void flush() {
@@ -108,7 +120,7 @@ public:
       const char* end = pos + text.size();
 
       while (pos < end) {
-        ssize_t n = write(outputPipe, pos, end - pos);
+        miniposix::ssize_t n = miniposix::write(outputPipe, pos, end - pos);
         if (n < 0) {
           if (errno == EINTR) {
             continue;
@@ -221,7 +233,7 @@ TEST(Debug, Log) {
 
   KJ_ASSERT(1 == 1);
   EXPECT_FATAL(KJ_ASSERT(1 == 2)); line = __LINE__;
-  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) + ": bug in code: expected "
+  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) + ": failed: expected "
             "1 == 2\n", mockCallback.text);
   mockCallback.text.clear();
 
@@ -232,25 +244,36 @@ TEST(Debug, Log) {
 
   bool recovered = false;
   KJ_ASSERT(1 == 2, "1 is not 2") { recovered = true; break; } line = __LINE__;
-  EXPECT_EQ("recoverable exception: " + fileLine(__FILE__, line) + ": bug in code: expected "
+  EXPECT_EQ("recoverable exception: " + fileLine(__FILE__, line) + ": failed: expected "
             "1 == 2; 1 is not 2\n", mockCallback.text);
   EXPECT_TRUE(recovered);
   mockCallback.text.clear();
 
   EXPECT_FATAL(KJ_ASSERT(1 == 2, i, "hi", str)); line = __LINE__;
-  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) + ": bug in code: expected "
+  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) + ": failed: expected "
             "1 == 2; i = 123; hi; str = foo\n", mockCallback.text);
   mockCallback.text.clear();
 
   EXPECT_FATAL(KJ_REQUIRE(1 == 2, i, "hi", str)); line = __LINE__;
-  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) + ": requirement not met: expected "
+  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) + ": failed: expected "
             "1 == 2; i = 123; hi; str = foo\n", mockCallback.text);
   mockCallback.text.clear();
 
   EXPECT_FATAL(KJ_FAIL_ASSERT("foo")); line = __LINE__;
-  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) + ": bug in code: foo\n",
+  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) + ": failed: foo\n",
             mockCallback.text);
   mockCallback.text.clear();
+}
+
+TEST(Debug, Exception) {
+  int i = 123;
+
+  int line = __LINE__; Exception exception = KJ_EXCEPTION(DISCONNECTED, "foo", i);
+
+  EXPECT_EQ(Exception::Type::DISCONNECTED, exception.getType());
+  EXPECT_STREQ(__FILE__, exception.getFile());
+  EXPECT_EQ(line, exception.getLine());
+  EXPECT_EQ("foo; i = 123", exception.getDescription());
 }
 
 TEST(Debug, Catch) {
@@ -268,7 +291,7 @@ TEST(Debug, Catch) {
         what = kj::str(what.slice(0, *eol));
       }
       std::string text(what.cStr());
-      EXPECT_EQ(fileLine(__FILE__, line) + ": bug in code: foo", text);
+      EXPECT_EQ(fileLine(__FILE__, line) + ": failed: foo", text);
     } else {
       ADD_FAILURE() << "Expected exception.";
     }
@@ -287,7 +310,7 @@ TEST(Debug, Catch) {
         what = kj::str(what.slice(0, *eol));
       }
       std::string text(what.cStr());
-      EXPECT_EQ(fileLine(__FILE__, line) + ": bug in code: foo", text);
+      EXPECT_EQ(fileLine(__FILE__, line) + ": failed: foo", text);
     } else {
       ADD_FAILURE() << "Expected exception.";
     }
@@ -306,10 +329,15 @@ TEST(Debug, Catch) {
       } else {
         text.assign(what.cStr());
       }
-      EXPECT_EQ(fileLine(__FILE__, line) + ": bug in code: foo", text);
+      EXPECT_EQ(fileLine(__FILE__, line) + ": failed: foo", text);
     }
   }
 #endif
+}
+
+int mockSyscall(int i, int error = 0) {
+  errno = error;
+  return i;
 }
 
 TEST(Debug, Syscall) {
@@ -319,20 +347,40 @@ TEST(Debug, Syscall) {
   int i = 123;
   const char* str = "foo";
 
-  int fd;
-  KJ_SYSCALL(fd = dup(STDIN_FILENO));
-  KJ_SYSCALL(close(fd));
-  EXPECT_FATAL(KJ_SYSCALL(close(fd), i, "bar", str)); line = __LINE__;
-  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) + ": error from OS: close(fd): "
-            + strerror(EBADF) + "; i = 123; bar; str = foo\n", mockCallback.text);
+  KJ_SYSCALL(mockSyscall(0));
+  KJ_SYSCALL(mockSyscall(1));
+
+  EXPECT_FATAL(KJ_SYSCALL(mockSyscall(-1, EBADF), i, "bar", str)); line = __LINE__;
+  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) +
+            ": failed: mockSyscall(-1, EBADF): " + strerror(EBADF) +
+            "; i = 123; bar; str = foo\n", mockCallback.text);
+  mockCallback.text.clear();
+
+  EXPECT_FATAL(KJ_SYSCALL(mockSyscall(-1, ECONNRESET), i, "bar", str)); line = __LINE__;
+  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) +
+            ": disconnected: mockSyscall(-1, ECONNRESET): " + strerror(ECONNRESET) +
+            "; i = 123; bar; str = foo\n", mockCallback.text);
+  mockCallback.text.clear();
+
+  EXPECT_FATAL(KJ_SYSCALL(mockSyscall(-1, ENOMEM), i, "bar", str)); line = __LINE__;
+  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) +
+            ": overloaded: mockSyscall(-1, ENOMEM): " + strerror(ENOMEM) +
+            "; i = 123; bar; str = foo\n", mockCallback.text);
+  mockCallback.text.clear();
+
+  EXPECT_FATAL(KJ_SYSCALL(mockSyscall(-1, ENOSYS), i, "bar", str)); line = __LINE__;
+  EXPECT_EQ("fatal exception: " + fileLine(__FILE__, line) +
+            ": unimplemented: mockSyscall(-1, ENOSYS): " + strerror(ENOSYS) +
+            "; i = 123; bar; str = foo\n", mockCallback.text);
   mockCallback.text.clear();
 
   int result = 0;
   bool recovered = false;
-  KJ_SYSCALL(result = close(fd), i, "bar", str) { recovered = true; break; } line = __LINE__;
-  EXPECT_EQ("recoverable exception: " + fileLine(__FILE__, line) + ": error from OS: close(fd): "
-            + strerror(EBADF) + "; i = 123; bar; str = foo\n", mockCallback.text);
-  EXPECT_LT(result, 0);
+  KJ_SYSCALL(result = mockSyscall(-2, EBADF), i, "bar", str) { recovered = true; break; } line = __LINE__;
+  EXPECT_EQ("recoverable exception: " + fileLine(__FILE__, line) +
+            ": failed: mockSyscall(-2, EBADF): " + strerror(EBADF) +
+            "; i = 123; bar; str = foo\n", mockCallback.text);
+  EXPECT_EQ(-2, result);
   EXPECT_TRUE(recovered);
 }
 
@@ -350,7 +398,7 @@ TEST(Debug, Context) {
 
     EXPECT_FATAL(KJ_FAIL_ASSERT("bar")); line = __LINE__;
     EXPECT_EQ("fatal exception: " + fileLine(__FILE__, cline) + ": context: foo\n"
-              + fileLine(__FILE__, line) + ": bug in code: bar\n",
+              + fileLine(__FILE__, line) + ": failed: bar\n",
               mockCallback.text);
     mockCallback.text.clear();
 
@@ -362,7 +410,7 @@ TEST(Debug, Context) {
 
       EXPECT_EQ("fatal exception: " + fileLine(__FILE__, cline) + ": context: foo\n"
                 + fileLine(__FILE__, cline2) + ": context: baz; i = 123; corge; str = qux\n"
-                + fileLine(__FILE__, line) + ": bug in code: bar\n",
+                + fileLine(__FILE__, line) + ": failed: bar\n",
                 mockCallback.text);
       mockCallback.text.clear();
     }
@@ -373,7 +421,7 @@ TEST(Debug, Context) {
 
       EXPECT_EQ("fatal exception: " + fileLine(__FILE__, cline) + ": context: foo\n"
                 + fileLine(__FILE__, cline2) + ": context: grault\n"
-                + fileLine(__FILE__, line) + ": bug in code: bar\n",
+                + fileLine(__FILE__, line) + ": failed: bar\n",
                 mockCallback.text);
       mockCallback.text.clear();
     }

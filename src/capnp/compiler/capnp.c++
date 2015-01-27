@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "lexer.h"
 #include "parser.h"
@@ -38,11 +36,19 @@
 #include <kj/parse/char.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <capnp/serialize.h>
 #include <capnp/serialize-packed.h>
 #include <errno.h>
 #include <stdlib.h>
+
+#if _WIN32
+#include <process.h>
+#include <io.h>
+#include <fcntl.h>
+#define pipe(fds) _pipe(fds, 8192, _O_BINARY)
+#else
+#include <sys/wait.h>
+#endif
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -197,7 +203,7 @@ public:
           "    capnp eval myschema.capnp someConstant.someList[4]\n"
           "    capnp eval myschema.capnp someConstant.someList[4].anotherField[1][2][3]\n"
           "Since consts can have complex struct types, and since you can define a const using "
-          "imporst and variable substitution, this can be a convenient way to write text-format "
+          "import and variable substitution, this can be a convenient way to write text-format "
           "config files which are compiled to binary before deployment.",
 
           "By default the value is written in text format and can have any type.  The -b, -p, "
@@ -245,7 +251,7 @@ public:
                              "If a file specified for compilation starts with <prefix>, remove "
                              "the prefix for the purpose of deciding the names of output files.  "
                              "For example, the following command:\n"
-                             "    capnp --src-prefix=foo/bar -oc++:corge foo/bar/baz/qux.capnp\n"
+                             "    capnp compile --src-prefix=foo/bar -oc++:corge foo/bar/baz/qux.capnp\n"
                              "would generate the files corge/baz/qux.capnp.{h,c++}.")
            .expectOneOrMoreArgs("<source>", KJ_BIND_METHOD(*this, addSource))
            .callAfterParsing(KJ_BIND_METHOD(*this, generateOutput));
@@ -283,6 +289,9 @@ public:
     if (addStandardImportPaths) {
       loader.addImportPath(kj::heapString("/usr/local/include"));
       loader.addImportPath(kj::heapString("/usr/include"));
+#ifdef CAPNP_INCLUDE_DIR
+      loader.addImportPath(kj::heapString(CAPNP_INCLUDE_DIR));
+#endif
       addStandardImportPaths = false;
     }
 
@@ -326,11 +335,53 @@ public:
   kj::MainBuilder::Validity addOutput(kj::StringPtr spec) {
     KJ_IF_MAYBE(split, spec.findFirst(':')) {
       kj::StringPtr dir = spec.slice(*split + 1);
+      auto plugin = spec.slice(0, *split);
+
+      KJ_IF_MAYBE(split2, dir.findFirst(':')) {
+        // Grr, there are two colons. Might this be a Windows path? Let's do some heuristics.
+        if (*split == 1 && (dir.startsWith("/") || dir.startsWith("\\"))) {
+          // So, the first ':' was the second char, and was followed by '/' or '\', e.g.:
+          //     capnp compile -o c:/foo.exe:bar
+          //
+          // In this case we can conclude that the second colon is actually meant to be the
+          // plugin/location separator, and the first colon was simply signifying a drive letter.
+          //
+          // Proof by contradiction:
+          // - Say that none of the colons were meant to be plugin/location separators; i.e. the
+          //   whole argument is meant to be a plugin indicator and the location defaults to ".".
+          //   -> In this case, the plugin path has two colons, which is not valid.
+          //   -> CONTRADICTION
+          // - Say that the first colon was meant to be the plugin/location separator.
+          //   -> In this case, the second colon must be the drive letter separator for the
+          //      output location.
+          //   -> However, the output location begins with '/' or '\', which is not a drive letter.
+          //   -> CONTRADICTION
+          // - Say that there are more colons beyond the first two, and one of these is meant to
+          //   be the plugin/location separator.
+          //   -> In this case, the plugin path has two or more colons, which is not valid.
+          //   -> CONTRADICTION
+          //
+          // We therefore conclude that the *second* colon is in fact the plugin/location separator.
+          //
+          // Note that there is still an ambiguous case:
+          //     capnp compile -o c:/foo
+          //
+          // In this unfortunate case, we have no way to tell if the user meant "use the 'c' plugin
+          // and output to /foo" or "use the plugin c:/foo and output to the default location". We
+          // prefer the former interpretation, because the latter is Windows-specific and such
+          // users can always explicitly specify the output location like:
+          //     capnp compile -o c:/foo:.
+
+          dir = dir.slice(*split2 + 1);
+          plugin = spec.slice(0, *split2 + 2);
+        }
+      }
+
       struct stat stats;
       if (stat(dir.cStr(), &stats) < 0 || !S_ISDIR(stats.st_mode)) {
         return "output location is inaccessible or is not a directory";
       }
-      outputs.add(OutputDirective { spec.slice(0, *split), dir });
+      outputs.add(OutputDirective { plugin, dir });
     } else {
       outputs.add(OutputDirective { spec.asArray(), nullptr });
     }
@@ -396,7 +447,11 @@ public:
       kj::String exeName;
       bool shouldSearchPath = true;
       for (char c: output.name) {
+#if _WIN32
+        if (c == '/' || c == '\\') {
+#else
         if (c == '/') {
+#endif
           shouldSearchPath = false;
           break;
         }
@@ -407,49 +462,108 @@ public:
         exeName = kj::heapString(output.name);
       }
 
+      kj::Array<char> pwd = kj::heapArray<char>(256);
+      while (getcwd(pwd.begin(), pwd.size()) == nullptr) {
+        KJ_REQUIRE(pwd.size() < 8192, "WTF your working directory path is more than 8k?");
+        pwd = kj::heapArray<char>(pwd.size() * 2);
+      }
+
+#if _WIN32
+      int oldStdin;
+      KJ_SYSCALL(oldStdin = dup(STDIN_FILENO));
+      intptr_t child;
+
+#else  // _WIN32
       pid_t child;
       KJ_SYSCALL(child = fork());
       if (child == 0) {
         // I am the child!
+
         KJ_SYSCALL(close(pipeFds[1]));
+#endif  // _WIN32, else
+
         KJ_SYSCALL(dup2(pipeFds[0], STDIN_FILENO));
         KJ_SYSCALL(close(pipeFds[0]));
-
-        kj::Array<char> pwd = kj::heapArray<char>(256);
-        while (getcwd(pwd.begin(), pwd.size()) == nullptr) {
-          KJ_REQUIRE(pwd.size() < 8192, "WTF your working directory path is more than 8k?");
-          pwd = kj::heapArray<char>(pwd.size() * 2);
-        }
 
         if (output.dir != nullptr) {
           KJ_SYSCALL(chdir(output.dir.cStr()), output.dir);
         }
 
         if (shouldSearchPath) {
+#if _WIN32
+          // MSVCRT's spawn*() don't correctly escape arguments, which is necessary on Windows
+          // since the underlying system call takes a single command line string rather than
+          // an arg list. Instead of trying to do the escaping ourselves, we just pass "plugin"
+          // for argv[0].
+          child = _spawnlp(_P_NOWAIT, exeName.cStr(), "plugin", nullptr);
+#else
           execlp(exeName.cStr(), exeName.cStr(), nullptr);
+#endif
         } else {
+#if _WIN32
+          if (!exeName.startsWith("/") && !exeName.startsWith("\\") &&
+              !(exeName.size() >= 2 && exeName[1] == ':')) {
+#else
           if (!exeName.startsWith("/")) {
+#endif
             // The name is relative.  Prefix it with our original working directory path.
             exeName = kj::str(pwd.begin(), "/", exeName);
           }
 
+#if _WIN32
+          // MSVCRT's spawn*() don't correctly escape arguments, which is necessary on Windows
+          // since the underlying system call takes a single command line string rather than
+          // an arg list. Instead of trying to do the escaping ourselves, we just pass "plugin"
+          // for argv[0].
+          child = _spawnl(_P_NOWAIT, exeName.cStr(), "plugin", nullptr);
+#else
           execl(exeName.cStr(), exeName.cStr(), nullptr);
+#endif
         }
 
-        int error = errno;
-        if (error == ENOENT) {
-          context.exitError(kj::str(output.name, ": no such plugin (executable should be '",
-                                    exeName, "')"));
-        } else {
-          KJ_FAIL_SYSCALL("exec()", error);
+#if _WIN32
+        if (child == -1) {
+#endif
+          int error = errno;
+          if (error == ENOENT) {
+            context.exitError(kj::str(output.name, ": no such plugin (executable should be '",
+                                      exeName, "')"));
+          } else {
+#if _WIN32
+            KJ_FAIL_SYSCALL("spawn()", error);
+#else
+            KJ_FAIL_SYSCALL("exec()", error);
+#endif
+          }
+#if _WIN32
         }
+
+        // Restore stdin.
+        KJ_SYSCALL(dup2(oldStdin, STDIN_FILENO));
+        KJ_SYSCALL(close(oldStdin));
+
+        // Restore current directory.
+        KJ_SYSCALL(chdir(pwd.begin()), pwd.begin());
+#else  // _WIN32
       }
 
       KJ_SYSCALL(close(pipeFds[0]));
+#endif  // _WIN32, else
 
       writeMessageToFd(pipeFds[1], message);
       KJ_SYSCALL(close(pipeFds[1]));
 
+#if _WIN32
+      int status;
+      if (_cwait(&status, child, 0) == -1) {
+        KJ_FAIL_SYSCALL("_cwait()", errno);
+      }
+
+      if (status != 0) {
+        context.error(kj::str(output.name, ": plugin failed: exit code ", status));
+      }
+
+#else  // _WIN32
       int status;
       KJ_SYSCALL(waitpid(child, &status, 0));
       if (WIFSIGNALED(status)) {
@@ -457,6 +571,7 @@ public:
       } else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
         context.error(kj::str(output.name, ": plugin failed: exit code ", WEXITSTATUS(status)));
       }
+#endif  // _WIN32, else
     }
 
     return true;
@@ -590,17 +705,10 @@ public:
 private:
   struct ParseErrorCatcher: public kj::ExceptionCallback {
     void onRecoverableException(kj::Exception&& e) {
-      if (e.getNature() == kj::Exception::Nature::PRECONDITION) {
-        // This is probably a problem with the input.  Let's try to report it more nicely.
-
-        // Only capture the first exception, on the assumption that later exceptions are probably
-        // just cascading problems.
-        if (exception == nullptr) {
-          exception = kj::mv(e);
-        }
-      } else {
-        // This is probably a bug, not a problem with the input.
-        ExceptionCallback::onRecoverableException(kj::mv(e));
+      // Only capture the first exception, on the assumption that later exceptions are probably
+      // just cascading problems.
+      if (exception == nullptr) {
+        exception = kj::mv(e);
       }
     }
 
@@ -984,8 +1092,7 @@ public:
       for (;;) {
         auto buf = input.tryGetReadBuffer();
         if (buf.size() == 0) break;
-        allText.addAll(reinterpret_cast<const char*>(buf.begin()),
-                       reinterpret_cast<const char*>(buf.end()));
+        allText.addAll(buf.asChars());
         input.skip(buf.size());
       }
     }
@@ -1004,21 +1111,19 @@ public:
 
     // Set up stuff for the ValueTranslator.
     ValueResolverGlue resolver(compiler->getLoader(), errorReporter);
-    auto type = arena.getOrphanage().newOrphan<schema::Type>();
-    type.get().initStruct().setTypeId(rootType.getProto().getId());
 
     // Set up output stream.
     kj::FdOutputStream rawOutput(STDOUT_FILENO);
     kj::BufferedOutputStreamWrapper output(rawOutput);
 
     while (parserInput.getPosition() != tokens.end()) {
-      KJ_IF_MAYBE(expression, parser.getParsers().parenthesizedValueExpression(parserInput)) {
+      KJ_IF_MAYBE(expression, parser.getParsers().expression(parserInput)) {
         MallocMessageBuilder item(
             segmentSize == 0 ? SUGGESTED_FIRST_SEGMENT_WORDS : segmentSize,
             segmentSize == 0 ? SUGGESTED_ALLOCATION_STRATEGY : AllocationStrategy::FIXED_SIZE);
         ValueTranslator translator(resolver, errorReporter, item.getOrphanage());
 
-        KJ_IF_MAYBE(value, translator.compileValue(expression->getReader(), type.getReader())) {
+        KJ_IF_MAYBE(value, translator.compileValue(expression->getReader(), rootType)) {
           if (segmentSize == 0) {
             writeFlat(value->getReader().as<DynamicStruct>(), output);
           } else {
@@ -1242,25 +1347,8 @@ private:
       return loader.get(id);
     }
 
-    kj::Maybe<DynamicValue::Reader> resolveConstant(DeclName::Reader name) {
-      auto base = name.getBase();
-      switch (base.which()) {
-        case DeclName::Base::RELATIVE_NAME: {
-          auto value = base.getRelativeName();
-          errorReporter.addErrorOn(value, kj::str("Not defined: ", value.getValue()));
-          break;
-        }
-        case DeclName::Base::ABSOLUTE_NAME: {
-          auto value = base.getAbsoluteName();
-          errorReporter.addErrorOn(value, kj::str("Not defined: ", value.getValue()));
-          break;
-        }
-        case DeclName::Base::IMPORT_NAME: {
-          auto value = base.getImportName();
-          errorReporter.addErrorOn(value, "Imports not allowed in encode input.");
-          break;
-        }
-      }
+    kj::Maybe<DynamicValue::Reader> resolveConstant(Expression::Reader name) {
+      errorReporter.addErrorOn(name, kj::str("External constants not allowed in encode input."));
       return nullptr;
     }
 

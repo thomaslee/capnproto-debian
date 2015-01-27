@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "serialize-packed.h"
 #include <kj/debug.h>
@@ -61,7 +59,7 @@ public:
 
   size_t tryRead(void* buffer, size_t minBytes, size_t maxBytes) override {
     KJ_ASSERT(maxBytes <= data.size() - readPos, "Overran end of stream.");
-    size_t amount = std::min(maxBytes, std::max(minBytes, preferredReadSize));
+    size_t amount = kj::min(maxBytes, kj::max(minBytes, preferredReadSize));
     memcpy(buffer, data.data() + readPos, amount);
     readPos += amount;
     return amount;
@@ -73,7 +71,7 @@ public:
   }
 
   kj::ArrayPtr<const byte> tryGetReadBuffer() override {
-    size_t amount = std::min(data.size() - readPos, preferredReadSize);
+    size_t amount = kj::min(data.size() - readPos, preferredReadSize);
     return kj::arrayPtr(reinterpret_cast<const byte*>(data.data() + readPos), amount);
   }
 
@@ -88,6 +86,8 @@ struct DisplayByteArray {
       : data(reinterpret_cast<const uint8_t*>(str.data())), size(str.size()) {}
   DisplayByteArray(const std::initializer_list<uint8_t>& list)
       : data(list.begin()), size(list.size()) {}
+  DisplayByteArray(kj::ArrayPtr<const byte> data)
+      : data(data.begin()), size(data.size()) {}
 
   const uint8_t* data;
   size_t size;
@@ -106,8 +106,7 @@ std::ostream& operator<<(std::ostream& os, const DisplayByteArray& bytes) {
   return os;
 }
 
-void expectPacksTo(std::initializer_list<uint8_t> unpacked,
-                   std::initializer_list<uint8_t> packed) {
+void expectPacksTo(kj::ArrayPtr<const byte> unpacked, kj::ArrayPtr<const byte> packed) {
   TestPipe pipe;
 
   // -----------------------------------------------------------------
@@ -119,7 +118,7 @@ void expectPacksTo(std::initializer_list<uint8_t> unpacked,
     packedOut.write(unpacked.begin(), unpacked.size());
   }
 
-  if (pipe.getData() != std::string(reinterpret_cast<const char*>(packed.begin()), packed.size())) {
+  if (pipe.getData() != std::string(packed.asChars().begin(), packed.asChars().size())) {
     ADD_FAILURE()
         << "Tried to pack: " << DisplayByteArray(unpacked) << "\n"
         << "Expected:      " << DisplayByteArray(packed) << "\n"
@@ -130,16 +129,15 @@ void expectPacksTo(std::initializer_list<uint8_t> unpacked,
   // -----------------------------------------------------------------
   // read
 
-  std::string roundTrip;
-  roundTrip.resize(unpacked.size());
+  kj::Array<byte> roundTrip = kj::heapArray<byte>(unpacked.size());
 
   {
     PackedInputStream packedIn(pipe);
-    packedIn.InputStream::read(&*roundTrip.begin(), roundTrip.size());
+    packedIn.InputStream::read(roundTrip.begin(), roundTrip.size());
     EXPECT_TRUE(pipe.allRead());
   }
 
-  if (roundTrip != std::string(reinterpret_cast<const char*>(unpacked.begin()), unpacked.size())) {
+  if (memcmp(roundTrip.begin(), unpacked.begin(), unpacked.size()) != 0) {
     ADD_FAILURE()
         << "Tried to unpack: " << DisplayByteArray(packed) << "\n"
         << "Expected:        " << DisplayByteArray(unpacked) << "\n"
@@ -152,12 +150,11 @@ void expectPacksTo(std::initializer_list<uint8_t> unpacked,
 
     {
       PackedInputStream packedIn(pipe);
-      packedIn.InputStream::read(&*roundTrip.begin(), roundTrip.size());
+      packedIn.InputStream::read(roundTrip.begin(), roundTrip.size());
       EXPECT_TRUE(pipe.allRead());
     }
 
-    if (roundTrip !=
-        std::string(reinterpret_cast<const char*>(unpacked.begin()), unpacked.size())) {
+    if (memcmp(roundTrip.begin(), unpacked.begin(), unpacked.size()) != 0) {
       ADD_FAILURE()
           << "Tried to unpack: " << DisplayByteArray(packed) << "\n"
           << "  Block size: " << blockSize << "\n"
@@ -204,8 +201,7 @@ void expectPacksTo(std::initializer_list<uint8_t> unpacked,
     PackedInputStream packedIn(pipe);
     packedIn.InputStream::read(&*roundTrip.begin(), roundTrip.size());
 
-    if (roundTrip !=
-        std::string(reinterpret_cast<const char*>(unpacked.begin()), unpacked.size())) {
+    if (memcmp(roundTrip.begin(), unpacked.begin(), unpacked.size()) != 0) {
       ADD_FAILURE()
           << "Tried to unpack: " << DisplayByteArray(packed) << "\n"
           << "  Index: " << i << "\n"

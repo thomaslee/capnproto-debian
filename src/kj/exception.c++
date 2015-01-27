@@ -1,40 +1,39 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "exception.h"
 #include "string.h"
 #include "debug.h"
 #include "threadlocal.h"
-#include <unistd.h>
+#include "miniposix.h"
 #include <stdlib.h>
 #include <exception>
+#include <new>
 
-#if __linux__ || __APPLE__
+#if (__linux__ && !__ANDROID__) || __APPLE__
 #define KJ_HAS_BACKTRACE 1
 #include <execinfo.h>
 #endif
 
-#if __linux__ && defined(KJ_DEBUG)
+#if (__linux__ || __APPLE__) && defined(KJ_DEBUG)
 #include <stdio.h>
 #include <pthread.h>
 #endif
@@ -44,11 +43,11 @@ namespace kj {
 namespace {
 
 String getStackSymbols(ArrayPtr<void* const> trace) {
-#if __linux__ && defined(KJ_DEBUG)
+#if (__linux__ || __APPLE__) && !__ANDROID__ && defined(KJ_DEBUG)
   // We want to generate a human-readable stack trace.
 
-  // TODO(someday):  It would be really great if we could avoid farming out to addr2line and do
-  //   this all in-process, but that may involve onerous requirements like large library
+  // TODO(someday):  It would be really great if we could avoid farming out to another process
+  //   and do this all in-process, but that may involve onerous requirements like large library
   //   dependencies or using -rdynamic.
 
   // The environment manipulation is not thread-safe, so lock a mutex.  This could still be
@@ -57,15 +56,21 @@ String getStackSymbols(ArrayPtr<void* const> trace) {
   // is in use.
   static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_lock(&mutex);
+  KJ_DEFER(pthread_mutex_unlock(&mutex));
 
-  // Don't heapcheck / intercept syscalls for addr2line.
+  // Don't heapcheck / intercept syscalls.
   const char* preload = getenv("LD_PRELOAD");
   String oldPreload;
   if (preload != nullptr) {
     oldPreload = heapString(preload);
     unsetenv("LD_PRELOAD");
   }
+  KJ_DEFER(if (oldPreload != nullptr) { setenv("LD_PRELOAD", oldPreload.cStr(), true); });
 
+  String lines[8];
+  FILE* p = nullptr;
+
+#if __linux__
   // Get executable name from /proc/self/exe, then pass it and the stack trace to addr2line to
   // get file/line pairs.
   char exe[512];
@@ -75,9 +80,13 @@ String getStackSymbols(ArrayPtr<void* const> trace) {
   }
   exe[n] = '\0';
 
-  String lines[8];
+  p = popen(str("addr2line -e ", exe, ' ', strArray(trace, " ")).cStr(), "r");
+#elif __APPLE__
+  // The Mac OS X equivalent of addr2line is atos.
+  // (Internally, it uses the private CoreSymbolication.framework library.)
+  p = popen(str("xcrun atos -p ", getpid(), ' ', strArray(trace, " ")).cStr(), "r");
+#endif
 
-  FILE* p = popen(str("addr2line -e ", exe, ' ', strArray(trace, " ")).cStr(), "r");
   if (p == nullptr) {
     return nullptr;
   }
@@ -86,10 +95,13 @@ String getStackSymbols(ArrayPtr<void* const> trace) {
   size_t i = 0;
   while (i < kj::size(lines) && fgets(line, sizeof(line), p) != nullptr) {
     // Don't include exception-handling infrastructure in stack trace.
+    // addr2line output matches file names; atos output matches symbol names.
     if (i == 0 &&
         (strstr(line, "kj/common.c++") != nullptr ||
          strstr(line, "kj/exception.") != nullptr ||
-         strstr(line, "kj/debug.") != nullptr)) {
+         strstr(line, "kj/debug.") != nullptr ||
+         strstr(line, "kj::Exception") != nullptr ||
+         strstr(line, "kj::_::Debug") != nullptr)) {
       continue;
     }
 
@@ -103,12 +115,6 @@ String getStackSymbols(ArrayPtr<void* const> trace) {
 
   pclose(p);
 
-  if (oldPreload != nullptr) {
-    setenv("LD_PRELOAD", oldPreload.cStr(), true);
-  }
-
-  pthread_mutex_unlock(&mutex);
-
   return strArray(arrayPtr(lines, i), "");
 #else
   return nullptr;
@@ -117,28 +123,15 @@ String getStackSymbols(ArrayPtr<void* const> trace) {
 
 }  // namespace
 
-ArrayPtr<const char> KJ_STRINGIFY(Exception::Nature nature) {
-  static const char* NATURE_STRINGS[] = {
-    "requirement not met",
-    "bug in code",
-    "error from OS",
-    "network failure",
-    "error"
+StringPtr KJ_STRINGIFY(Exception::Type type) {
+  static const char* TYPE_STRINGS[] = {
+    "failed",
+    "overloaded",
+    "disconnected",
+    "unimplemented"
   };
 
-  const char* s = NATURE_STRINGS[static_cast<uint>(nature)];
-  return arrayPtr(s, strlen(s));
-}
-
-ArrayPtr<const char> KJ_STRINGIFY(Exception::Durability durability) {
-  static const char* DURABILITY_STRINGS[] = {
-    "permanent",
-    "temporary",
-    "overloaded"
-  };
-
-  const char* s = DURABILITY_STRINGS[static_cast<uint>(durability)];
-  return arrayPtr(s, strlen(s));
+  return TYPE_STRINGS[static_cast<uint>(type)];
 }
 
 String KJ_STRINGIFY(const Exception& e) {
@@ -169,16 +162,23 @@ String KJ_STRINGIFY(const Exception& e) {
   }
 
   return str(strArray(contextText, ""),
-             e.getFile(), ":", e.getLine(), ": ", e.getNature(),
-             e.getDurability() == Exception::Durability::TEMPORARY ? " (temporary)" : "",
+             e.getFile(), ":", e.getLine(), ": ", e.getType(),
              e.getDescription() == nullptr ? "" : ": ", e.getDescription(),
              e.getStackTrace().size() > 0 ? "\nstack: " : "", strArray(e.getStackTrace(), " "),
              getStackSymbols(e.getStackTrace()));
 }
 
-Exception::Exception(Nature nature, Durability durability, const char* file, int line,
-                     String description) noexcept
-    : file(file), line(line), nature(nature), durability(durability),
+Exception::Exception(Type type, const char* file, int line, String description) noexcept
+    : file(file), line(line), type(type), description(mv(description)) {
+#ifndef KJ_HAS_BACKTRACE
+  traceCount = 0;
+#else
+  traceCount = backtrace(trace, 16);
+#endif
+}
+
+Exception::Exception(Type type, String file, int line, String description) noexcept
+    : ownFile(kj::mv(file)), file(ownFile.cStr()), line(line), type(type),
       description(mv(description)) {
 #ifndef KJ_HAS_BACKTRACE
   traceCount = 0;
@@ -187,19 +187,8 @@ Exception::Exception(Nature nature, Durability durability, const char* file, int
 #endif
 }
 
-Exception::Exception(Nature nature, Durability durability, String file, int line,
-                     String description) noexcept
-    : ownFile(kj::mv(file)), file(ownFile.cStr()), line(line), nature(nature),
-      durability(durability), description(mv(description)) {
-#ifndef KJ_HAS_BACKTRACE
-  traceCount = 0;
-#else
-  traceCount = backtrace(trace, 16);
-#endif
-}
-
 Exception::Exception(const Exception& other) noexcept
-    : file(other.file), line(other.line), nature(other.nature), durability(other.durability),
+    : file(other.file), line(other.line), type(other.type),
       description(heapString(other.description)), traceCount(other.traceCount) {
   if (file == other.ownFile.cStr()) {
     ownFile = heapString(other.ownFile);
@@ -312,7 +301,7 @@ public:
     StringPtr textPtr = text;
 
     while (text != nullptr) {
-      ssize_t n = write(STDERR_FILENO, textPtr.begin(), textPtr.size());
+      miniposix::ssize_t n = miniposix::write(STDERR_FILENO, textPtr.begin(), textPtr.size());
       if (n <= 0) {
         // stderr is broken.  Give up.
         return;
@@ -329,8 +318,7 @@ private:
     // We intentionally don't log the context since it should get re-added by the exception callback
     // anyway.
     getExceptionCallback().logMessage(e.getFile(), e.getLine(), 0, str(
-        e.getNature(), e.getDurability() == Exception::Durability::TEMPORARY ? " (temporary)" : "",
-        e.getDescription() == nullptr ? "" : ": ", e.getDescription(),
+        e.getType(), e.getDescription() == nullptr ? "" : ": ", e.getDescription(),
         e.getStackTrace().size() > 0 ? "\nstack: " : "", strArray(e.getStackTrace(), " "),
         getStackSymbols(e.getStackTrace()), "\n"));
   }
@@ -392,6 +380,26 @@ uint uncaughtExceptionCount() {
   return __cxa_get_globals()->uncaughtExceptions;
 }
 
+#elif _MSC_VER
+
+#if 0
+// TODO(msvc): The below was copied from:
+//     https://github.com/panaseleus/stack_unwinding/blob/master/boost/exception/uncaught_exception_count.hpp
+//   Alas, it doesn not appera to work on MSVC2015. The linker claims _getptd() doesn't exist.
+
+extern "C" char *__cdecl _getptd();
+
+uint uncaughtExceptionCount() {
+  return *reinterpret_cast<uint*>(_getptd() + (sizeof(void*) == 8 ? 0x100 : 0x90));
+}
+#endif
+
+uint uncaughtExceptionCount() {
+  // Since the above doesn't work, fall back to uncaught_exception(). This will produce incorrect
+  // results in very obscure cases that Cap'n Proto doesn't really rely on anyway.
+  return std::uncaught_exception();
+}
+
 #else
 #error "This needs to be ported to your compiler / C++ ABI."
 #endif
@@ -442,11 +450,14 @@ Maybe<Exception> runCatchingExceptions(Runnable& runnable) noexcept {
     return nullptr;
   } catch (Exception& e) {
     return kj::mv(e);
+  } catch (std::bad_alloc& e) {
+    return Exception(Exception::Type::OVERLOADED,
+                     "(unknown)", -1, str("std::bad_alloc: ", e.what()));
   } catch (std::exception& e) {
-    return Exception(Exception::Nature::OTHER, Exception::Durability::PERMANENT,
+    return Exception(Exception::Type::FAILED,
                      "(unknown)", -1, str("std::exception: ", e.what()));
   } catch (...) {
-    return Exception(Exception::Nature::OTHER, Exception::Durability::PERMANENT,
+    return Exception(Exception::Type::FAILED,
                      "(unknown)", -1, str("Unknown non-KJ exception."));
   }
 #endif

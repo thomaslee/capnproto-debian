@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "test-util.h"
 #include <kj/debug.h>
@@ -58,7 +56,7 @@ void genericInitTestMessage(Builder builder) {
     subBuilder.setUInt16Field(1234u);
     subBuilder.setUInt32Field(56789012u);
     subBuilder.setUInt64Field(345678901234567890ull);
-    subBuilder.setFloat32Field(-1.25e-10);
+    subBuilder.setFloat32Field(-1.25e-10f);
     subBuilder.setFloat64Field(345);
     subBuilder.setTextField("baz");
     subBuilder.setDataField(data("qux"));
@@ -80,7 +78,7 @@ void genericInitTestMessage(Builder builder) {
     subBuilder.setUInt16List({1234u, 5678u, 0u, 0xffffu});
     subBuilder.setUInt32List({12345678u, 90123456u, 0u, 0xffffffffu});
     subBuilder.setUInt64List({123456789012345ull, 678901234567890ull, 0ull, 0xffffffffffffffffull});
-    subBuilder.setFloat32List({0, 1234567, 1e37, -1e37, 1e-37, -1e-37});
+    subBuilder.setFloat32List({0, 1234567, 1e37f, -1e37f, 1e-37f, -1e-37f});
     subBuilder.setFloat64List({0, 123456789012345, 1e306, -1e306, 1e-306, -1e-306});
     subBuilder.setTextList({"quux", "corge", "grault"});
     subBuilder.setDataList({data("garply"), data("waldo"), data("fred")});
@@ -116,6 +114,8 @@ void genericInitTestMessage(Builder builder) {
   }
   builder.setEnumList({TestEnum::FOO, TestEnum::GARPLY});
 }
+
+#if !CAPNP_LITE
 
 void dynamicInitTestMessage(DynamicStruct::Builder builder) {
   builder.set("voidField", VOID);
@@ -202,6 +202,8 @@ void dynamicInitTestMessage(DynamicStruct::Builder builder) {
   }
   builder.set("enumList", {"foo", "garply"});
 }
+
+#endif  // !CAPNP_LITE
 
 inline bool isNaN(float f) { return f != f; }
 inline bool isNaN(double f) { return f != f; }
@@ -308,6 +310,8 @@ void genericCheckTestMessage(Reader reader) {
   }
   checkList(reader.getEnumList(), {TestEnum::FOO, TestEnum::GARPLY});
 }
+
+#if !CAPNP_LITE
 
 // Hack because as<>() is a template-parameter-dependent lookup everywhere below...
 #define as template as
@@ -435,6 +439,8 @@ void dynamicCheckTestMessage(Reader reader) {
 
 #undef as
 
+#endif  // !CAPNP_LITE
+
 template <typename Reader>
 void genericCheckTestMessageAllZero(Reader reader) {
   EXPECT_EQ(VOID, reader.getVoidField());
@@ -506,6 +512,8 @@ void genericCheckTestMessageAllZero(Reader reader) {
   EXPECT_EQ(0u, reader.getDataList().size());
   EXPECT_EQ(0u, reader.getStructList().size());
 }
+
+#if !CAPNP_LITE
 
 // Hack because as<>() is a template-parameter-dependent lookup everywhere below...
 #define as template as
@@ -585,6 +593,8 @@ void dynamicCheckTestMessageAllZero(Reader reader) {
 
 #undef as
 
+#endif  // !CAPNP_LITE
+
 template <typename Builder>
 void genericInitListDefaults(Builder builder) {
   auto lists = builder.initLists();
@@ -638,6 +648,8 @@ void genericInitListDefaults(Builder builder) {
   }
 }
 
+#if !CAPNP_LITE
+
 void dynamicInitListDefaults(DynamicStruct::Builder builder) {
   auto lists = builder.init("lists").as<DynamicStruct>();
 
@@ -689,6 +701,8 @@ void dynamicInitListDefaults(DynamicStruct::Builder builder) {
     e[0].as<TestAllTypes>().setInt32Field(789);
   }
 }
+
+#endif  // !CAPNP_LITE
 
 template <typename Reader>
 void genericCheckListDefaults(Reader reader) {
@@ -747,6 +761,8 @@ void genericCheckListDefaults(Reader reader) {
     EXPECT_EQ(789, e[0].getInt32Field());
   }
 }
+
+#if !CAPNP_LITE
 
 // Hack because as<>() is a template-parameter-dependent lookup everywhere below...
 #define as template as
@@ -811,6 +827,8 @@ void dynamicCheckListDefaults(Reader reader) {
 
 #undef as
 
+#endif  // !CAPNP_LITE
+
 }  // namespace
 
 void initTestMessage(TestAllTypes::Builder builder) { genericInitTestMessage(builder); }
@@ -831,6 +849,8 @@ void checkTestMessageAllZero(TestAllTypes::Builder builder) {
 void checkTestMessageAllZero(TestAllTypes::Reader reader) {
   genericCheckTestMessageAllZero(reader);
 }
+
+#if !CAPNP_LITE
 
 void initDynamicTestMessage(DynamicStruct::Builder builder) {
   dynamicInitTestMessage(builder);
@@ -857,8 +877,12 @@ void checkDynamicTestMessageAllZero(DynamicStruct::Reader reader) {
   dynamicCheckTestMessageAllZero(reader);
 }
 
+#endif  // !CAPNP_LITE
+
 // =======================================================================================
 // Interface implementations.
+
+#if !CAPNP_LITE
 
 TestInterfaceImpl::TestInterfaceImpl(int& callCount): callCount(callCount) {}
 
@@ -961,7 +985,8 @@ kj::Promise<void> TestTailCalleeImpl::foo(FooContext context) {
   return kj::READY_NOW;
 }
 
-TestMoreStuffImpl::TestMoreStuffImpl(int& callCount): callCount(callCount) {}
+TestMoreStuffImpl::TestMoreStuffImpl(int& callCount, int& handleCount)
+    : callCount(callCount), handleCount(handleCount) {}
 
 kj::Promise<void> TestMoreStuffImpl::getCallSequence(GetCallSequenceContext context) {
   auto result = context.getResults();
@@ -1072,6 +1097,22 @@ kj::Promise<void> TestMoreStuffImpl::loop(uint depth, test::TestInterface::Clien
     });
   }
 }
+
+class HandleImpl final: public test::TestHandle::Server {
+public:
+  HandleImpl(int& count): count(count) { ++count; }
+  ~HandleImpl() { --count; }
+
+private:
+  int& count;
+};
+
+kj::Promise<void> TestMoreStuffImpl::getHandle(GetHandleContext context) {
+  context.getResults().setHandle(kj::heap<HandleImpl>(handleCount));
+  return kj::READY_NOW;
+}
+
+#endif  // !CAPNP_LITE
 
 }  // namespace _ (private)
 }  // namespace capnp

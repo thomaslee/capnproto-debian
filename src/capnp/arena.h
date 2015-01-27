@@ -1,28 +1,30 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #ifndef CAPNP_ARENA_H_
 #define CAPNP_ARENA_H_
+
+#if defined(__GNUC__) && !CAPNP_HEADER_WARNINGS
+#pragma GCC system_header
+#endif
 
 #ifndef CAPNP_PRIVATE
 #error "This header is only meant to be included by Cap'n Proto's own source code."
@@ -36,11 +38,16 @@
 #include "common.h"
 #include "message.h"
 #include "layout.h"
+
+#if !CAPNP_LITE
 #include "capability.h"
+#endif  // !CAPNP_LITE
 
 namespace capnp {
 
+#if !CAPNP_LITE
 class ClientHook;
+#endif  // !CAPNP_LITE
 
 namespace _ {  // private
 
@@ -93,6 +100,7 @@ private:
   KJ_DISALLOW_COPY(ReadLimiter);
 };
 
+#if !CAPNP_LITE
 class BrokenCapFactory {
   // Callback for constructing broken caps.  We use this so that we can avoid arena.c++ having a
   // link-time dependency on capability code that lives in libcapnp-rpc.
@@ -100,6 +108,7 @@ class BrokenCapFactory {
 public:
   virtual kj::Own<ClientHook> newBrokenCap(kj::StringPtr description) = 0;
 };
+#endif  // !CAPNP_LITE
 
 class SegmentReader {
 public:
@@ -134,10 +143,20 @@ private:
 class SegmentBuilder: public SegmentReader {
 public:
   inline SegmentBuilder(BuilderArena* arena, SegmentId id, kj::ArrayPtr<word> ptr,
+                        ReadLimiter* readLimiter, size_t wordsUsed = 0);
+  inline SegmentBuilder(BuilderArena* arena, SegmentId id, kj::ArrayPtr<const word> ptr,
+                        ReadLimiter* readLimiter);
+  inline SegmentBuilder(BuilderArena* arena, SegmentId id, decltype(nullptr),
                         ReadLimiter* readLimiter);
 
   KJ_ALWAYS_INLINE(word* allocate(WordCount amount));
-  inline word* getPtrUnchecked(WordCount offset);
+
+  KJ_ALWAYS_INLINE(void checkWritable());
+  // Throw an exception if the segment is read-only (meaning it is a reference to external data).
+
+  KJ_ALWAYS_INLINE(word* getPtrUnchecked(WordCount offset));
+  // Get a writable pointer into the segment.  Throws an exception if the segment is read-only (i.e.
+  // a reference to external immutable data).
 
   inline BuilderArena* getArena();
 
@@ -145,10 +164,20 @@ public:
 
   inline void reset();
 
+  inline bool isWritable() { return !readOnly; }
+
+  inline void tryTruncate(word* from, word* to);
+  // If `from` points just past the current end of the segment, then move the end back to `to`.
+  // Otherwise, do nothing.
+
 private:
   word* pos;
   // Pointer to a pointer to the current end point of the segment, i.e. the location where the
   // next object should be allocated.
+
+  bool readOnly;
+
+  void throwNotWritable();
 
   KJ_DISALLOW_COPY(SegmentBuilder);
 };
@@ -165,8 +194,10 @@ public:
   // the VALIDATE_INPUT() macro which may throw an exception; if it returns normally, the caller
   // will need to continue with default values.
 
+#if !CAPNP_LITE
   virtual kj::Maybe<kj::Own<ClientHook>> extractCap(uint index) = 0;
   // Extract the capability at the given index.  If the index is invalid, returns null.
+#endif  // !CAPNP_LITE
 };
 
 class ReaderArena final: public Arena {
@@ -175,22 +206,28 @@ public:
   ~ReaderArena() noexcept(false);
   KJ_DISALLOW_COPY(ReaderArena);
 
+#if !CAPNP_LITE
   inline void initCapTable(kj::Array<kj::Maybe<kj::Own<ClientHook>>> capTable) {
     // Imbues the arena with a capability table.  This is not passed to the constructor because the
     // table itself may be built based on some other part of the message (as is the case with the
     // RPC protocol).
     this->capTable = kj::mv(capTable);
   }
+#endif  // !CAPNP_LITE
 
   // implements Arena ------------------------------------------------
   SegmentReader* tryGetSegment(SegmentId id) override;
   void reportReadLimitReached() override;
+#if !CAPNP_LITE
   kj::Maybe<kj::Own<ClientHook>> extractCap(uint index);
+#endif  // !CAPNP_LITE
 
 private:
   MessageReader* message;
   ReadLimiter readLimiter;
+#if !CAPNP_LITE
   kj::Array<kj::Maybe<kj::Own<ClientHook>>> capTable;
+#endif  // !CAPNP_LITE
 
   // Optimize for single-segment messages so that small messages are handled quickly.
   SegmentReader segment0;
@@ -210,7 +247,8 @@ class BuilderArena final: public Arena {
   // A BuilderArena that does not allow the injection of capabilities.
 
 public:
-  BuilderArena(MessageBuilder* message);
+  explicit BuilderArena(MessageBuilder* message);
+  BuilderArena(MessageBuilder* message, kj::ArrayPtr<MessageBuilder::SegmentInit> segments);
   ~BuilderArena() noexcept(false);
   KJ_DISALLOW_COPY(BuilderArena);
 
@@ -221,8 +259,10 @@ public:
   // portion of each segment, whereas tryGetSegment() returns something that includes
   // not-yet-allocated space.
 
+#if !CAPNP_LITE
   inline kj::ArrayPtr<kj::Maybe<kj::Own<ClientHook>>> getCapTable() { return capTable; }
   // Return the capability table.
+#endif  // !CAPNP_LITE
 
   SegmentBuilder* getSegment(SegmentId id);
   // Get the segment with the given id.  Crashes or throws an exception if no such segment exists.
@@ -238,10 +278,23 @@ public:
   // the arena is guaranteed to succeed.  Therefore callers should try to allocate from a specific
   // segment first if there is one, then fall back to the arena.
 
+  SegmentBuilder* addExternalSegment(kj::ArrayPtr<const word> content);
+  // Add a new segment to the arena which points to some existing memory region.  The segment is
+  // assumed to be completley full; the arena will never allocate from it.  In fact, the segment
+  // is considered read-only.  Any attempt to get a Builder pointing into this segment will throw
+  // an exception.  Readers are allowed, however.
+  //
+  // This can be used to inject some external data into a message without a copy, e.g. embedding a
+  // large mmap'd file into a message as `Data` without forcing that data to actually be read in
+  // from disk (until the message itself is written out).  `Orphanage` provides the public API for
+  // this feature.
+
+#if !CAPNP_LITE
   uint injectCap(kj::Own<ClientHook>&& cap);
   // Add the capability to the message and return its index.  If the same ClientHook is injected
   // twice, this may return the same index both times, but in this case dropCap() needs to be
   // called an equal number of times to actually remove the cap.
+#endif  // !CAPNP_LITE
 
   void dropCap(uint index);
   // Remove a capability injected earlier.  Called when the pointer is overwritten or zero'd out.
@@ -249,12 +302,16 @@ public:
   // implements Arena ------------------------------------------------
   SegmentReader* tryGetSegment(SegmentId id) override;
   void reportReadLimitReached() override;
+#if !CAPNP_LITE
   kj::Maybe<kj::Own<ClientHook>> extractCap(uint index);
+#endif  // !CAPNP_LITE
 
 private:
   MessageBuilder* message;
   ReadLimiter dummyLimiter;
+#if !CAPNP_LITE
   kj::Vector<kj::Maybe<kj::Own<ClientHook>>> capTable;
+#endif  // !CAPNP_LITE
 
   SegmentBuilder segment0;
   kj::ArrayPtr<const word> segment0ForOutput;
@@ -264,6 +321,14 @@ private:
     kj::Vector<kj::ArrayPtr<const word>> forOutput;
   };
   kj::Maybe<kj::Own<MultiSegmentState>> moreSegments;
+
+  SegmentBuilder* segmentWithSpace = nullptr;
+  // When allocating, look for space in this segment first before resorting to allocating a new
+  // segment.  This is not necessarily the last segment because addExternalSegment() may add a
+  // segment that is already-full, in which case we don't update this pointer.
+
+  template <typename T>  // Can be `word` or `const word`.
+  SegmentBuilder* addSegmentInternal(kj::ArrayPtr<T> content);
 };
 
 // =======================================================================================
@@ -315,8 +380,19 @@ inline void SegmentReader::unread(WordCount64 amount) { readLimiter->unread(amou
 // -------------------------------------------------------------------
 
 inline SegmentBuilder::SegmentBuilder(
-    BuilderArena* arena, SegmentId id, kj::ArrayPtr<word> ptr, ReadLimiter* readLimiter)
-    : SegmentReader(arena, id, ptr, readLimiter), pos(ptr.begin()) {}
+    BuilderArena* arena, SegmentId id, kj::ArrayPtr<word> ptr, ReadLimiter* readLimiter,
+    size_t wordsUsed)
+    : SegmentReader(arena, id, ptr, readLimiter), pos(ptr.begin() + wordsUsed), readOnly(false) {}
+inline SegmentBuilder::SegmentBuilder(
+    BuilderArena* arena, SegmentId id, kj::ArrayPtr<const word> ptr, ReadLimiter* readLimiter)
+    : SegmentReader(arena, id, ptr, readLimiter),
+      // const_cast is safe here because the member won't ever be dereferenced because it appears
+      // to point to the end of the segment anyway.
+      pos(const_cast<word*>(ptr.end())),
+      readOnly(true) {}
+inline SegmentBuilder::SegmentBuilder(BuilderArena* arena, SegmentId id, decltype(nullptr),
+                                      ReadLimiter* readLimiter)
+    : SegmentReader(arena, id, nullptr, readLimiter), pos(nullptr), readOnly(false) {}
 
 inline word* SegmentBuilder::allocate(WordCount amount) {
   if (intervalLength(pos, ptr.end()) < amount) {
@@ -330,9 +406,11 @@ inline word* SegmentBuilder::allocate(WordCount amount) {
   }
 }
 
+inline void SegmentBuilder::checkWritable() {
+  if (KJ_UNLIKELY(readOnly)) throwNotWritable();
+}
+
 inline word* SegmentBuilder::getPtrUnchecked(WordCount offset) {
-  // const_cast OK because SegmentBuilder's constructor always initializes its SegmentReader base
-  // class with a pointer that was originally non-const.
   return const_cast<word*>(ptr.begin() + offset);
 }
 
@@ -350,6 +428,10 @@ inline void SegmentBuilder::reset() {
   word* start = getPtrUnchecked(0 * WORDS);
   memset(start, 0, (pos - start) * sizeof(word));
   pos = start;
+}
+
+inline void SegmentBuilder::tryTruncate(word* from, word* to) {
+  if (pos == from) pos = to;
 }
 
 }  // namespace _ (private)

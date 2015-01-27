@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "module-loader.h"
 #include "lexer.h"
@@ -31,11 +29,16 @@
 #include <capnp/message.h>
 #include <map>
 #include <unistd.h>
-#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+
+#if _WIN32
+#include <windows.h>
+#else
+#include <sys/mman.h>
+#endif
 
 namespace capnp {
 namespace compiler {
@@ -46,7 +49,11 @@ class MmapDisposer: public kj::ArrayDisposer {
 protected:
   void disposeImpl(void* firstElement, size_t elementSize, size_t elementCount,
                    size_t capacity, void (*destroyElement)(void*)) const {
+#if _WIN32
+    KJ_ASSERT(UnmapViewOfFile(firstElement));
+#else
     munmap(firstElement, elementSize * elementCount);
+#endif
   }
 };
 
@@ -68,10 +75,20 @@ kj::Array<const char> mmapForRead(kj::StringPtr filename) {
     }
 
     // Regular file.  Just mmap() it.
+#if _WIN32
+    HANDLE handle = reinterpret_cast<HANDLE>(_get_osfhandle(fd));
+    KJ_ASSERT(handle != INVALID_HANDLE_VALUE);
+    HANDLE mappingHandle = CreateFileMapping(
+        handle, NULL, PAGE_READONLY, 0, stats.st_size, NULL);
+    KJ_ASSERT(mappingHandle != INVALID_HANDLE_VALUE);
+    KJ_DEFER(KJ_ASSERT(CloseHandle(mappingHandle)));
+    const void* mapping = MapViewOfFile(mappingHandle, FILE_MAP_READ, 0, 0, stats.st_size);
+#else  // _WIN32
     const void* mapping = mmap(NULL, stats.st_size, PROT_READ, MAP_SHARED, fd, 0);
     if (mapping == MAP_FAILED) {
       KJ_FAIL_SYSCALL("mmap", errno, filename);
     }
+#endif  // _WIN32, else
 
     return kj::Array<const char>(
         reinterpret_cast<const char*>(mapping), stats.st_size, mmapDisposer);

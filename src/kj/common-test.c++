@@ -1,27 +1,26 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "common.h"
+#include <inttypes.h>
 #include <gtest/gtest.h>
 
 namespace kj {
@@ -286,6 +285,10 @@ TEST(Common, MinMaxValue) {
 
   f = nan();
   EXPECT_FALSE(f == f);
+
+  // `char`'s signedness is platform-specific.
+  EXPECT_LE(char(minValue), '\0');
+  EXPECT_GE(char(maxValue), '\x7f');
 }
 
 TEST(Common, Defer) {
@@ -320,6 +323,125 @@ TEST(Common, CanConvert) {
 
   static_assert(canConvert<void*, const void*>(), "failure");
   static_assert(!canConvert<const void*, void*>(), "failure");
+}
+
+TEST(Common, ArrayAsBytes) {
+  uint32_t raw[] = { 0x12345678u, 0x9abcdef0u };
+
+  ArrayPtr<uint32_t> array = raw;
+  ASSERT_EQ(2, array.size());
+  EXPECT_EQ(0x12345678u, array[0]);
+  EXPECT_EQ(0x9abcdef0u, array[1]);
+
+  {
+    ArrayPtr<byte> bytes = array.asBytes();
+    ASSERT_EQ(8, bytes.size());
+
+    if (bytes[0] == '\x12') {
+      // big-endian
+      EXPECT_EQ(0x12u, bytes[0]);
+      EXPECT_EQ(0x34u, bytes[1]);
+      EXPECT_EQ(0x56u, bytes[2]);
+      EXPECT_EQ(0x78u, bytes[3]);
+      EXPECT_EQ(0x9au, bytes[4]);
+      EXPECT_EQ(0xbcu, bytes[5]);
+      EXPECT_EQ(0xdeu, bytes[6]);
+      EXPECT_EQ(0xf0u, bytes[7]);
+    } else {
+      // little-endian
+      EXPECT_EQ(0x12u, bytes[3]);
+      EXPECT_EQ(0x34u, bytes[2]);
+      EXPECT_EQ(0x56u, bytes[1]);
+      EXPECT_EQ(0x78u, bytes[0]);
+      EXPECT_EQ(0x9au, bytes[7]);
+      EXPECT_EQ(0xbcu, bytes[6]);
+      EXPECT_EQ(0xdeu, bytes[5]);
+      EXPECT_EQ(0xf0u, bytes[4]);
+    }
+  }
+
+  {
+    ArrayPtr<char> chars = array.asChars();
+    ASSERT_EQ(8, chars.size());
+
+    if (chars[0] == '\x12') {
+      // big-endian
+      EXPECT_EQ('\x12', chars[0]);
+      EXPECT_EQ('\x34', chars[1]);
+      EXPECT_EQ('\x56', chars[2]);
+      EXPECT_EQ('\x78', chars[3]);
+      EXPECT_EQ('\x9a', chars[4]);
+      EXPECT_EQ('\xbc', chars[5]);
+      EXPECT_EQ('\xde', chars[6]);
+      EXPECT_EQ('\xf0', chars[7]);
+    } else {
+      // little-endian
+      EXPECT_EQ('\x12', chars[3]);
+      EXPECT_EQ('\x34', chars[2]);
+      EXPECT_EQ('\x56', chars[1]);
+      EXPECT_EQ('\x78', chars[0]);
+      EXPECT_EQ('\x9a', chars[7]);
+      EXPECT_EQ('\xbc', chars[6]);
+      EXPECT_EQ('\xde', chars[5]);
+      EXPECT_EQ('\xf0', chars[4]);
+    }
+  }
+
+  ArrayPtr<const uint32_t> constArray = array;
+
+  {
+    ArrayPtr<const byte> bytes = constArray.asBytes();
+    ASSERT_EQ(8, bytes.size());
+
+    if (bytes[0] == '\x12') {
+      // big-endian
+      EXPECT_EQ(0x12u, bytes[0]);
+      EXPECT_EQ(0x34u, bytes[1]);
+      EXPECT_EQ(0x56u, bytes[2]);
+      EXPECT_EQ(0x78u, bytes[3]);
+      EXPECT_EQ(0x9au, bytes[4]);
+      EXPECT_EQ(0xbcu, bytes[5]);
+      EXPECT_EQ(0xdeu, bytes[6]);
+      EXPECT_EQ(0xf0u, bytes[7]);
+    } else {
+      // little-endian
+      EXPECT_EQ(0x12u, bytes[3]);
+      EXPECT_EQ(0x34u, bytes[2]);
+      EXPECT_EQ(0x56u, bytes[1]);
+      EXPECT_EQ(0x78u, bytes[0]);
+      EXPECT_EQ(0x9au, bytes[7]);
+      EXPECT_EQ(0xbcu, bytes[6]);
+      EXPECT_EQ(0xdeu, bytes[5]);
+      EXPECT_EQ(0xf0u, bytes[4]);
+    }
+  }
+
+  {
+    ArrayPtr<const char> chars = constArray.asChars();
+    ASSERT_EQ(8, chars.size());
+
+    if (chars[0] == '\x12') {
+      // big-endian
+      EXPECT_EQ('\x12', chars[0]);
+      EXPECT_EQ('\x34', chars[1]);
+      EXPECT_EQ('\x56', chars[2]);
+      EXPECT_EQ('\x78', chars[3]);
+      EXPECT_EQ('\x9a', chars[4]);
+      EXPECT_EQ('\xbc', chars[5]);
+      EXPECT_EQ('\xde', chars[6]);
+      EXPECT_EQ('\xf0', chars[7]);
+    } else {
+      // little-endian
+      EXPECT_EQ('\x12', chars[3]);
+      EXPECT_EQ('\x34', chars[2]);
+      EXPECT_EQ('\x56', chars[1]);
+      EXPECT_EQ('\x78', chars[0]);
+      EXPECT_EQ('\x9a', chars[7]);
+      EXPECT_EQ('\xbc', chars[6]);
+      EXPECT_EQ('\xde', chars[5]);
+      EXPECT_EQ('\xf0', chars[4]);
+    }
+  }
 }
 
 }  // namespace

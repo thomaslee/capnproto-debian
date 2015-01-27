@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "rpc.h"
 #include "test-util.h"
@@ -75,8 +73,8 @@ public:
             schemaProto.getDisplayName().slice(schemaProto.getDisplayNamePrefixLength());
 
         auto methodProto = method.getProto();
-        auto paramType = schema.getDependency(methodProto.getParamStructType()).asStruct();
-        auto resultType = schema.getDependency(methodProto.getResultStructType()).asStruct();
+        auto paramType = method.getParamType();
+        auto resultType = method.getResultType();
 
         if (call.getSendResultsTo().isCaller()) {
           returnTypes[std::make_pair(sender, call.getQuestionId())] = resultType;
@@ -128,13 +126,13 @@ public:
         }
       }
 
-      case rpc::Message::RESTORE: {
-        auto restore = message.getRestore();
+      case rpc::Message::BOOTSTRAP: {
+        auto restore = message.getBootstrap();
 
         returnTypes[std::make_pair(sender, restore.getQuestionId())] = InterfaceSchema();
 
-        return kj::str(senderName, "(", restore.getQuestionId(), "): restore ",
-                       restore.getObjectId().getAs<test::TestSturdyRefObjectId>());
+        return kj::str(senderName, "(", restore.getQuestionId(), "): bootstrap ",
+                       restore.getDeprecatedObjectId().getAs<test::TestSturdyRefObjectId>());
       }
 
       default:
@@ -192,9 +190,7 @@ public:
   TestNetworkAdapter(TestNetwork& network): network(network) {}
 
   ~TestNetworkAdapter() {
-    kj::Exception exception(
-        kj::Exception::Nature::PRECONDITION, kj::Exception::Durability::PERMANENT,
-        __FILE__, __LINE__, kj::str("Network was destroyed."));
+    kj::Exception exception = KJ_EXCEPTION(FAILED, "Network was destroyed.");
     for (auto& entry: connections) {
       entry.second->disconnect(kj::cp(exception));
     }
@@ -306,9 +302,14 @@ public:
       }
 
       if (messages.empty()) {
-        auto paf = kj::newPromiseAndFulfiller<kj::Maybe<kj::Own<IncomingRpcMessage>>>();
-        fulfillers.push(kj::mv(paf.fulfiller));
-        return kj::mv(paf.promise);
+        KJ_IF_MAYBE(f, fulfillOnEnd) {
+          f->get()->fulfill();
+          return kj::Maybe<kj::Own<IncomingRpcMessage>>(nullptr);
+        } else {
+          auto paf = kj::newPromiseAndFulfiller<kj::Maybe<kj::Own<IncomingRpcMessage>>>();
+          fulfillers.push(kj::mv(paf.fulfiller));
+          return kj::mv(paf.promise);
+        }
       } else {
         ++network.received;
         auto result = kj::mv(messages.front());
@@ -316,18 +317,14 @@ public:
         return kj::Maybe<kj::Own<IncomingRpcMessage>>(kj::mv(result));
       }
     }
-    void introduceTo(Connection& recipient,
-        test::TestThirdPartyCapId::Builder sendToRecipient,
-        test::TestRecipientId::Builder sendToTarget) override {
-      KJ_FAIL_ASSERT("not implemented");
-    }
-    ConnectionAndProvisionId connectToIntroduced(
-        test::TestThirdPartyCapId::Reader capId) override {
-      KJ_FAIL_ASSERT("not implemented");
-    }
-    kj::Own<Connection> acceptIntroducedConnection(
-        test::TestRecipientId::Reader recipientId) override {
-      KJ_FAIL_ASSERT("not implemented");
+    kj::Promise<void> shutdown() override {
+      KJ_IF_MAYBE(p, partner) {
+        auto paf = kj::newPromiseAndFulfiller<void>();
+        p->fulfillOnEnd = kj::mv(paf.fulfiller);
+        return kj::mv(paf.promise);
+      } else {
+        return kj::READY_NOW;
+      }
     }
 
     void taskFailed(kj::Exception&& exception) override {
@@ -343,12 +340,12 @@ public:
 
     std::queue<kj::Own<kj::PromiseFulfiller<kj::Maybe<kj::Own<IncomingRpcMessage>>>>> fulfillers;
     std::queue<kj::Own<IncomingRpcMessage>> messages;
+    kj::Maybe<kj::Own<kj::PromiseFulfiller<void>>> fulfillOnEnd;
 
     kj::Own<kj::TaskSet> tasks;
   };
 
-  kj::Maybe<kj::Own<Connection>> connectToRefHost(
-      test::TestSturdyRefHostId::Reader hostId) override {
+  kj::Maybe<kj::Own<Connection>> connect(test::TestSturdyRefHostId::Reader hostId) override {
     TestNetworkAdapter& dst = KJ_REQUIRE_NONNULL(network.find(hostId.getHost()));
 
     auto iter = connections.find(&dst);
@@ -373,7 +370,7 @@ public:
     }
   }
 
-  kj::Promise<kj::Own<Connection>> acceptConnectionAsRefHost() override {
+  kj::Promise<kj::Own<Connection>> accept() override {
     if (connectionQueue.empty()) {
       auto paf = kj::newPromiseAndFulfiller<kj::Own<Connection>>();
       fulfillerQueue.push(kj::mv(paf.fulfiller));
@@ -406,6 +403,7 @@ TestNetworkAdapter& TestNetwork::add(kj::StringPtr name) {
 class TestRestorer final: public SturdyRefRestorer<test::TestSturdyRefObjectId> {
 public:
   int callCount = 0;
+  int handleCount = 0;
 
   Capability::Client restore(test::TestSturdyRefObjectId::Reader objectId) override {
     switch (objectId.getTag()) {
@@ -420,7 +418,7 @@ public:
       case test::TestSturdyRefObjectId::Tag::TEST_TAIL_CALLER:
         return kj::heap<TestTailCallerImpl>(callCount);
       case test::TestSturdyRefObjectId::Tag::TEST_MORE_STUFF:
-        return kj::heap<TestMoreStuffImpl>(callCount);
+        return kj::heap<TestMoreStuffImpl>(callCount, handleCount);
     }
     KJ_UNREACHABLE;
   }
@@ -442,11 +440,26 @@ struct TestContext {
         serverNetwork(network.add("server")),
         rpcClient(makeRpcClient(clientNetwork)),
         rpcServer(makeRpcServer(serverNetwork, restorer)) {}
+  TestContext(Capability::Client bootstrap,
+              RealmGateway<test::TestSturdyRef, Text>::Client gateway)
+      : waitScope(loop),
+        clientNetwork(network.add("client")),
+        serverNetwork(network.add("server")),
+        rpcClient(makeRpcClient(clientNetwork, gateway)),
+        rpcServer(makeRpcServer(serverNetwork, bootstrap)) {}
+  TestContext(Capability::Client bootstrap,
+              RealmGateway<test::TestSturdyRef, Text>::Client gateway,
+              bool)
+      : waitScope(loop),
+        clientNetwork(network.add("client")),
+        serverNetwork(network.add("server")),
+        rpcClient(makeRpcClient(clientNetwork)),
+        rpcServer(makeRpcServer(serverNetwork, bootstrap, gateway)) {}
 
   Capability::Client connect(test::TestSturdyRefObjectId::Tag tag) {
     MallocMessageBuilder refMessage(128);
-    auto ref = refMessage.initRoot<rpc::SturdyRef>();
-    auto hostId = ref.getHostId().initAs<test::TestSturdyRefHostId>();
+    auto ref = refMessage.initRoot<test::TestSturdyRef>();
+    auto hostId = ref.initHostId();
     hostId.setHost("server");
     ref.getObjectId().initAs<test::TestSturdyRefObjectId>().setTag(tag);
 
@@ -531,6 +544,63 @@ TEST(Rpc, Pipelining) {
   EXPECT_EQ(1, chainedCallCount);
 }
 
+TEST(Rpc, Release) {
+  TestContext context;
+
+  auto client = context.connect(test::TestSturdyRefObjectId::Tag::TEST_MORE_STUFF)
+      .castAs<test::TestMoreStuff>();
+
+  auto handle1 = client.getHandleRequest().send().wait(context.waitScope).getHandle();
+  auto promise = client.getHandleRequest().send();
+  auto handle2 = promise.wait(context.waitScope).getHandle();
+
+  EXPECT_EQ(2, context.restorer.handleCount);
+
+  handle1 = nullptr;
+
+  for (uint i = 0; i < 16; i++) kj::evalLater([]() {}).wait(context.waitScope);
+  EXPECT_EQ(1, context.restorer.handleCount);
+
+  handle2 = nullptr;
+
+  for (uint i = 0; i < 16; i++) kj::evalLater([]() {}).wait(context.waitScope);
+  EXPECT_EQ(1, context.restorer.handleCount);
+
+  promise = nullptr;
+
+  for (uint i = 0; i < 16; i++) kj::evalLater([]() {}).wait(context.waitScope);
+  EXPECT_EQ(0, context.restorer.handleCount);
+}
+
+TEST(Rpc, ReleaseOnCancel) {
+  // At one time, there was a bug where if a Return contained capabilities, but the client had
+  // canceled the request and already send a Finish (which presumably didn't reach the server before
+  // the Return), then we'd leak those caps. Test for that.
+
+  TestContext context;
+
+  auto client = context.connect(test::TestSturdyRefObjectId::Tag::TEST_MORE_STUFF)
+      .castAs<test::TestMoreStuff>();
+  client.whenResolved().wait(context.waitScope);
+
+  {
+    auto promise = client.getHandleRequest().send();
+
+    // If the server receives cancellation too early, it won't even return a capability in the
+    // results, it will just return "canceled". We want to emulate the case where the return message
+    // and the cancel (finish) message cross paths. It turns out that exactly two evalLater()s get
+    // us there.
+    //
+    // TODO(cleanup): This is fragile, but I'm not sure how else to write it without a ton
+    //   of scaffolding.
+    kj::evalLater([]() {}).wait(context.waitScope);
+    kj::evalLater([]() {}).wait(context.waitScope);
+  }
+
+  for (uint i = 0; i < 16; i++) kj::evalLater([]() {}).wait(context.waitScope);
+  EXPECT_EQ(0, context.restorer.handleCount);
+}
+
 TEST(Rpc, TailCall) {
   TestContext context;
 
@@ -551,7 +621,7 @@ TEST(Rpc, TailCall) {
 
   auto response = promise.wait(context.waitScope);
   EXPECT_EQ(456, response.getI());
-  EXPECT_EQ(456, response.getI());
+  EXPECT_EQ("from TestTailCaller", response.getT());
 
   auto dependentCall1 = promise.getC().getCallSequenceRequest().send();
 
@@ -821,6 +891,226 @@ TEST(Rpc, Embargo) {
   EXPECT_EQ(3, call3.wait(context.waitScope).getN());
   EXPECT_EQ(4, call4.wait(context.waitScope).getN());
   EXPECT_EQ(5, call5.wait(context.waitScope).getN());
+}
+
+template <typename T>
+void expectPromiseThrows(kj::Promise<T>&& promise, kj::WaitScope& waitScope) {
+  EXPECT_TRUE(promise.then([](T&&) { return false; }, [](kj::Exception&&) { return true; })
+      .wait(waitScope));
+}
+
+template <>
+void expectPromiseThrows(kj::Promise<void>&& promise, kj::WaitScope& waitScope) {
+  EXPECT_TRUE(promise.then([]() { return false; }, [](kj::Exception&&) { return true; })
+      .wait(waitScope));
+}
+
+TEST(Rpc, EmbargoError) {
+  TestContext context;
+
+  auto client = context.connect(test::TestSturdyRefObjectId::Tag::TEST_MORE_STUFF)
+      .castAs<test::TestMoreStuff>();
+
+  auto paf = kj::newPromiseAndFulfiller<test::TestCallOrder::Client>();
+
+  auto cap = test::TestCallOrder::Client(kj::mv(paf.promise));
+
+  auto earlyCall = client.getCallSequenceRequest().send();
+
+  auto echoRequest = client.echoRequest();
+  echoRequest.setCap(cap);
+  auto echo = echoRequest.send();
+
+  auto pipeline = echo.getCap();
+
+  auto call0 = getCallSequence(pipeline, 0);
+  auto call1 = getCallSequence(pipeline, 1);
+
+  earlyCall.wait(context.waitScope);
+
+  auto call2 = getCallSequence(pipeline, 2);
+
+  auto resolved = echo.wait(context.waitScope).getCap();
+
+  auto call3 = getCallSequence(pipeline, 3);
+  auto call4 = getCallSequence(pipeline, 4);
+  auto call5 = getCallSequence(pipeline, 5);
+
+  paf.fulfiller->rejectIfThrows([]() { KJ_FAIL_ASSERT("foo") { break; } });
+
+  expectPromiseThrows(kj::mv(call0), context.waitScope);
+  expectPromiseThrows(kj::mv(call1), context.waitScope);
+  expectPromiseThrows(kj::mv(call2), context.waitScope);
+  expectPromiseThrows(kj::mv(call3), context.waitScope);
+  expectPromiseThrows(kj::mv(call4), context.waitScope);
+  expectPromiseThrows(kj::mv(call5), context.waitScope);
+
+  // Verify that we're still connected (there were no protocol errors).
+  getCallSequence(client, 1).wait(context.waitScope);
+}
+
+TEST(Rpc, CallBrokenPromise) {
+  // Tell the server to call back to a promise client, then resolve the promise to an error.
+
+  TestContext context;
+
+  auto client = context.connect(test::TestSturdyRefObjectId::Tag::TEST_MORE_STUFF)
+      .castAs<test::TestMoreStuff>();
+  auto paf = kj::newPromiseAndFulfiller<test::TestInterface::Client>();
+
+  {
+    auto req = client.holdRequest();
+    req.setCap(kj::mv(paf.promise));
+    req.send().wait(context.waitScope);
+  }
+
+  bool returned = false;
+  auto req = client.callHeldRequest().send()
+      .then([&](capnp::Response<test::TestMoreStuff::CallHeldResults>&&) {
+    returned = true;
+  }, [&](kj::Exception&& e) {
+    returned = true;
+    kj::throwRecoverableException(kj::mv(e));
+  }).eagerlyEvaluate(nullptr);
+
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+
+  EXPECT_FALSE(returned);
+
+  paf.fulfiller->rejectIfThrows([]() { KJ_FAIL_ASSERT("foo") { break; } });
+
+  expectPromiseThrows(kj::mv(req), context.waitScope);
+  EXPECT_TRUE(returned);
+
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+  kj::evalLater([]() {}).wait(context.waitScope);
+
+  // Verify that we're still connected (there were no protocol errors).
+  getCallSequence(client, 1).wait(context.waitScope);
+}
+
+TEST(Rpc, Abort) {
+  // Verify that aborts are received.
+
+  TestContext context;
+
+  MallocMessageBuilder refMessage(128);
+  auto hostId = refMessage.initRoot<test::TestSturdyRefHostId>();
+  hostId.setHost("server");
+
+  auto conn = KJ_ASSERT_NONNULL(context.clientNetwork.connect(hostId));
+
+  {
+    // Send an invalid message (Return to non-existent question).
+    auto msg = conn->newOutgoingMessage(128);
+    auto body = msg->getBody().initAs<rpc::Message>().initReturn();
+    body.setAnswerId(1234);
+    body.setCanceled();
+    msg->send();
+  }
+
+  auto reply = KJ_ASSERT_NONNULL(conn->receiveIncomingMessage().wait(context.waitScope));
+  EXPECT_EQ(rpc::Message::ABORT, reply->getBody().getAs<rpc::Message>().which());
+
+  EXPECT_TRUE(conn->receiveIncomingMessage().wait(context.waitScope) == nullptr);
+}
+
+// =======================================================================================
+
+typedef RealmGateway<test::TestSturdyRef, Text> TestRealmGateway;
+
+class TestGateway final: public TestRealmGateway::Server {
+public:
+  kj::Promise<void> import(ImportContext context) override {
+    auto cap = context.getParams().getCap();
+    context.releaseParams();
+    return cap.saveRequest().send()
+        .then([context](Response<Persistent<Text>::SaveResults> response) mutable {
+      context.getResults().initSturdyRef().getObjectId().setAs<Text>(
+          kj::str("imported-", response.getSturdyRef()));
+    });
+  }
+
+  kj::Promise<void> export_(ExportContext context) override {
+    auto cap = context.getParams().getCap();
+    context.releaseParams();
+    return cap.saveRequest().send()
+        .then([context](Response<Persistent<test::TestSturdyRef>::SaveResults> response) mutable {
+      context.getResults().setSturdyRef(kj::str("exported-",
+          response.getSturdyRef().getObjectId().getAs<Text>()));
+    });
+  }
+};
+
+class TestPersistent final: public Persistent<test::TestSturdyRef>::Server {
+public:
+  TestPersistent(kj::StringPtr name): name(name) {}
+
+  kj::Promise<void> save(SaveContext context) override {
+    context.initResults().initSturdyRef().getObjectId().setAs<Text>(name);
+    return kj::READY_NOW;
+  }
+
+private:
+  kj::StringPtr name;
+};
+
+class TestPersistentText final: public Persistent<Text>::Server {
+public:
+  TestPersistentText(kj::StringPtr name): name(name) {}
+
+  kj::Promise<void> save(SaveContext context) override {
+    context.initResults().setSturdyRef(name);
+    return kj::READY_NOW;
+  }
+
+private:
+  kj::StringPtr name;
+};
+
+TEST(Rpc, RealmGatewayImport) {
+  TestRealmGateway::Client gateway = kj::heap<TestGateway>();
+  Persistent<Text>::Client bootstrap = kj::heap<TestPersistentText>("foo");
+
+  MallocMessageBuilder hostIdBuilder;
+  auto hostId = hostIdBuilder.getRoot<test::TestSturdyRefHostId>();
+  hostId.setHost("server");
+
+  TestContext context(bootstrap, gateway);
+  auto client = context.rpcClient.bootstrap(hostId).castAs<Persistent<test::TestSturdyRef>>();
+
+  auto response = client.saveRequest().send().wait(context.waitScope);
+
+  EXPECT_EQ("imported-foo", response.getSturdyRef().getObjectId().getAs<Text>());
+}
+
+TEST(Rpc, RealmGatewayExport) {
+  TestRealmGateway::Client gateway = kj::heap<TestGateway>();
+  Persistent<test::TestSturdyRef>::Client bootstrap = kj::heap<TestPersistent>("foo");
+
+  MallocMessageBuilder hostIdBuilder;
+  auto hostId = hostIdBuilder.getRoot<test::TestSturdyRefHostId>();
+  hostId.setHost("server");
+
+  TestContext context(bootstrap, gateway, true);
+  auto client = context.rpcClient.bootstrap(hostId).castAs<Persistent<Text>>();
+
+  auto response = client.saveRequest().send().wait(context.waitScope);
+
+  EXPECT_EQ("exported-foo", response.getSturdyRef());
 }
 
 }  // namespace

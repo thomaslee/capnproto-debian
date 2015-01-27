@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 // This is a fuzz test which randomly generates a schema for a struct one change at a time.
 // Each modification is known a priori to be compatible or incompatible.  The type is compiled
@@ -75,64 +73,64 @@ static Declaration::Builder addNested(Declaration::Builder parent) {
 
 struct TypeOption {
   kj::StringPtr name;
-  kj::ConstFunction<void(ValueExpression::Builder)> makeValue;
+  kj::ConstFunction<void(Expression::Builder)> makeValue;
 };
 
 static const TypeOption TYPE_OPTIONS[] = {
   { "Int32",
-    [](ValueExpression::Builder builder) {
+    [](Expression::Builder builder) {
       builder.setPositiveInt(rand() % (1 << 24));
     }},
   { "Float64",
-    [](ValueExpression::Builder builder) {
+    [](Expression::Builder builder) {
       builder.setPositiveInt(rand());
     }},
   { "Int8",
-    [](ValueExpression::Builder builder) {
+    [](Expression::Builder builder) {
       builder.setPositiveInt(rand() % 128);
     }},
   { "UInt16",
-    [](ValueExpression::Builder builder) {
+    [](Expression::Builder builder) {
       builder.setPositiveInt(rand() % (1 << 16));
     }},
   { "Bool",
-    [](ValueExpression::Builder builder) {
-      builder.initName().getBase().initRelativeName().setValue("true");
+    [](Expression::Builder builder) {
+      builder.initRelativeName().setValue("true");
     }},
   { "Text",
-    [](ValueExpression::Builder builder) {
+    [](Expression::Builder builder) {
       builder.setString(chooseFrom(RFC3092));
     }},
   { "StructType",
-    [](ValueExpression::Builder builder) {
-      auto assignment = builder.initStruct(1)[0];
-      assignment.initFieldName().setValue("i");
+    [](Expression::Builder builder) {
+      auto assignment = builder.initTuple(1)[0];
+      assignment.initNamed().setValue("i");
       assignment.initValue().setPositiveInt(rand() % (1 << 24));
     }},
   { "EnumType",
-    [](ValueExpression::Builder builder) {
-      builder.initName().getBase().initRelativeName().setValue(chooseFrom(RFC3092));
+    [](Expression::Builder builder) {
+      builder.initRelativeName().setValue(chooseFrom(RFC3092));
     }},
 };
 
-void setDeclName(DeclName::Builder decl, kj::StringPtr name) {
-  decl.getBase().initRelativeName().setValue(name);
+void setDeclName(Expression::Builder decl, kj::StringPtr name) {
+  decl.initRelativeName().setValue(name);
 }
 
-static kj::ConstFunction<void(ValueExpression::Builder)> randomizeType(
-    TypeExpression::Builder type) {
+static kj::ConstFunction<void(Expression::Builder)> randomizeType(Expression::Builder type) {
   auto option = &chooseFrom(TYPE_OPTIONS);
 
   if (rand() % 4 == 0) {
-    setDeclName(type.initName(), "List");
-    setDeclName(type.initParams(1)[0].initName(), option->name);
-    return [option](ValueExpression::Builder builder) {
+    auto app = type.initApplication();
+    setDeclName(app.initFunction(), "List");
+    setDeclName(app.initParams(1)[0].initValue(), option->name);
+    return [option](Expression::Builder builder) {
       for (auto element: builder.initList(rand() % 4 + 1)) {
         option->makeValue(element);
       }
     };
   } else {
-    setDeclName(type.initName(), option->name);
+    setDeclName(type, option->name);
     return option->makeValue.reference();
   }
 }
@@ -326,16 +324,20 @@ static ChangeInfo fieldUpgradeList(Declaration::Builder decl, uint& nextOrdinal,
     return { NO_CHANGE, "Upgrade primitive list to struct list, but it had a default value." };
   }
 
-  auto typeParams = field.getType().getParams();
-  if (typeParams.size() != 1) {
+  auto type = field.getType();
+  if (!type.isApplication()) {
     return { NO_CHANGE, "Upgrade primitive list to struct list, but it wasn't a list." };
   }
+  auto typeParams = type.getApplication().getParams();
 
-  auto elementType = typeParams[0];
-  auto relativeName = elementType.getName().getBase().getRelativeName();
+  auto elementType = typeParams[0].getValue();
+  auto relativeName = elementType.getRelativeName();
   auto nameText = relativeName.asReader().getValue();
   if (nameText == "StructType" || nameText.endsWith("Struct")) {
     return { NO_CHANGE, "Upgrade primitive list to struct list, but it was already a struct list."};
+  }
+  if (nameText == "Bool") {
+    return { NO_CHANGE, "Upgrade primitive list to struct list, but bool lists can't be upgraded."};
   }
 
   relativeName.setValue(kj::str(nameText, "Struct"));
@@ -382,15 +384,15 @@ static ChangeInfo fieldChangeType(Declaration::Builder decl, uint& nextOrdinal,
   if (field.getDefaultValue().isNone()) {
     // Change the type.
     auto type = field.getType();
-    while (type.getParams().size() > 0) {
+    while (type.isApplication()) {
       // Either change the list parameter, or revert to a non-list.
       if (rand() % 2) {
-        type = type.getParams()[0];
+        type = type.getApplication().getParams()[0].getValue();
       } else {
-        type.disownParams();
+        type.initRelativeName();
       }
     }
-    auto typeName = type.getName().getBase().getRelativeName();
+    auto typeName = type.getRelativeName();
     if (typeName.asReader().getValue().startsWith("Text")) {
       typeName.setValue("Int32");
     } else {
@@ -401,12 +403,12 @@ static ChangeInfo fieldChangeType(Declaration::Builder decl, uint& nextOrdinal,
     // Change the default value.
     auto dval = field.getDefaultValue().getValue();
     switch (dval.which()) {
-      case ValueExpression::UNKNOWN: KJ_FAIL_ASSERT("unknown value expression?");
-      case ValueExpression::POSITIVE_INT: dval.setPositiveInt(dval.getPositiveInt() ^ 1); break;
-      case ValueExpression::NEGATIVE_INT: dval.setNegativeInt(dval.getNegativeInt() ^ 1); break;
-      case ValueExpression::FLOAT: dval.setFloat(-dval.getFloat()); break;
-      case ValueExpression::NAME: {
-        auto name = dval.getName().getBase().getRelativeName();
+      case Expression::UNKNOWN: KJ_FAIL_ASSERT("unknown value expression?");
+      case Expression::POSITIVE_INT: dval.setPositiveInt(dval.getPositiveInt() ^ 1); break;
+      case Expression::NEGATIVE_INT: dval.setNegativeInt(dval.getNegativeInt() ^ 1); break;
+      case Expression::FLOAT: dval.setFloat(-dval.getFloat()); break;
+      case Expression::RELATIVE_NAME: {
+        auto name = dval.getRelativeName();
         auto nameText = name.asReader().getValue();
         if (nameText == "true") {
           name.setValue("false");
@@ -419,10 +421,17 @@ static ChangeInfo fieldChangeType(Declaration::Builder decl, uint& nextOrdinal,
         }
         break;
       }
-      case ValueExpression::STRING:
-      case ValueExpression::LIST:
-      case ValueExpression::STRUCT:
+      case Expression::STRING:
+      case Expression::BINARY:
+      case Expression::LIST:
+      case Expression::TUPLE:
         return { NO_CHANGE, "Change the default value of a field, but it's a pointer field." };
+
+      case Expression::ABSOLUTE_NAME:
+      case Expression::IMPORT:
+      case Expression::APPLICATION:
+      case Expression::MEMBER:
+        KJ_FAIL_ASSERT("Unexpected expression type.");
     }
     return { INCOMPATIBLE, "Change the default value of a pritimive field." };
   }
@@ -447,7 +456,7 @@ uint getOrdinal(StructSchema::Field field) {
 
   KJ_ASSERT(proto.isGroup());
 
-  auto group = field.getContainingStruct().getDependency(proto.getGroup().getTypeId()).asStruct();
+  auto group = field.getType().asStruct();
   return getOrdinal(group.getFields()[0]);
 }
 
@@ -456,8 +465,7 @@ Orphan<DynamicStruct> makeExampleStruct(
 void checkExampleStruct(DynamicStruct::Reader reader, uint sharedOrdinalCount);
 
 Orphan<DynamicValue> makeExampleValue(
-    Orphanage orphanage, Schema scope, uint ordinal, schema::Type::Reader type,
-    uint sharedOrdinalCount) {
+    Orphanage orphanage, uint ordinal, Type type, uint sharedOrdinalCount) {
   switch (type.which()) {
     case schema::Type::INT32: return ordinal * 47327;
     case schema::Type::FLOAT64: return ordinal * 313.25;
@@ -466,7 +474,7 @@ Orphan<DynamicValue> makeExampleValue(
     case schema::Type::BOOL: return ordinal % 2 == 0;
     case schema::Type::TEXT: return orphanage.newOrphanCopy(Text::Reader(kj::str(ordinal)));
     case schema::Type::STRUCT: {
-      auto structType = scope.getDependency(type.getStruct().getTypeId()).asStruct();
+      auto structType = type.asStruct();
       auto result = orphanage.newOrphan(structType);
       auto builder = result.get();
 
@@ -476,23 +484,22 @@ Orphan<DynamicValue> makeExampleValue(
       } else {
         // Type is "Int32Struct" or the like.
         auto field = structType.getFieldByName("f0");
-        builder.adopt(field, makeExampleValue(orphanage, structType, ordinal,
-                                              field.getProto().getSlot().getType(),
-                                              sharedOrdinalCount));
+        builder.adopt(field, makeExampleValue(
+            orphanage, ordinal, field.getType(), sharedOrdinalCount));
       }
 
       return kj::mv(result);
     }
     case schema::Type::ENUM: {
-      auto enumerants = scope.getDependency(type.getEnum().getTypeId()).asEnum().getEnumerants();
+      auto enumerants = type.asEnum().getEnumerants();
       return DynamicEnum(enumerants[ordinal %enumerants.size()]);
     }
     case schema::Type::LIST: {
-      auto elementType = type.getList().getElementType();
-      auto listType = ListSchema::of(elementType, scope);
+      auto listType = type.asList();
+      auto elementType = listType.getElementType();
       auto result = orphanage.newOrphan(listType, 1);
       result.get().adopt(0, makeExampleValue(
-          orphanage, scope, ordinal, elementType, sharedOrdinalCount));
+          orphanage, ordinal, elementType, sharedOrdinalCount));
       return kj::mv(result);
     }
     default:
@@ -545,14 +552,13 @@ void setExampleField(DynamicStruct::Builder builder, StructSchema::Field field,
   switch (fieldProto.which()) {
     case schema::Field::SLOT:
       builder.adopt(field, makeExampleValue(
-          Orphanage::getForMessageContaining(builder), field.getContainingStruct(),
-          getOrdinal(field), fieldProto.getSlot().getType(), sharedOrdinalCount));
+          Orphanage::getForMessageContaining(builder),
+          getOrdinal(field), field.getType(), sharedOrdinalCount));
       break;
     case schema::Field::GROUP:
       builder.adopt(field, makeExampleStruct(
           Orphanage::getForMessageContaining(builder),
-          field.getContainingStruct().getDependency(fieldProto.getGroup().getTypeId()).asStruct(),
-          sharedOrdinalCount));
+          field.getType().asStruct(), sharedOrdinalCount));
       break;
   }
 }
@@ -766,7 +772,7 @@ void doTest() {
       fieldDecl.initName().setValue("i");
       fieldDecl.getId().initOrdinal().setValue(0);
       auto field = fieldDecl.initField();
-      setDeclName(field.initType().initName(), "UInt32");
+      setDeclName(field.initType(), "UInt32");
     }
     {
       auto decl = decls[2];
@@ -795,7 +801,7 @@ void doTest() {
       fieldDecl.initName().setValue("f0");
       fieldDecl.getId().initOrdinal().setValue(0);
       auto field = fieldDecl.initField();
-      setDeclName(field.initType().initName(), option.name);
+      setDeclName(field.initType(), option.name);
 
       uint ordinal = 1;
       for (auto j: kj::range(0, rand() % 4)) {

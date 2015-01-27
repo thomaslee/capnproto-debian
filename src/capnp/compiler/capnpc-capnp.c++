@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 // This program is a code generator plugin for `capnp compile` which writes the schema back to
 // stdout in roughly capnpc format.
@@ -36,6 +34,7 @@
 #include <unordered_map>
 #include <kj/main.h>
 #include <algorithm>
+#include <map>
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -115,15 +114,32 @@ private:
     return "(?)";
   }
 
-  kj::StringTree nodeName(Schema target, Schema scope) {
-    kj::Vector<Schema> targetParents;
+  kj::StringTree nodeName(Schema target, Schema scope, schema::Brand::Reader brand,
+                          kj::Maybe<InterfaceSchema::Method> method) {
+    kj::Vector<Schema> targetPath;
     kj::Vector<Schema> scopeParts;
+
+    targetPath.add(target);
+
+    std::map<uint64_t, List<schema::Brand::Binding>::Reader> scopeBindings;
+    for (auto scopeBrand: brand.getScopes()) {
+      switch (scopeBrand.which()) {
+        case schema::Brand::Scope::BIND:
+          scopeBindings[scopeBrand.getScopeId()] = scopeBrand.getBind();
+          break;
+        case schema::Brand::Scope::INHERIT:
+          // TODO(someday): We need to pay attention to INHERIT and be sure to explicitly override
+          //   any bindings that are not inherited. This requires a way to determine which of our
+          //   parent scopes have a non-empty parameter list.
+          break;
+      }
+    }
 
     {
       Schema parent = target;
       while (parent.getProto().getScopeId() != 0) {
         parent = schemaLoader.get(parent.getProto().getScopeId());
-        targetParents.add(parent);
+        targetPath.add(parent);
       }
     }
 
@@ -136,31 +152,49 @@ private:
       }
     }
 
-    // Remove common scope.
-    while (!scopeParts.empty() && !targetParents.empty() &&
-           scopeParts.back() == targetParents.back()) {
-      scopeParts.removeLast();
-      targetParents.removeLast();
-    }
-
+    // Remove common scope (unless it has been reparameterized).
     // TODO(someday):  This is broken in that we aren't checking for shadowing.
-
-    kj::StringTree path = kj::strTree();
-    while (!targetParents.empty()) {
-      auto part = targetParents.back();
-      auto proto = part.getProto();
-      if (proto.getScopeId() == 0) {
-        path = kj::strTree(kj::mv(path), "import \"/", proto.getDisplayName(), "\".");
-      } else {
-        path = kj::strTree(kj::mv(path), getUnqualifiedName(part), ".");
-      }
-      targetParents.removeLast();
+    while (!scopeParts.empty() && targetPath.size() > 1 &&
+           scopeParts.back() == targetPath.back() &&
+           scopeBindings.count(scopeParts.back().getProto().getId()) == 0) {
+      scopeParts.removeLast();
+      targetPath.removeLast();
     }
 
-    return kj::strTree(kj::mv(path), getUnqualifiedName(target));
+    auto parts = kj::heapArrayBuilder<kj::StringTree>(targetPath.size());
+    while (!targetPath.empty()) {
+      auto part = targetPath.back();
+      auto proto = part.getProto();
+      kj::StringTree partStr;
+      if (proto.getScopeId() == 0) {
+        partStr = kj::strTree("import \"/", proto.getDisplayName(), '\"');
+      } else {
+        partStr = kj::strTree(getUnqualifiedName(part));
+      }
+
+      auto iter = scopeBindings.find(proto.getId());
+      if (iter != scopeBindings.end()) {
+        auto bindings = KJ_MAP(binding, iter->second) {
+          switch (binding.which()) {
+            case schema::Brand::Binding::UNBOUND:
+              return kj::strTree("AnyPointer");
+            case schema::Brand::Binding::TYPE:
+              return genType(binding.getType(), scope, method);
+          }
+          return kj::strTree("<unknown binding>");
+        };
+        partStr = kj::strTree(kj::mv(partStr), "(", kj::StringTree(kj::mv(bindings), ", "), ")");
+      }
+
+      parts.add(kj::mv(partStr));
+      targetPath.removeLast();
+    }
+
+    return kj::StringTree(parts.finish(), ".");
   }
 
-  kj::StringTree genType(schema::Type::Reader type, Schema scope) {
+  kj::StringTree genType(schema::Type::Reader type, Schema scope,
+                         kj::Maybe<InterfaceSchema::Method> method) {
     switch (type.which()) {
       case schema::Type::VOID: return kj::strTree("Void");
       case schema::Type::BOOL: return kj::strTree("Bool");
@@ -177,14 +211,41 @@ private:
       case schema::Type::TEXT: return kj::strTree("Text");
       case schema::Type::DATA: return kj::strTree("Data");
       case schema::Type::LIST:
-        return kj::strTree("List(", genType(type.getList().getElementType(), scope), ")");
+        return kj::strTree("List(", genType(type.getList().getElementType(), scope, method), ")");
       case schema::Type::ENUM:
-        return nodeName(schemaLoader.get(type.getEnum().getTypeId()), scope);
+        return nodeName(schemaLoader.get(type.getEnum().getTypeId()), scope,
+                        type.getEnum().getBrand(), method);
       case schema::Type::STRUCT:
-        return nodeName(schemaLoader.get(type.getStruct().getTypeId()), scope);
+        return nodeName(schemaLoader.get(type.getStruct().getTypeId()), scope,
+                        type.getStruct().getBrand(), method);
       case schema::Type::INTERFACE:
-        return nodeName(schemaLoader.get(type.getInterface().getTypeId()), scope);
-      case schema::Type::ANY_POINTER: return kj::strTree("AnyPointer");
+        return nodeName(schemaLoader.get(type.getInterface().getTypeId()), scope,
+                        type.getInterface().getBrand(), method);
+      case schema::Type::ANY_POINTER: {
+        auto anyPointer = type.getAnyPointer();
+        switch (anyPointer.which()) {
+          case schema::Type::AnyPointer::UNCONSTRAINED:
+            return kj::strTree("AnyPointer");
+          case schema::Type::AnyPointer::PARAMETER: {
+            auto param = anyPointer.getParameter();
+            auto scopeProto = scope.getProto();
+            auto targetScopeId = param.getScopeId();
+            while (scopeProto.getId() != targetScopeId) {
+              scopeProto = schemaLoader.get(param.getScopeId()).getProto();
+            }
+            auto params = scopeProto.getParameters();
+            KJ_REQUIRE(param.getParameterIndex() < params.size());
+            return kj::strTree(params[param.getParameterIndex()].getName());
+          }
+          case schema::Type::AnyPointer::IMPLICIT_METHOD_PARAMETER: {
+            auto params = KJ_REQUIRE_NONNULL(method).getProto().getImplicitParameters();
+            uint index = anyPointer.getImplicitMethodParameter().getParameterIndex();
+            KJ_REQUIRE(index < params.size());
+            return kj::strTree(params[index].getName());
+          }
+        }
+        KJ_UNREACHABLE;
+      }
     }
     return kj::strTree();
   }
@@ -239,7 +300,7 @@ private:
     return true;
   }
 
-  kj::StringTree genValue(schema::Type::Reader type, schema::Value::Reader value, Schema scope) {
+  kj::StringTree genValue(Type type, schema::Value::Reader value) {
     switch (value.which()) {
       case schema::Value::VOID: return kj::strTree("void");
       case schema::Value::BOOL:
@@ -259,23 +320,19 @@ private:
       case schema::Value::DATA:
         return kj::strTree(DynamicValue::Reader(value.getData()));
       case schema::Value::LIST: {
-        KJ_REQUIRE(type.isList(), "type/value mismatch");
-        auto listValue = value.getList().getAs<DynamicList>(
-            ListSchema::of(type.getList().getElementType(), scope));
+        auto listValue = value.getList().getAs<DynamicList>(type.asList());
         return kj::strTree(listValue);
       }
       case schema::Value::ENUM: {
-        KJ_REQUIRE(type.isEnum(), "type/value mismatch");
-        auto enumNode = schemaLoader.get(type.getEnum().getTypeId()).asEnum().getProto();
+        auto enumNode = type.asEnum().getProto();
         auto enumerants = enumNode.getEnum().getEnumerants();
         KJ_REQUIRE(value.getEnum() < enumerants.size(),
                 "Enum value out-of-range.", value.getEnum(), enumNode.getDisplayName());
         return kj::strTree(enumerants[value.getEnum()].getName());
       }
       case schema::Value::STRUCT: {
-        KJ_REQUIRE(type.isStruct(), "type/value mismatch");
-        auto structValue = value.getStruct().getAs<DynamicStruct>(
-            schemaLoader.get(type.getStruct().getTypeId()).asStruct());
+        KJ_REQUIRE(type.which() == schema::Type::STRUCT, "type/value mismatch");
+        auto structValue = value.getStruct().getAs<DynamicStruct>(type.asStruct());
         return kj::strTree(structValue);
       }
       case schema::Value::INTERFACE: {
@@ -288,19 +345,35 @@ private:
     return kj::strTree("");
   }
 
+  kj::StringTree genGenericParams(List<schema::Node::Parameter>::Reader params, Schema scope) {
+    if (params.size() == 0) {
+      return kj::strTree();
+    }
+
+    return kj::strTree(" (", kj::StringTree(
+        KJ_MAP(param, params) { return kj::strTree(param.getName()); }, ", "), ')');
+  }
+  kj::StringTree genGenericParams(Schema schema) {
+    auto proto = schema.getProto();
+    return genGenericParams(proto.getParameters(), schemaLoader.get(proto.getScopeId()));
+  }
+
   kj::StringTree genAnnotation(schema::Annotation::Reader annotation,
                                Schema scope,
                                const char* prefix = " ", const char* suffix = "") {
-    auto decl = schemaLoader.get(annotation.getId());
+    auto decl = schemaLoader.get(annotation.getId(), annotation.getBrand(), scope);
     auto proto = decl.getProto();
     KJ_REQUIRE(proto.isAnnotation());
     auto annDecl = proto.getAnnotation();
 
-    auto value = genValue(annDecl.getType(), annotation.getValue(), decl).flatten();
+    auto value = genValue(schemaLoader.getType(annDecl.getType(), decl),
+                          annotation.getValue()).flatten();
     if (value.startsWith("(")) {
-      return kj::strTree(prefix, "$", nodeName(decl, scope), value, suffix);
+      return kj::strTree(prefix, "$", nodeName(decl, scope, annotation.getBrand(), nullptr),
+                         value, suffix);
     } else {
-      return kj::strTree(prefix, "$", nodeName(decl, scope), "(", value, ")", suffix);
+      return kj::strTree(prefix, "$", nodeName(decl, scope, annotation.getBrand(), nullptr),
+                         "(", value, ")", suffix);
     }
   }
 
@@ -360,42 +433,42 @@ private:
           return kj::strTree(
               indent, "union {  # tag bits [", offset * 16, ", ", offset * 16 + 16, ")\n",
               KJ_MAP(uField, unionFields) {
-                return genStructField(uField.getProto(), schema, indent.next());
+                return genStructField(uField, schema, indent.next());
               },
               indent, "}\n");
         }
       } else {
-        return genStructField(field.getProto(), schema, indent);
+        return genStructField(field, schema, indent);
       }
     };
   }
 
-  kj::StringTree genStructField(schema::Field::Reader field, Schema scope, Indent indent) {
-    switch (field.which()) {
+  kj::StringTree genStructField(StructSchema::Field field, Schema scope, Indent indent) {
+    auto proto = field.getProto();
+    switch (proto.which()) {
       case schema::Field::SLOT: {
-        auto slot = field.getSlot();
+        auto slot = proto.getSlot();
         int size = typeSizeBits(slot.getType());
         return kj::strTree(
-            indent, field.getName(), " @", field.getOrdinal().getExplicit(),
-            " :", genType(slot.getType(), scope),
+            indent, proto.getName(), " @", proto.getOrdinal().getExplicit(),
+            " :", genType(slot.getType(), scope, nullptr),
             isEmptyValue(slot.getDefaultValue()) ? kj::strTree("") :
-                kj::strTree(" = ", genValue(
-                    slot.getType(), slot.getDefaultValue(), scope)),
-            genAnnotations(field.getAnnotations(), scope),
+                kj::strTree(" = ", genValue(field.getType(), slot.getDefaultValue())),
+            genAnnotations(proto.getAnnotations(), scope),
             ";  # ", size == -1 ? kj::strTree("ptr[", slot.getOffset(), "]")
                                 : kj::strTree("bits[", slot.getOffset() * size, ", ",
                                               (slot.getOffset() + 1) * size, ")"),
-            hasDiscriminantValue(field)
-                ? kj::strTree(", union tag = ", field.getDiscriminantValue()) : kj::strTree(),
+            hasDiscriminantValue(proto)
+                ? kj::strTree(", union tag = ", proto.getDiscriminantValue()) : kj::strTree(),
             "\n");
       }
       case schema::Field::GROUP: {
-        auto group = schemaLoader.get(field.getGroup().getTypeId()).asStruct();
+        auto group = field.getType().asStruct();
         return kj::strTree(
-            indent, field.getName(),
-            " :group", genAnnotations(field.getAnnotations(), scope), " {",
-            hasDiscriminantValue(field)
-                ? kj::strTree("  # union tag = ", field.getDiscriminantValue()) : kj::strTree(),
+            indent, proto.getName(),
+            " :group", genAnnotations(proto.getAnnotations(), scope), " {",
+            hasDiscriminantValue(proto)
+                ? kj::strTree("  # union tag = ", proto.getDiscriminantValue()) : kj::strTree(),
             "\n",
             genStructFields(group, indent.next()),
             indent, "}\n");
@@ -404,7 +477,8 @@ private:
     return kj::strTree();
   }
 
-  kj::StringTree genParamList(InterfaceSchema interface, StructSchema schema) {
+  kj::StringTree genParamList(InterfaceSchema interface, StructSchema schema,
+                              schema::Brand::Reader brand, InterfaceSchema::Method method) {
     if (schema.getProto().getScopeId() == 0) {
       // A named parameter list.
       return kj::strTree("(", kj::StringTree(
@@ -413,14 +487,26 @@ private:
             auto slot = proto.getSlot();
 
             return kj::strTree(
-                proto.getName(), " :", genType(slot.getType(), interface),
+                proto.getName(), " :", genType(slot.getType(), interface, nullptr),
                 isEmptyValue(slot.getDefaultValue()) ? kj::strTree("") :
-                    kj::strTree(" = ", genValue(
-                        slot.getType(), slot.getDefaultValue(), interface)),
+                    kj::strTree(" = ", genValue(field.getType(), slot.getDefaultValue())),
                 genAnnotations(proto.getAnnotations(), interface));
           }, ", "), ")");
     } else {
-      return nodeName(schema, interface);
+      return nodeName(schema, interface, brand, method);
+    }
+  }
+
+  kj::StringTree genSuperclasses(InterfaceSchema interface) {
+    auto superclasses = interface.getProto().getInterface().getSuperclasses();
+    if (superclasses.size() == 0) {
+      return kj::strTree();
+    } else {
+      return kj::strTree(" superclasses(", kj::StringTree(
+          KJ_MAP(superclass, superclasses) {
+            return nodeName(schemaLoader.get(superclass.getId()), interface,
+                            superclass.getBrand(), nullptr);
+          }, ", "), ")");
     }
   }
 
@@ -439,12 +525,14 @@ private:
         auto structProto = proto.getStruct();
         return kj::strTree(
             indent, "struct ", name,
-            " @0x", kj::hex(proto.getId()), genAnnotations(schema), " {  # ",
+            " @0x", kj::hex(proto.getId()), genGenericParams(schema),
+            genAnnotations(schema), " {  # ",
             structProto.getDataWordCount() * 8, " bytes, ",
             structProto.getPointerCount(), " ptrs",
             structProto.getPreferredListEncoding() == schema::ElementSize::INLINE_COMPOSITE
                 ? kj::strTree()
-                : kj::strTree(", packed as ", elementSizeName(structProto.getPreferredListEncoding())),
+                : kj::strTree(", packed as ",
+                              elementSizeName(structProto.getPreferredListEncoding())),
             "\n",
             genStructFields(schema.asStruct(), indent.next()),
             genNestedDecls(schema, indent.next()),
@@ -465,15 +553,28 @@ private:
       case schema::Node::INTERFACE: {
         auto interface = schema.asInterface();
         return kj::strTree(
-            indent, "interface ", name, " @0x", kj::hex(proto.getId()),
+            indent, "interface ", name, " @0x", kj::hex(proto.getId()), genGenericParams(schema),
+            genSuperclasses(interface),
             genAnnotations(schema), " {\n",
             KJ_MAP(method, sortByCodeOrder(interface.getMethods())) {
               auto methodProto = method.getProto();
+
+              auto implicits = methodProto.getImplicitParameters();
+              kj::StringTree implicitsStr;
+              if (implicits.size() > 0) {
+                implicitsStr = kj::strTree(
+                    "[", kj::StringTree(KJ_MAP(implicit, implicits) {
+                      return kj::strTree(implicit.getName());
+                    }, ", "), "] ");
+              }
+
               auto params = schemaLoader.get(methodProto.getParamStructType()).asStruct();
               auto results = schemaLoader.get(methodProto.getResultStructType()).asStruct();
               return kj::strTree(
-                  indent.next(), methodProto.getName(), " @", method.getIndex(), " ",
-                  genParamList(interface, params), " -> ", genParamList(interface, results),
+                  indent.next(), methodProto.getName(),
+                  " @", method.getIndex(), " ", kj::mv(implicitsStr),
+                  genParamList(interface, params, methodProto.getParamBrand(), method), " -> ",
+                  genParamList(interface, results, methodProto.getResultBrand(), method),
                   genAnnotations(methodProto.getAnnotations(), interface), ";\n");
             },
             genNestedDecls(schema, indent.next()),
@@ -483,8 +584,8 @@ private:
         auto constProto = proto.getConst();
         return kj::strTree(
             indent, "const ", name, " @0x", kj::hex(proto.getId()), " :",
-            genType(constProto.getType(), schema), " = ",
-            genValue(constProto.getType(), constProto.getValue(), schema),
+            genType(constProto.getType(), schema, nullptr), " = ",
+            genValue(schema.asConst().getType(), constProto.getValue()),
             genAnnotations(schema), ";\n");
       }
       case schema::Node::ANNOTATION: {
@@ -515,7 +616,7 @@ private:
         return kj::strTree(
             indent, "annotation ", name, " @0x", kj::hex(proto.getId()),
             " (", strArray(targets, ", "), ") :",
-            genType(annotationProto.getType(), schema), genAnnotations(schema), ";\n");
+            genType(annotationProto.getType(), schema, nullptr), genAnnotations(schema), ";\n");
       }
     }
 

@@ -1,37 +1,44 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #include "mutex.h"
 #include "debug.h"
 #include "thread.h"
+#include <gtest/gtest.h>
+
+#if _WIN32
+#include <windows.h>
+#else
 #include <pthread.h>
 #include <unistd.h>
-#include <gtest/gtest.h>
+#endif
 
 namespace kj {
 namespace {
 
+#if _WIN32
+inline void delay() { Sleep(10); }
+#else
 inline void delay() { usleep(10000); }
+#endif
 
 #if KJ_NO_EXCEPTIONS
 #undef EXPECT_ANY_THROW
@@ -116,26 +123,32 @@ TEST(Mutex, MutexGuarded) {
 
   EXPECT_EQ(321u, *value.lockExclusive());
 
+#if !_WIN32  // Not checked on win32.
   EXPECT_DEBUG_ANY_THROW(value.getAlreadyLockedExclusive());
   EXPECT_DEBUG_ANY_THROW(value.getAlreadyLockedShared());
+#endif
   EXPECT_EQ(321u, value.getWithoutLock());
 }
 
 TEST(Mutex, Lazy) {
   Lazy<uint> lazy;
-  bool initStarted = false;
+  volatile bool initStarted = false;
 
   Thread thread([&]() {
     EXPECT_EQ(123u, lazy.get([&](SpaceFor<uint>& space) -> Own<uint> {
-      __atomic_store_n(&initStarted, true, __ATOMIC_RELAXED);
+      initStarted = true;
       delay();
       return space.construct(123);
     }));
   });
 
   // Spin until the initializer has been entered in the thread.
-  while (!__atomic_load_n(&initStarted, __ATOMIC_RELAXED)) {
+  while (!initStarted) {
+#if _WIN32
+    Sleep(0);
+#else
     sched_yield();
+#endif
   }
 
   EXPECT_EQ(123u, lazy.get([](SpaceFor<uint>& space) { return space.construct(456); }));

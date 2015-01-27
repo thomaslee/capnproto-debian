@@ -1,25 +1,23 @@
-// Copyright (c) 2013, Kenton Varda <temporal@gmail.com>
-// All rights reserved.
+// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Licensed under the MIT License:
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 #define CAPNP_PRIVATE
 #include "layout.h"
@@ -27,12 +25,14 @@
 #include "arena.h"
 #include <gtest/gtest.h>
 
-namespace capnp {
+#if CAPNP_DEBUG_TYPES
+namespace kj {
   template <typename T, typename U>
   std::ostream& operator<<(std::ostream& os, kj::Quantity<T, U> value) {
     return os << (value / kj::unit<kj::Quantity<T, U>>());
   }
 }
+#endif
 
 namespace capnp {
 namespace _ {  // private
@@ -102,8 +102,7 @@ static const AlignedData<2> SUBSTRUCT_DEFAULT = {{0,0,0,0,1,0,0,0,  0,0,0,0,0,0,
 static const AlignedData<2> STRUCTLIST_ELEMENT_SUBSTRUCT_DEFAULT =
     {{0,0,0,0,1,0,0,0,  0,0,0,0,0,0,0,0}};
 
-static constexpr StructSize STRUCTLIST_ELEMENT_SIZE(
-    1 * WORDS, 1 * POINTERS, FieldSize::INLINE_COMPOSITE);
+static constexpr StructSize STRUCTLIST_ELEMENT_SIZE(1 * WORDS, 1 * POINTERS);
 
 static void setupStruct(StructBuilder builder) {
   builder.setDataField<uint64_t>(0 * ELEMENTS, 0x1011121314151617ull);
@@ -121,13 +120,13 @@ static void setupStruct(StructBuilder builder) {
 
   {
     StructBuilder subStruct = builder.getPointerField(0 * POINTERS).initStruct(
-        StructSize(1 * WORDS, 0 * POINTERS, FieldSize::EIGHT_BYTES));
+        StructSize(1 * WORDS, 0 * POINTERS));
     subStruct.setDataField<uint32_t>(0 * ELEMENTS, 123);
   }
 
   {
     ListBuilder list = builder.getPointerField(1 * POINTERS)
-        .initList(FieldSize::FOUR_BYTES, 3 * ELEMENTS);
+        .initList(ElementSize::FOUR_BYTES, 3 * ELEMENTS);
     EXPECT_EQ(3 * ELEMENTS, list.size());
     list.setDataElement<int32_t>(0 * ELEMENTS, 200);
     list.setDataElement<int32_t>(1 * ELEMENTS, 201);
@@ -142,18 +141,18 @@ static void setupStruct(StructBuilder builder) {
       StructBuilder element = list.getStructElement(i * ELEMENTS);
       element.setDataField<int32_t>(0 * ELEMENTS, 300 + i);
       element.getPointerField(0 * POINTERS)
-             .initStruct(StructSize(1 * WORDS, 0 * POINTERS, FieldSize::EIGHT_BYTES))
+             .initStruct(StructSize(1 * WORDS, 0 * POINTERS))
              .setDataField<int32_t>(0 * ELEMENTS, 400 + i);
     }
   }
 
   {
     ListBuilder list = builder.getPointerField(3 * POINTERS)
-                              .initList(FieldSize::POINTER, 5 * ELEMENTS);
+                              .initList(ElementSize::POINTER, 5 * ELEMENTS);
     EXPECT_EQ(5 * ELEMENTS, list.size());
     for (uint i = 0; i < 5; i++) {
       ListBuilder element = list.getPointerElement(i * ELEMENTS)
-                                .initList(FieldSize::TWO_BYTES, (i + 1) * ELEMENTS);
+                                .initList(ElementSize::TWO_BYTES, (i + 1) * ELEMENTS);
       EXPECT_EQ((i + 1) * ELEMENTS, element.size());
       for (uint j = 0; j <= i; j++) {
         element.setDataElement<uint16_t>(j * ELEMENTS, 500 + j);
@@ -178,14 +177,13 @@ static void checkStruct(StructBuilder builder) {
 
   {
     StructBuilder subStruct = builder.getPointerField(0 * POINTERS).getStruct(
-        StructSize(1 * WORDS, 0 * POINTERS, FieldSize::EIGHT_BYTES),
-        SUBSTRUCT_DEFAULT.words);
+        StructSize(1 * WORDS, 0 * POINTERS), SUBSTRUCT_DEFAULT.words);
     EXPECT_EQ(123u, subStruct.getDataField<uint32_t>(0 * ELEMENTS));
   }
 
   {
     ListBuilder list = builder.getPointerField(1 * POINTERS)
-                              .getList(FieldSize::FOUR_BYTES, nullptr);
+                              .getList(ElementSize::FOUR_BYTES, nullptr);
     ASSERT_EQ(3 * ELEMENTS, list.size());
     EXPECT_EQ(200, list.getDataElement<int32_t>(0 * ELEMENTS));
     EXPECT_EQ(201, list.getDataElement<int32_t>(1 * ELEMENTS));
@@ -201,18 +199,18 @@ static void checkStruct(StructBuilder builder) {
       EXPECT_EQ(300 + i, element.getDataField<int32_t>(0 * ELEMENTS));
       EXPECT_EQ(400 + i,
           element.getPointerField(0 * POINTERS)
-                 .getStruct(StructSize(1 * WORDS, 0 * POINTERS, FieldSize::EIGHT_BYTES),
+                 .getStruct(StructSize(1 * WORDS, 0 * POINTERS),
                             STRUCTLIST_ELEMENT_SUBSTRUCT_DEFAULT.words)
                  .getDataField<int32_t>(0 * ELEMENTS));
     }
   }
 
   {
-    ListBuilder list = builder.getPointerField(3 * POINTERS).getList(FieldSize::POINTER, nullptr);
+    ListBuilder list = builder.getPointerField(3 * POINTERS).getList(ElementSize::POINTER, nullptr);
     ASSERT_EQ(5 * ELEMENTS, list.size());
     for (uint i = 0; i < 5; i++) {
       ListBuilder element = list.getPointerElement(i * ELEMENTS)
-                                .getList(FieldSize::TWO_BYTES, nullptr);
+                                .getList(ElementSize::TWO_BYTES, nullptr);
       ASSERT_EQ((i + 1) * ELEMENTS, element.size());
       for (uint j = 0; j <= i; j++) {
         EXPECT_EQ(500u + j, element.getDataElement<uint16_t>(j * ELEMENTS));
@@ -242,7 +240,7 @@ static void checkStruct(StructReader reader) {
   }
 
   {
-    ListReader list = reader.getPointerField(1 * POINTERS).getList(FieldSize::FOUR_BYTES, nullptr);
+    ListReader list = reader.getPointerField(1 * POINTERS).getList(ElementSize::FOUR_BYTES, nullptr);
     ASSERT_EQ(3 * ELEMENTS, list.size());
     EXPECT_EQ(200, list.getDataElement<int32_t>(0 * ELEMENTS));
     EXPECT_EQ(201, list.getDataElement<int32_t>(1 * ELEMENTS));
@@ -251,7 +249,7 @@ static void checkStruct(StructReader reader) {
 
   {
     ListReader list = reader.getPointerField(2 * POINTERS)
-                            .getList(FieldSize::INLINE_COMPOSITE, nullptr);
+                            .getList(ElementSize::INLINE_COMPOSITE, nullptr);
     ASSERT_EQ(4 * ELEMENTS, list.size());
     for (int i = 0; i < 4; i++) {
       StructReader element = list.getStructElement(i * ELEMENTS);
@@ -264,11 +262,11 @@ static void checkStruct(StructReader reader) {
   }
 
   {
-    ListReader list = reader.getPointerField(3 * POINTERS).getList(FieldSize::POINTER, nullptr);
+    ListReader list = reader.getPointerField(3 * POINTERS).getList(ElementSize::POINTER, nullptr);
     ASSERT_EQ(5 * ELEMENTS, list.size());
     for (uint i = 0; i < 5; i++) {
       ListReader element = list.getPointerElement(i * ELEMENTS)
-                               .getList(FieldSize::TWO_BYTES, nullptr);
+                               .getList(ElementSize::TWO_BYTES, nullptr);
       ASSERT_EQ((i + 1) * ELEMENTS, element.size());
       for (uint j = 0; j <= i; j++) {
         EXPECT_EQ(500u + j, element.getDataElement<uint16_t>(j * ELEMENTS));
@@ -285,7 +283,7 @@ TEST(WireFormat, StructRoundTrip_OneSegment) {
   word* rootLocation = allocation.words;
 
   StructBuilder builder = PointerBuilder::getRoot(segment, rootLocation)
-      .initStruct(StructSize(2 * WORDS, 4 * POINTERS, FieldSize::INLINE_COMPOSITE));
+      .initStruct(StructSize(2 * WORDS, 4 * POINTERS));
   setupStruct(builder);
 
   // word count:
@@ -322,7 +320,7 @@ TEST(WireFormat, StructRoundTrip_OneSegmentPerAllocation) {
   word* rootLocation = allocation.words;
 
   StructBuilder builder = PointerBuilder::getRoot(segment, rootLocation)
-      .initStruct(StructSize(2 * WORDS, 4 * POINTERS, FieldSize::INLINE_COMPOSITE));
+      .initStruct(StructSize(2 * WORDS, 4 * POINTERS));
   setupStruct(builder);
 
   // Verify that we made 15 segments.
@@ -360,7 +358,7 @@ TEST(WireFormat, StructRoundTrip_MultipleSegmentsWithMultipleAllocations) {
   word* rootLocation = allocation.words;
 
   StructBuilder builder = PointerBuilder::getRoot(segment, rootLocation)
-      .initStruct(StructSize(2 * WORDS, 4 * POINTERS, FieldSize::INLINE_COMPOSITE));
+      .initStruct(StructSize(2 * WORDS, 4 * POINTERS));
   setupStruct(builder);
 
   // Verify that we made 6 segments.
@@ -379,6 +377,22 @@ TEST(WireFormat, StructRoundTrip_MultipleSegmentsWithMultipleAllocations) {
   checkStruct(builder);
   checkStruct(builder.asReader());
   checkStruct(PointerReader::getRoot(segment, segment->getStartPtr(), 4).getStruct(nullptr));
+}
+
+inline bool isNan(float f) { return f != f; }
+inline bool isNan(double f) { return f != f; }
+
+TEST(WireFormat, NanPatching) {
+  EXPECT_EQ(0x7fc00000u, mask(kj::nan(), 0));
+  EXPECT_TRUE(isNan(unmask<float>(0x7fc00000u, 0)));
+  EXPECT_TRUE(isNan(unmask<float>(0x7fc00001u, 0)));
+  EXPECT_TRUE(isNan(unmask<float>(0x7fc00005u, 0)));
+  EXPECT_EQ(0x7fc00000u, mask(unmask<float>(0x7fc00000u, 0), 0));
+  EXPECT_EQ(0x7ff8000000000000ull, mask((double)kj::nan(), 0));
+  EXPECT_TRUE(isNan(unmask<double>(0x7ff8000000000000ull, 0)));
+  EXPECT_TRUE(isNan(unmask<double>(0x7ff8000000000001ull, 0)));
+  EXPECT_TRUE(isNan(unmask<double>(0x7ff8000000000005ull, 0)));
+  EXPECT_EQ(0x7ff8000000000000ull, mask(unmask<double>(0x7ff8000000000000ull, 0), 0));
 }
 
 }  // namespace
