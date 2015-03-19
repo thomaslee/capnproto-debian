@@ -1,3 +1,9 @@
+Subject: [PATCH] SECURITY: Additional CPU amplification case.
+Origin: https://github.com/sandstorm-io/capnproto/commit/ac00109ca0749efd04a4203d002afa00f6b6cd89
+From: Kenton Varda <kenton@sandstorm.io>
+Bug-Debian: https://bugs.debian.org/780568
+Forwarded: not-needed
+
 --- a/src/capnp/encoding-test.c++
 +++ b/src/capnp/encoding-test.c++
 @@ -1501,17 +1501,24 @@

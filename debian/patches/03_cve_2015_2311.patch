@@ -1,3 +1,9 @@
+Subject: [PATCH] SECURITY: Integer underflow in pointer validation.
+Origin: https://github.com/sandstorm-io/capnproto/commit/e84ae6e395ba6e6e8616bd3d40f7a7d50ad5b5ed
+From: Kenton Varda <kenton@sandstorm.io>
+Bug-Debian: https://bugs.debian.org/780566
+Forwarded: not-needed
+
 --- a/src/capnp/layout.c++
 +++ b/src/capnp/layout.c++
 @@ -1437,6 +1437,7 @@

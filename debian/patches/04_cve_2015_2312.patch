@@ -1,3 +1,9 @@
+Subject: [PATCH] SECURITY: CPU usage amplification attack.
+Origin: https://github.com/sandstorm-io/capnproto/commit/4caa02ed303689323cda603928fe6a09a6d9fa74
+From: Kenton Varda <kenton@sandstorm.io>
+Bug-Debian: https://bugs.debian.org/780567
+Forwarded: not-needed
+
 --- a/src/capnp/arena.h
 +++ b/src/capnp/arena.h
 @@ -108,6 +108,13 @@
