@@ -308,6 +308,11 @@ struct WireHelpers {
     return segment == nullptr || segment->containsInterval(start, end);
   }
 
+  static KJ_ALWAYS_INLINE(bool amplifiedRead(SegmentReader* segment, WordCount virtualAmount)) {
+    // If segment is null, this is an unchecked message, so we don't do read limiter checks.
+    return segment == nullptr || segment->amplifiedRead(virtualAmount);
+  }
+
   static KJ_ALWAYS_INLINE(word* allocate(
       WirePointer*& ref, SegmentBuilder*& segment, WordCount amount,
       WirePointer::Kind kind, BuilderArena* orphanArena)) {
@@ -550,14 +555,16 @@ struct WireHelpers {
             WordCount dataSize = elementTag->structRef.dataSize.get();
             WirePointerCount pointerCount = elementTag->structRef.ptrCount.get();
 
-            word* pos = ptr + POINTER_SIZE_IN_WORDS;
             uint count = elementTag->inlineCompositeListElementCount() / ELEMENTS;
-            for (uint i = 0; i < count; i++) {
-              pos += dataSize;
+            if (pointerCount > 0 * POINTERS) {
+              word* pos = ptr + POINTER_SIZE_IN_WORDS;
+              for (uint i = 0; i < count; i++) {
+                pos += dataSize;
 
-              for (uint j = 0; j < pointerCount / POINTERS; j++) {
-                zeroObject(segment, reinterpret_cast<WirePointer*>(pos));
-                pos += POINTER_SIZE_IN_WORDS;
+                for (uint j = 0; j < pointerCount / POINTERS; j++) {
+                  zeroObject(segment, reinterpret_cast<WirePointer*>(pos));
+                  pos += POINTER_SIZE_IN_WORDS;
+                }
               }
             }
 
@@ -675,8 +682,6 @@ struct WireHelpers {
               return result;
             }
 
-            result.wordCount += wordCount + POINTER_SIZE_IN_WORDS;
-
             const WirePointer* elementTag = reinterpret_cast<const WirePointer*>(ptr);
             ElementCount count = elementTag->inlineCompositeListElementCount();
 
@@ -685,22 +690,29 @@ struct WireHelpers {
               return result;
             }
 
-            KJ_REQUIRE(elementTag->structRef.wordSize() / ELEMENTS * count <= wordCount,
+            auto actualSize = elementTag->structRef.wordSize() / ELEMENTS * ElementCount64(count);
+            KJ_REQUIRE(actualSize <= wordCount,
                        "Struct list pointer's elements overran size.") {
               return result;
             }
 
+            // We count the actual size rather than the claimed word count because that's what
+            // we'll end up with if we make a copy.
+            result.wordCount += actualSize + POINTER_SIZE_IN_WORDS;
+
             WordCount dataSize = elementTag->structRef.dataSize.get();
             WirePointerCount pointerCount = elementTag->structRef.ptrCount.get();
 
-            const word* pos = ptr + POINTER_SIZE_IN_WORDS;
-            for (uint i = 0; i < count / ELEMENTS; i++) {
-              pos += dataSize;
+            if (pointerCount > 0 * POINTERS) {
+              const word* pos = ptr + POINTER_SIZE_IN_WORDS;
+              for (uint i = 0; i < count / ELEMENTS; i++) {
+                pos += dataSize;
 
-              for (uint j = 0; j < pointerCount / POINTERS; j++) {
-                result += totalSize(segment, reinterpret_cast<const WirePointer*>(pos),
-                                    nestingLimit);
-                pos += POINTER_SIZE_IN_WORDS;
+                for (uint j = 0; j < pointerCount / POINTERS; j++) {
+                  result += totalSize(segment, reinterpret_cast<const WirePointer*>(pos),
+                                      nestingLimit);
+                  pos += POINTER_SIZE_IN_WORDS;
+                }
               }
             }
             break;
@@ -1429,6 +1441,7 @@ struct WireHelpers {
       WirePointer* ref, word* refTarget, SegmentBuilder* segment,
       const void* defaultValue, ByteCount defaultSize)) {
     if (ref->isNull()) {
+    useDefault:
       if (defaultSize == 0 * BYTES) {
         return nullptr;
       } else {
@@ -1438,14 +1451,19 @@ struct WireHelpers {
       }
     } else {
       word* ptr = followFars(ref, refTarget, segment);
+      char* cptr = reinterpret_cast<char*>(ptr);
 
       KJ_REQUIRE(ref->kind() == WirePointer::LIST,
           "Called getText{Field,Element}() but existing pointer is not a list.");
       KJ_REQUIRE(ref->listRef.elementSize() == ElementSize::BYTE,
           "Called getText{Field,Element}() but existing list pointer is not byte-sized.");
 
-      // Subtract 1 from the size for the NUL terminator.
-      return Text::Builder(reinterpret_cast<char*>(ptr), ref->listRef.elementCount() / ELEMENTS - 1);
+      size_t size = ref->listRef.elementCount() / ELEMENTS;
+      KJ_REQUIRE(size > 0 && cptr[size-1] == '\0', "Text blob missing NUL terminator.") {
+        goto useDefault;
+      }
+
+      return Text::Builder(cptr, size - 1);
     }
   }
 
@@ -1663,9 +1681,18 @@ struct WireHelpers {
           ElementCount elementCount = tag->inlineCompositeListElementCount();
           auto wordsPerElement = tag->structRef.wordSize() / ELEMENTS;
 
-          KJ_REQUIRE(wordsPerElement * elementCount <= wordCount,
+          KJ_REQUIRE(wordsPerElement * ElementCount64(elementCount) <= wordCount,
                      "INLINE_COMPOSITE list's elements overrun its word count.") {
             goto useDefault;
+          }
+
+          if (wordsPerElement * (1 * ELEMENTS) == 0 * WORDS) {
+            // Watch out for lists of zero-sized structs, which can claim to be arbitrarily large
+            // without having sent actual data.
+            KJ_REQUIRE(amplifiedRead(srcSegment, elementCount * (1 * WORDS / ELEMENTS)),
+                       "Message contains amplified list pointer.") {
+              goto useDefault;
+            }
           }
 
           return setListPointer(dstSegment, dst,
@@ -1684,6 +1711,15 @@ struct WireHelpers {
           KJ_REQUIRE(boundsCheck(srcSegment, ptr, ptr + wordCount),
                      "Message contains out-of-bounds list pointer.") {
             goto useDefault;
+          }
+
+          if (elementSize == ElementSize::VOID) {
+            // Watch out for lists of void, which can claim to be arbitrarily large without having
+            // sent actual data.
+            KJ_REQUIRE(amplifiedRead(srcSegment, elementCount * (1 * WORDS / ELEMENTS)),
+                       "Message contains amplified list pointer.") {
+              goto useDefault;
+            }
           }
 
           return setListPointer(dstSegment, dst,
@@ -1919,9 +1955,18 @@ struct WireHelpers {
       size = tag->inlineCompositeListElementCount();
       wordsPerElement = tag->structRef.wordSize() / ELEMENTS;
 
-      KJ_REQUIRE(size * wordsPerElement <= wordCount,
+      KJ_REQUIRE(ElementCount64(size) * wordsPerElement <= wordCount,
                  "INLINE_COMPOSITE list's elements overrun its word count.") {
         goto useDefault;
+      }
+
+      if (wordsPerElement * (1 * ELEMENTS) == 0 * WORDS) {
+        // Watch out for lists of zero-sized structs, which can claim to be arbitrarily large
+        // without having sent actual data.
+        KJ_REQUIRE(amplifiedRead(segment, size * (1 * WORDS / ELEMENTS)),
+                   "Message contains amplified list pointer.") {
+          goto useDefault;
+        }
       }
 
       if (checkElementSize) {
@@ -1981,12 +2026,22 @@ struct WireHelpers {
       BitCount dataSize = dataBitsPerElement(ref->listRef.elementSize()) * ELEMENTS;
       WirePointerCount pointerCount =
           pointersPerElement(ref->listRef.elementSize()) * ELEMENTS;
+      ElementCount elementCount = ref->listRef.elementCount();
       auto step = (dataSize + pointerCount * BITS_PER_POINTER) / ELEMENTS;
 
-      KJ_REQUIRE(boundsCheck(segment, ptr, ptr +
-                     roundBitsUpToWords(ElementCount64(ref->listRef.elementCount()) * step)),
+      WordCount wordCount = roundBitsUpToWords(ElementCount64(elementCount) * step);
+      KJ_REQUIRE(boundsCheck(segment, ptr, ptr + wordCount),
                  "Message contains out-of-bounds list pointer.") {
         goto useDefault;
+      }
+
+      if (elementSize == ElementSize::VOID) {
+        // Watch out for lists of void, which can claim to be arbitrarily large without having sent
+        // actual data.
+        KJ_REQUIRE(amplifiedRead(segment, elementCount * (1 * WORDS / ELEMENTS)),
+                   "Message contains amplified list pointer.") {
+          goto useDefault;
+        }
       }
 
       if (checkElementSize) {
@@ -2018,7 +2073,7 @@ struct WireHelpers {
         }
       }
 
-      return ListReader(segment, ptr, ref->listRef.elementCount(), step,
+      return ListReader(segment, ptr, elementCount, step,
                         dataSize, pointerCount, elementSize, nestingLimit - 1);
     }
   }
