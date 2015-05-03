@@ -1858,6 +1858,13 @@ private:
     declareText = kj::strTree(kj::mv(declareText), "  };");
     defineText = kj::strTree(kj::mv(defineText), "#endif  // !CAPNP_LITE\n\n");
 
+    // Name of the ::Which type, when applicable.
+    CppTypeName whichName;
+    if (structNode.getDiscriminantCount() != 0) {
+      whichName = cppFullName(schema, nullptr);
+      whichName.addMemberType("Which");
+    }
+
     return StructText {
       kj::strTree(
           templateContext.hasParams() ? "  " : "", templateContext.decl(true),
@@ -1898,10 +1905,12 @@ private:
 
       kj::strTree(
           structNode.getDiscriminantCount() == 0 ? kj::strTree() : kj::strTree(
-              "inline ", fullName, "::Which ", fullName, "::Reader::which() const {\n"
+              templateContext.allDecls(),
+              "inline ", whichName, " ", fullName, "::Reader::which() const {\n"
               "  return _reader.getDataField<Which>(", discrimOffset, " * ::capnp::ELEMENTS);\n"
-              "}\n"
-              "inline ", fullName, "::Which ", fullName, "::Builder::which() {\n"
+              "}\n",
+              templateContext.allDecls(),
+              "inline ", whichName, " ", fullName, "::Builder::which() {\n"
               "  return _builder.getDataField<Which>(", discrimOffset, " * ::capnp::ELEMENTS);\n"
               "}\n"
               "\n"),
@@ -2050,6 +2059,14 @@ private:
     uint64_t id;
   };
 
+  void getTransitiveSuperclasses(InterfaceSchema schema, std::map<uint64_t, InterfaceSchema>& map) {
+    if (map.insert(std::make_pair(schema.getProto().getId(), schema)).second) {
+      for (auto sup: schema.getSuperclasses()) {
+        getTransitiveSuperclasses(sup, map);
+      }
+    }
+  }
+
   InterfaceText makeInterfaceText(kj::StringPtr scope, kj::StringPtr name, InterfaceSchema schema,
                                   kj::Array<kj::StringTree> nestedTypeDecls,
                                   const TemplateContext& templateContext) {
@@ -2064,6 +2081,16 @@ private:
     auto superclasses = KJ_MAP(superclass, schema.getSuperclasses()) {
       return ExtendInfo { cppFullName(superclass, nullptr), superclass.getProto().getId() };
     };
+
+    kj::Array<ExtendInfo> transitiveSuperclasses;
+    {
+      std::map<uint64_t, InterfaceSchema> map;
+      getTransitiveSuperclasses(schema, map);
+      map.erase(schema.getProto().getId());
+      transitiveSuperclasses = KJ_MAP(entry, map) {
+        return ExtendInfo { cppFullName(entry.second, nullptr), entry.second.getProto().getId() };
+      };
+    }
 
     CppTypeName clientName = cppFullName(schema, nullptr);
     clientName.addMemberType("Client");
@@ -2218,7 +2245,7 @@ private:
           "  switch (interfaceId) {\n"
           "    case 0x", kj::hex(proto.getId()), "ull:\n"
           "      return dispatchCallInternal(methodId, context);\n",
-          KJ_MAP(s, superclasses) {
+          KJ_MAP(s, transitiveSuperclasses) {
             return kj::strTree(
               "    case 0x", kj::hex(s.id), "ull:\n"
               "      return ", s.typeName, "::Server::dispatchCallInternal(methodId, context);\n");
