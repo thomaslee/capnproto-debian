@@ -10,7 +10,7 @@ Homepage: http://kentonv.github.io/capnproto/
 Vcs-Git: git://github.com/thomaslee/capnproto-debian
 Vcs-Browser: http://github.com/thomaslee/capnproto-debian
 
-Package: libcapnp-0.5.1
+Package: libcapnp-0.5.2
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -30,7 +30,7 @@ Description: Cap'n Proto C++ library
 Package: libcapnp-dev
 Architecture: any
 Section: libdevel
-Depends: ${misc:Depends}, libcapnp-0.5.1 (= ${binary:Version})
+Depends: ${misc:Depends}, libcapnp-0.5.2 (= ${binary:Version})
 Description: Cap'n Proto C++ library (development files)
  Similar to Protocol Buffers, Cap'n Proto is an efficient means of
  serializing structured data to be transferred across a network or
@@ -48,7 +48,7 @@ Description: Cap'n Proto C++ library (development files)
 Package: capnproto
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
- libcapnp-0.5.1 (= ${binary:Version})
+ libcapnp-0.5.2 (= ${binary:Version})
 Description: tool for working with the Cap'n Proto data interchange format
  Similar to Protocol Buffers, Cap'n Proto is an efficient means of
  serializing structured data to be transferred across a network or
