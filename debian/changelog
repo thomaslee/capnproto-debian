@@ -1,3 +1,14 @@
+capnproto (0.5.2-2) unstable; urgency=low
+
+  * Enable parallel builds
+  * Drop postinst/postrm scripts, dh_makeshlibs adds ldconfig
+  * Attempt to fix GNU/Hurd FTBFS
+  * Update .gitignore
+  * Install upstream cmake find_package file
+  * Symlinks for cmake 3.0 -> 3.2 transition
+
+ -- Tom Lee <debian@tomlee.co>  Sat, 09 May 2015 02:13:59 -0700
+
 capnproto (0.5.2-1) unstable; urgency=low
 
   * Imported Upstream version 0.5.2
