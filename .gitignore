@@ -21,7 +21,7 @@ Makefile
 *.log
 *.debhelper
 /debian/capnproto-compiler
-/debian/libcapnp-0.4.0
+/debian/libcapnp-0.5.2
 /debian/libcapnp-dev
 *.substvars
 /capnp-test
@@ -38,3 +38,7 @@ tags
 vgdump
 autom4te.cache
 /capnp-evolution-test
+*~
+*.trs
+autoreconf.before
+autoreconf.after
