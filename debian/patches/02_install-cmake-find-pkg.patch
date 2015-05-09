@@ -1,0 +1,12 @@
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -136,6 +136,9 @@
+ pkgconfigdir = $(libdir)/pkgconfig
+ pkgconfig_DATA = capnp.pc capnp-rpc.pc
+ 
++cmakemoduledir = $(datadir)/cmake-3.2/Modules
++cmakemodule_DATA = cmake/FindCapnProto.cmake
++
+ noinst_HEADERS = \
+   src/kj/iovmax.h
+ 
