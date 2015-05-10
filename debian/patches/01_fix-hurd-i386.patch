@@ -1,3 +1,11 @@
+Description: Fix build error on hurd-i386.
+  hurd-i386 does not define IOV_MAX. Here we provide a more robust way to
+  determine the max iovs allowed during readv/writev operations.
+Author: Tom Lee <debian@tomlee.co>
+Forwarded: https://github.com/sandstorm-io/capnproto/pull/202
+Last-Update: 2015-05-09
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 --- a/Makefile.am
 +++ b/Makefile.am
 @@ -136,6 +136,9 @@

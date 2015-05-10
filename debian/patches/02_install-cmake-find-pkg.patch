@@ -1,3 +1,12 @@
+Description: *Config files for cmake.
+ Upstream provides a FindCapnProto.cmake, but this needs to be installed in a
+ version-specific directory. In this patch we generate CapnProtoConfig.cmake
+ and CapnProtoConfigVersion.cmake so that we don't need to move our Find*
+ files around any time the cmake package is upgraded.
+Author: Tom Lee <debian@tomlee.co>
+Last-Update: 2015-05-09
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 --- a/Makefile.am
 +++ b/Makefile.am
 @@ -59,12 +59,18 @@
