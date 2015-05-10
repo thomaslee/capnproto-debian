@@ -50,7 +50,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 +		$< >$@
 +
  noinst_HEADERS = \
-   src/kj/iovmax.h
+   src/kj/miniposix.h
  
 --- /dev/null
 +++ b/cmake/CapnProtoConfig.cmake.in
