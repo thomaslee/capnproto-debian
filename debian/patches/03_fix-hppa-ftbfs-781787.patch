@@ -1,0 +1,22 @@
+Description: hppa FTBFS due to NaN test failure
+  The hppa and mips architecture have the same nan format (i.e.,
+  quiet and signalling nans are different from x86, etc).
+Author: John David Anglin <dave.anglin@bell.net>
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=781787
+Forwarded: https://github.com/sandstorm-io/capnproto/pull/200
+Applied-Upstream: https://github.com/sandstorm-io/capnproto/commit/9e66d012b949a026d2be33e4639a560c6b9d89c0
+Reviewed-by: Tom Lee <debian@tomlee.co>
+Last-Update: 2015-05-10
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/src/capnp/layout.h
++++ b/src/capnp/layout.h
+@@ -39,7 +39,7 @@
+ #include "blob.h"
+ #include "endian.h"
+ 
+-#if __mips__ && !defined(CAPNP_CANONICALIZE_NAN)
++#if (defined(__mips__) || defined(__hppa__)) && !defined(CAPNP_CANONICALIZE_NAN)
+ #define CAPNP_CANONICALIZE_NAN 1
+ // Explicitly detect NaNs and canonicalize them to the quiet NaN value as would be returned by
+ // __builtin_nan("") on systems implementing the IEEE-754 recommended (but not required) NaN
