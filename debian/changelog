@@ -4,8 +4,7 @@ capnproto (0.5.2-2) unstable; urgency=low
   * Drop postinst/postrm scripts, dh_makeshlibs adds ldconfig
   * Attempt to fix GNU/Hurd FTBFS
   * Update .gitignore
-  * Install upstream cmake find_package file
-  * Symlinks for cmake 3.0 -> 3.2 transition
+  * Add support for cmake *Config files
 
  -- Tom Lee <debian@tomlee.co>  Sat, 09 May 2015 02:13:59 -0700
 
