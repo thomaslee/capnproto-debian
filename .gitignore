@@ -42,3 +42,4 @@ autom4te.cache
 *.trs
 autoreconf.before
 autoreconf.after
+cmake/CapnProtoConfig*.cmake
