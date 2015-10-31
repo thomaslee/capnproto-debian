@@ -1,3 +1,14 @@
+capnproto (0.5.3-1) unstable; urgency=medium
+
+  * Backporting final IOV_MAX patch accepted upstream
+  * Add patch for hppa FTBFS (Closes: #781787)
+  * Fix mipsel/powerpc/ppc64el FTBFS (Closes: #790571)
+  * Imported Upstream version 0.5.3
+  * Update packaging for 0.5.3
+  * Fix dep5-copyright-license-name-not-unique lintian warning
+
+ -- Tom Lee <debian@tomlee.co>  Fri, 30 Oct 2015 23:49:29 -0700
+
 capnproto (0.5.2-2) unstable; urgency=low
 
   * Enable parallel builds
