@@ -3,7 +3,7 @@ Upstream-Name: capnproto
 Source: http://capnproto.org/
 
 Files: *
-Copyright: 2013 Kenton Varda <temporal@gmail.com>
+Copyright: 2013-2015 Sandstorm Development Group, Inc. and contributors
 License: BSD-2-clause
 
 Files: debian/*
