@@ -94,14 +94,14 @@ host_triplet = @host@
 @LITE_MODE_FALSE@bin_PROGRAMS = capnp$(EXEEXT) capnpc-capnp$(EXEEXT) \
 @LITE_MODE_FALSE@	capnpc-c++$(EXEEXT)
 @LITE_MODE_FALSE@check_PROGRAMS = capnp-test$(EXEEXT) \
-@LITE_MODE_FALSE@	capnp-evolution-test$(EXEEXT)
+@LITE_MODE_FALSE@	capnp-evolution-test$(EXEEXT) \
+@LITE_MODE_FALSE@	capnp-afl-testcase$(EXEEXT)
 @LITE_MODE_TRUE@check_PROGRAMS = capnp-test$(EXEEXT)
 @LITE_MODE_FALSE@TESTS = capnp-test$(EXEEXT) \
 @LITE_MODE_FALSE@	capnp-evolution-test$(EXEEXT) \
 @LITE_MODE_FALSE@	src/capnp/compiler/capnp-test.sh
 @LITE_MODE_TRUE@TESTS = capnp-test$(EXEEXT)
 subdir = .
-SUBDIRS =
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/acx_pthread.m4 \
 	$(top_srcdir)/m4/ax_cxx_compile_stdcxx_11.m4 \
@@ -112,15 +112,32 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(top_srcdir)/configure \
 	$(am__configure_deps) $(dist_includecapnp_DATA) \
-	$(includecapnp_HEADERS) $(includekj_HEADERS) \
+	$(includecapnp_HEADERS) $(includecapnpcompat_HEADERS) \
+	$(includekj_HEADERS) $(includekjcompat_HEADERS) \
 	$(includekjparse_HEADERS) $(includekjstd_HEADERS) \
-	$(am__DIST_COMMON)
+	$(noinst_HEADERS) $(am__DIST_COMMON)
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = config.h
-CONFIG_CLEAN_FILES = capnp.pc capnp-rpc.pc
+CONFIG_CLEAN_FILES = capnp.pc capnp-rpc.pc capnp-json.pc kj.pc \
+	kj-async.pc
 CONFIG_CLEAN_VPATH_FILES =
+ARFLAGS = cru
+AM_V_AR = $(am__v_AR_@AM_V@)
+am__v_AR_ = $(am__v_AR_@AM_DEFAULT_V@)
+am__v_AR_0 = @echo "  AR      " $@;
+am__v_AR_1 = 
+libcapnp_test_a_AR = $(AR) $(ARFLAGS)
+libcapnp_test_a_LIBADD =
+am__dirstamp = $(am__leading_dot)dirstamp
+am_libcapnp_test_a_OBJECTS = src/capnp/test-util.$(OBJEXT)
+am__objects_1 = src/capnp/test.capnp.$(OBJEXT) \
+	src/capnp/test-import.capnp.$(OBJEXT) \
+	src/capnp/test-import2.capnp.$(OBJEXT)
+nodist_libcapnp_test_a_OBJECTS = $(am__objects_1)
+libcapnp_test_a_OBJECTS = $(am_libcapnp_test_a_OBJECTS) \
+	$(nodist_libcapnp_test_a_OBJECTS)
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
 am__vpath_adj = case $$p in \
     $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
@@ -150,22 +167,42 @@ am__uninstall_files_from_dir = { \
   }
 am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" \
 	"$(DESTDIR)$(includecapnpdir)" "$(DESTDIR)$(pkgconfigdir)" \
-	"$(DESTDIR)$(includecapnpdir)" "$(DESTDIR)$(includekjdir)" \
+	"$(DESTDIR)$(includecapnpdir)" \
+	"$(DESTDIR)$(includecapnpcompatdir)" \
+	"$(DESTDIR)$(includekjdir)" "$(DESTDIR)$(includekjcompatdir)" \
 	"$(DESTDIR)$(includekjparsedir)" \
 	"$(DESTDIR)$(includekjstddir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 am__DEPENDENCIES_1 =
+@LITE_MODE_FALSE@libcapnp_json_la_DEPENDENCIES = libcapnp.la libkj.la \
+@LITE_MODE_FALSE@	$(am__DEPENDENCIES_1)
+am__libcapnp_json_la_SOURCES_DIST = src/capnp/compat/json.c++ \
+	src/capnp/compat/json.capnp.c++
+@LITE_MODE_FALSE@am_libcapnp_json_la_OBJECTS =  \
+@LITE_MODE_FALSE@	src/capnp/compat/json.lo \
+@LITE_MODE_FALSE@	src/capnp/compat/json.capnp.lo
+libcapnp_json_la_OBJECTS = $(am_libcapnp_json_la_OBJECTS)
+AM_V_lt = $(am__v_lt_@AM_V@)
+am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
+am__v_lt_0 = --silent
+am__v_lt_1 = 
+libcapnp_json_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
+	$(AM_CXXFLAGS) $(CXXFLAGS) $(libcapnp_json_la_LDFLAGS) \
+	$(LDFLAGS) -o $@
+@LITE_MODE_FALSE@am_libcapnp_json_la_rpath = -rpath $(libdir)
 @LITE_MODE_FALSE@libcapnp_rpc_la_DEPENDENCIES = libcapnp.la \
-@LITE_MODE_FALSE@	libkj-async.la libkj.la $(am__DEPENDENCIES_1)
+@LITE_MODE_FALSE@	libkj-async.la libkj.la $(am__DEPENDENCIES_1) \
+@LITE_MODE_FALSE@	$(am__DEPENDENCIES_1)
 am__libcapnp_rpc_la_SOURCES_DIST = src/capnp/serialize-async.c++ \
-	src/capnp/capability.c++ src/capnp/dynamic-capability.c++ \
-	src/capnp/rpc.c++ src/capnp/rpc.capnp.c++ \
-	src/capnp/rpc-twoparty.c++ src/capnp/rpc-twoparty.capnp.c++ \
+	src/capnp/capability.c++ src/capnp/membrane.c++ \
+	src/capnp/dynamic-capability.c++ src/capnp/rpc.c++ \
+	src/capnp/rpc.capnp.c++ src/capnp/rpc-twoparty.c++ \
+	src/capnp/rpc-twoparty.capnp.c++ \
 	src/capnp/persistent.capnp.c++ src/capnp/ez-rpc.c++
-am__dirstamp = $(am__leading_dot)dirstamp
 @LITE_MODE_FALSE@am_libcapnp_rpc_la_OBJECTS =  \
 @LITE_MODE_FALSE@	src/capnp/serialize-async.lo \
-@LITE_MODE_FALSE@	src/capnp/capability.lo \
+@LITE_MODE_FALSE@	src/capnp/capability.lo src/capnp/membrane.lo \
 @LITE_MODE_FALSE@	src/capnp/dynamic-capability.lo \
 @LITE_MODE_FALSE@	src/capnp/rpc.lo src/capnp/rpc.capnp.lo \
 @LITE_MODE_FALSE@	src/capnp/rpc-twoparty.lo \
@@ -173,10 +210,6 @@ am__dirstamp = $(am__leading_dot)dirstamp
 @LITE_MODE_FALSE@	src/capnp/persistent.capnp.lo \
 @LITE_MODE_FALSE@	src/capnp/ez-rpc.lo
 libcapnp_rpc_la_OBJECTS = $(am_libcapnp_rpc_la_OBJECTS)
-AM_V_lt = $(am__v_lt_@AM_V@)
-am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
-am__v_lt_0 = --silent
-am__v_lt_1 = 
 libcapnp_rpc_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
 	$(AM_CXXFLAGS) $(CXXFLAGS) $(libcapnp_rpc_la_LDFLAGS) \
@@ -190,14 +223,14 @@ am__libcapnp_la_SOURCES_DIST = src/capnp/c++.capnp.c++ \
 	src/capnp/serialize.c++ src/capnp/serialize-packed.c++ \
 	src/capnp/schema.c++ src/capnp/schema-loader.c++ \
 	src/capnp/dynamic.c++ src/capnp/stringify.c++
-@LITE_MODE_FALSE@am__objects_1 = src/capnp/schema.lo \
+@LITE_MODE_FALSE@am__objects_2 = src/capnp/schema.lo \
 @LITE_MODE_FALSE@	src/capnp/schema-loader.lo \
 @LITE_MODE_FALSE@	src/capnp/dynamic.lo src/capnp/stringify.lo
 am_libcapnp_la_OBJECTS = src/capnp/c++.capnp.lo src/capnp/blob.lo \
 	src/capnp/arena.lo src/capnp/layout.lo src/capnp/list.lo \
 	src/capnp/any.lo src/capnp/message.lo \
 	src/capnp/schema.capnp.lo src/capnp/serialize.lo \
-	src/capnp/serialize-packed.lo $(am__objects_1)
+	src/capnp/serialize-packed.lo $(am__objects_2)
 libcapnp_la_OBJECTS = $(am_libcapnp_la_OBJECTS)
 libcapnp_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
@@ -218,7 +251,7 @@ am__libcapnpc_la_SOURCES_DIST = src/capnp/compiler/md5.h \
 	src/capnp/compiler/node-translator.h \
 	src/capnp/compiler/node-translator.c++ \
 	src/capnp/compiler/compiler.h src/capnp/compiler/compiler.c++ \
-	src/capnp/schema-parser.c++
+	src/capnp/schema-parser.c++ src/capnp/serialize-text.c++
 @LITE_MODE_FALSE@am_libcapnpc_la_OBJECTS = src/capnp/compiler/md5.lo \
 @LITE_MODE_FALSE@	src/capnp/compiler/error-reporter.lo \
 @LITE_MODE_FALSE@	src/capnp/compiler/lexer.capnp.lo \
@@ -227,31 +260,55 @@ am__libcapnpc_la_SOURCES_DIST = src/capnp/compiler/md5.h \
 @LITE_MODE_FALSE@	src/capnp/compiler/parser.lo \
 @LITE_MODE_FALSE@	src/capnp/compiler/node-translator.lo \
 @LITE_MODE_FALSE@	src/capnp/compiler/compiler.lo \
-@LITE_MODE_FALSE@	src/capnp/schema-parser.lo
+@LITE_MODE_FALSE@	src/capnp/schema-parser.lo \
+@LITE_MODE_FALSE@	src/capnp/serialize-text.lo
 libcapnpc_la_OBJECTS = $(am_libcapnpc_la_OBJECTS)
 libcapnpc_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
 	$(CXXFLAGS) $(libcapnpc_la_LDFLAGS) $(LDFLAGS) -o $@
 @LITE_MODE_FALSE@am_libcapnpc_la_rpath = -rpath $(libdir)
 @LITE_MODE_FALSE@libkj_async_la_DEPENDENCIES = libkj.la \
-@LITE_MODE_FALSE@	$(am__DEPENDENCIES_1)
+@LITE_MODE_FALSE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
 am__libkj_async_la_SOURCES_DIST = src/kj/async.c++ \
-	src/kj/async-unix.c++ src/kj/async-io.c++ src/kj/time.c++
+	src/kj/async-unix.c++ src/kj/async-win32.c++ \
+	src/kj/async-io.c++ src/kj/async-io-unix.c++ \
+	src/kj/async-io-win32.c++ src/kj/time.c++
 @LITE_MODE_FALSE@am_libkj_async_la_OBJECTS = src/kj/async.lo \
-@LITE_MODE_FALSE@	src/kj/async-unix.lo src/kj/async-io.lo \
-@LITE_MODE_FALSE@	src/kj/time.lo
+@LITE_MODE_FALSE@	src/kj/async-unix.lo src/kj/async-win32.lo \
+@LITE_MODE_FALSE@	src/kj/async-io.lo src/kj/async-io-unix.lo \
+@LITE_MODE_FALSE@	src/kj/async-io-win32.lo src/kj/time.lo
 libkj_async_la_OBJECTS = $(am_libkj_async_la_OBJECTS)
 libkj_async_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
 	$(AM_CXXFLAGS) $(CXXFLAGS) $(libkj_async_la_LDFLAGS) \
 	$(LDFLAGS) -o $@
 @LITE_MODE_FALSE@am_libkj_async_la_rpath = -rpath $(libdir)
+@LITE_MODE_FALSE@libkj_http_la_DEPENDENCIES = libkj-async.la libkj.la \
+@LITE_MODE_FALSE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
+am__libkj_http_la_SOURCES_DIST = src/kj/compat/http.c++
+@LITE_MODE_FALSE@am_libkj_http_la_OBJECTS = src/kj/compat/http.lo
+libkj_http_la_OBJECTS = $(am_libkj_http_la_OBJECTS)
+libkj_http_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
+	$(AM_CXXFLAGS) $(CXXFLAGS) $(libkj_http_la_LDFLAGS) $(LDFLAGS) \
+	-o $@
+@LITE_MODE_FALSE@am_libkj_http_la_rpath = -rpath $(libdir)
+libkj_test_la_DEPENDENCIES = libkj.la $(am__DEPENDENCIES_1)
+am_libkj_test_la_OBJECTS = src/kj/test.lo
+libkj_test_la_OBJECTS = $(am_libkj_test_la_OBJECTS)
+libkj_test_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
+	$(AM_CXXFLAGS) $(CXXFLAGS) $(libkj_test_la_LDFLAGS) $(LDFLAGS) \
+	-o $@
+@LITE_MODE_FALSE@am_libkj_test_la_rpath = -rpath $(libdir)
+@LITE_MODE_TRUE@am_libkj_test_la_rpath = -rpath $(libdir)
 libkj_la_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am_libkj_la_OBJECTS = src/kj/common.lo src/kj/units.lo \
 	src/kj/memory.lo src/kj/refcount.lo src/kj/array.lo \
 	src/kj/string.lo src/kj/string-tree.lo src/kj/exception.lo \
 	src/kj/debug.lo src/kj/arena.lo src/kj/io.lo src/kj/mutex.lo \
-	src/kj/thread.lo src/kj/main.lo src/kj/parse/char.lo
+	src/kj/thread.lo src/kj/test-helpers.lo src/kj/main.lo \
+	src/kj/parse/char.lo
 libkj_la_OBJECTS = $(am_libkj_la_OBJECTS)
 libkj_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
@@ -268,6 +325,13 @@ am__capnp_SOURCES_DIST = src/capnp/compiler/module-loader.h \
 capnp_OBJECTS = $(am_capnp_OBJECTS)
 @LITE_MODE_FALSE@capnp_DEPENDENCIES = libcapnpc.la libcapnp.la \
 @LITE_MODE_FALSE@	libkj.la $(am__DEPENDENCIES_1)
+am__capnp_afl_testcase_SOURCES_DIST = src/capnp/afl-testcase.c++
+@LITE_MODE_FALSE@am_capnp_afl_testcase_OBJECTS =  \
+@LITE_MODE_FALSE@	src/capnp/afl-testcase.$(OBJEXT)
+capnp_afl_testcase_OBJECTS = $(am_capnp_afl_testcase_OBJECTS)
+@LITE_MODE_FALSE@capnp_afl_testcase_DEPENDENCIES = libcapnp-test.a \
+@LITE_MODE_FALSE@	libcapnp-rpc.la libcapnp.la libkj.la \
+@LITE_MODE_FALSE@	libkj-async.la
 am__capnp_evolution_test_SOURCES_DIST =  \
 	src/capnp/compiler/evolution-test.c++
 @LITE_MODE_FALSE@am_capnp_evolution_test_OBJECTS =  \
@@ -284,40 +348,52 @@ am__capnp_test_SOURCES_DIST = src/kj/common-test.c++ \
 	src/kj/one-of-test.c++ src/kj/function-test.c++ \
 	src/kj/io-test.c++ src/kj/mutex-test.c++ \
 	src/kj/threadlocal-test.c++ \
-	src/kj/threadlocal-pthread-test.c++ src/capnp/common-test.c++ \
-	src/capnp/blob-test.c++ src/capnp/endian-test.c++ \
-	src/capnp/endian-fallback-test.c++ \
+	src/kj/threadlocal-pthread-test.c++ src/kj/test-test.c++ \
+	src/capnp/common-test.c++ src/capnp/blob-test.c++ \
+	src/capnp/endian-test.c++ src/capnp/endian-fallback-test.c++ \
 	src/capnp/endian-reverse-test.c++ src/capnp/layout-test.c++ \
 	src/capnp/any-test.c++ src/capnp/message-test.c++ \
 	src/capnp/encoding-test.c++ src/capnp/orphan-test.c++ \
 	src/capnp/serialize-test.c++ \
-	src/capnp/serialize-packed-test.c++ src/capnp/test-util.c++ \
-	src/capnp/test-util.h src/kj/async-test.c++ \
-	src/kj/async-unix-test.c++ src/kj/async-io-test.c++ \
+	src/capnp/serialize-packed-test.c++ src/capnp/fuzz-test.c++ \
+	src/kj/async-test.c++ src/kj/async-unix-test.c++ \
+	src/kj/async-win32-test.c++ src/kj/async-io-test.c++ \
 	src/kj/parse/common-test.c++ src/kj/parse/char-test.c++ \
-	src/kj/std/iostream-test.c++ src/capnp/capability-test.c++ \
-	src/capnp/schema-test.c++ src/capnp/schema-loader-test.c++ \
-	src/capnp/dynamic-test.c++ src/capnp/stringify-test.c++ \
-	src/capnp/serialize-async-test.c++ src/capnp/rpc-test.c++ \
+	src/kj/std/iostream-test.c++ src/kj/compat/http-test.c++ \
+	src/capnp/canonicalize-test.c++ src/capnp/capability-test.c++ \
+	src/capnp/membrane-test.c++ src/capnp/schema-test.c++ \
+	src/capnp/schema-loader-test.c++ \
+	src/capnp/schema-parser-test.c++ src/capnp/dynamic-test.c++ \
+	src/capnp/stringify-test.c++ \
+	src/capnp/serialize-async-test.c++ \
+	src/capnp/serialize-text-test.c++ src/capnp/rpc-test.c++ \
 	src/capnp/rpc-twoparty-test.c++ src/capnp/ez-rpc-test.c++ \
+	src/capnp/compat/json-test.c++ \
 	src/capnp/compiler/lexer-test.c++ \
 	src/capnp/compiler/md5-test.c++
-@LITE_MODE_FALSE@am__objects_2 =  \
+@LITE_MODE_FALSE@am__objects_3 =  \
 @LITE_MODE_FALSE@	src/kj/capnp_test-async-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/kj/capnp_test-async-unix-test.$(OBJEXT) \
+@LITE_MODE_FALSE@	src/kj/capnp_test-async-win32-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/kj/capnp_test-async-io-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/kj/parse/capnp_test-common-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/kj/parse/capnp_test-char-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/kj/std/capnp_test-iostream-test.$(OBJEXT) \
+@LITE_MODE_FALSE@	src/kj/compat/capnp_test-http-test.$(OBJEXT) \
+@LITE_MODE_FALSE@	src/capnp/capnp_test-canonicalize-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/capnp_test-capability-test.$(OBJEXT) \
+@LITE_MODE_FALSE@	src/capnp/capnp_test-membrane-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/capnp_test-schema-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/capnp_test-schema-loader-test.$(OBJEXT) \
+@LITE_MODE_FALSE@	src/capnp/capnp_test-schema-parser-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/capnp_test-dynamic-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/capnp_test-stringify-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/capnp_test-serialize-async-test.$(OBJEXT) \
+@LITE_MODE_FALSE@	src/capnp/capnp_test-serialize-text-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/capnp_test-rpc-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/capnp_test-rpc-twoparty-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/capnp_test-ez-rpc-test.$(OBJEXT) \
+@LITE_MODE_FALSE@	src/capnp/compat/capnp_test-json-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/compiler/capnp_test-lexer-test.$(OBJEXT) \
 @LITE_MODE_FALSE@	src/capnp/compiler/capnp_test-md5-test.$(OBJEXT)
 am_capnp_test_OBJECTS = src/kj/capnp_test-common-test.$(OBJEXT) \
@@ -337,6 +413,7 @@ am_capnp_test_OBJECTS = src/kj/capnp_test-common-test.$(OBJEXT) \
 	src/kj/capnp_test-mutex-test.$(OBJEXT) \
 	src/kj/capnp_test-threadlocal-test.$(OBJEXT) \
 	src/kj/capnp_test-threadlocal-pthread-test.$(OBJEXT) \
+	src/kj/capnp_test-test-test.$(OBJEXT) \
 	src/capnp/capnp_test-common-test.$(OBJEXT) \
 	src/capnp/capnp_test-blob-test.$(OBJEXT) \
 	src/capnp/capnp_test-endian-test.$(OBJEXT) \
@@ -349,20 +426,14 @@ am_capnp_test_OBJECTS = src/kj/capnp_test-common-test.$(OBJEXT) \
 	src/capnp/capnp_test-orphan-test.$(OBJEXT) \
 	src/capnp/capnp_test-serialize-test.$(OBJEXT) \
 	src/capnp/capnp_test-serialize-packed-test.$(OBJEXT) \
-	src/capnp/capnp_test-test-util.$(OBJEXT) $(am__objects_2)
-am__objects_3 = src/capnp/capnp_test-test.capnp.$(OBJEXT) \
-	src/capnp/capnp_test-test-import.capnp.$(OBJEXT) \
-	src/capnp/capnp_test-test-import2.capnp.$(OBJEXT)
-nodist_capnp_test_OBJECTS = $(am__objects_3)
-capnp_test_OBJECTS = $(am_capnp_test_OBJECTS) \
-	$(nodist_capnp_test_OBJECTS)
-@LITE_MODE_FALSE@capnp_test_DEPENDENCIES = gtest/lib/libgtest.la \
-@LITE_MODE_FALSE@	gtest/lib/libgtest_main.la libcapnpc.la \
-@LITE_MODE_FALSE@	libcapnp-rpc.la libcapnp.la libkj-async.la \
-@LITE_MODE_FALSE@	libkj.la
-@LITE_MODE_TRUE@capnp_test_DEPENDENCIES = gtest/lib/libgtest.la \
-@LITE_MODE_TRUE@	gtest/lib/libgtest_main.la libcapnp.la \
-@LITE_MODE_TRUE@	libkj.la
+	src/capnp/capnp_test-fuzz-test.$(OBJEXT) $(am__objects_3)
+capnp_test_OBJECTS = $(am_capnp_test_OBJECTS)
+@LITE_MODE_FALSE@capnp_test_DEPENDENCIES = libcapnp-test.a \
+@LITE_MODE_FALSE@	libcapnpc.la libcapnp-rpc.la libcapnp-json.la \
+@LITE_MODE_FALSE@	libcapnp.la libkj-http.la libkj-async.la \
+@LITE_MODE_FALSE@	libkj-test.la libkj.la
+@LITE_MODE_TRUE@capnp_test_DEPENDENCIES = libcapnp-test.a libcapnp.la \
+@LITE_MODE_TRUE@	libkj-test.la libkj.la
 am__capnpc_c___SOURCES_DIST = src/capnp/compiler/capnpc-c++.c++
 @LITE_MODE_FALSE@am_capnpc_c___OBJECTS =  \
 @LITE_MODE_FALSE@	src/capnp/compiler/capnpc-c++.$(OBJEXT)
@@ -427,44 +498,36 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(libcapnp_rpc_la_SOURCES) $(libcapnp_la_SOURCES) \
-	$(libcapnpc_la_SOURCES) $(libkj_async_la_SOURCES) \
-	$(libkj_la_SOURCES) $(capnp_SOURCES) \
-	$(capnp_evolution_test_SOURCES) $(capnp_test_SOURCES) \
-	$(nodist_capnp_test_SOURCES) $(capnpc_c___SOURCES) \
+SOURCES = $(libcapnp_test_a_SOURCES) $(nodist_libcapnp_test_a_SOURCES) \
+	$(libcapnp_json_la_SOURCES) $(libcapnp_rpc_la_SOURCES) \
+	$(libcapnp_la_SOURCES) $(libcapnpc_la_SOURCES) \
+	$(libkj_async_la_SOURCES) $(libkj_http_la_SOURCES) \
+	$(libkj_test_la_SOURCES) $(libkj_la_SOURCES) $(capnp_SOURCES) \
+	$(capnp_afl_testcase_SOURCES) $(capnp_evolution_test_SOURCES) \
+	$(capnp_test_SOURCES) $(capnpc_c___SOURCES) \
 	$(capnpc_capnp_SOURCES)
-DIST_SOURCES = $(am__libcapnp_rpc_la_SOURCES_DIST) \
+DIST_SOURCES = $(libcapnp_test_a_SOURCES) \
+	$(am__libcapnp_json_la_SOURCES_DIST) \
+	$(am__libcapnp_rpc_la_SOURCES_DIST) \
 	$(am__libcapnp_la_SOURCES_DIST) \
 	$(am__libcapnpc_la_SOURCES_DIST) \
-	$(am__libkj_async_la_SOURCES_DIST) $(libkj_la_SOURCES) \
-	$(am__capnp_SOURCES_DIST) \
+	$(am__libkj_async_la_SOURCES_DIST) \
+	$(am__libkj_http_la_SOURCES_DIST) $(libkj_test_la_SOURCES) \
+	$(libkj_la_SOURCES) $(am__capnp_SOURCES_DIST) \
+	$(am__capnp_afl_testcase_SOURCES_DIST) \
 	$(am__capnp_evolution_test_SOURCES_DIST) \
 	$(am__capnp_test_SOURCES_DIST) $(am__capnpc_c___SOURCES_DIST) \
 	$(am__capnpc_capnp_SOURCES_DIST)
-RECURSIVE_TARGETS = all-recursive check-recursive cscopelist-recursive \
-	ctags-recursive dvi-recursive html-recursive info-recursive \
-	install-data-recursive install-dvi-recursive \
-	install-exec-recursive install-html-recursive \
-	install-info-recursive install-pdf-recursive \
-	install-ps-recursive install-recursive installcheck-recursive \
-	installdirs-recursive pdf-recursive ps-recursive \
-	tags-recursive uninstall-recursive
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
 DATA = $(dist_includecapnp_DATA) $(pkgconfig_DATA)
-HEADERS = $(includecapnp_HEADERS) $(includekj_HEADERS) \
-	$(includekjparse_HEADERS) $(includekjstd_HEADERS)
-RECURSIVE_CLEAN_TARGETS = mostlyclean-recursive clean-recursive	\
-  distclean-recursive maintainer-clean-recursive
-am__recursive_targets = \
-  $(RECURSIVE_TARGETS) \
-  $(RECURSIVE_CLEAN_TARGETS) \
-  $(am__extra_recursive_targets)
-AM_RECURSIVE_TARGETS = $(am__recursive_targets:-recursive=) TAGS CTAGS \
-	cscope check recheck distdir dist dist-all distcheck
+HEADERS = $(includecapnp_HEADERS) $(includecapnpcompat_HEADERS) \
+	$(includekj_HEADERS) $(includekjcompat_HEADERS) \
+	$(includekjparse_HEADERS) $(includekjstd_HEADERS) \
+	$(noinst_HEADERS)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) \
 	$(LISP)config.h.in
 # Read a list of newline-separated strings from the standard input,
@@ -486,6 +549,7 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 CSCOPE = cscope
+AM_RECURSIVE_TARGETS = cscope check recheck
 am__tty_colors_dummy = \
   mgn= red= grn= lgn= blu= brg= std=; \
   am__color_tests=no
@@ -662,9 +726,10 @@ TEST_LOGS = $(am__test_logs2:.test.log=.log)
 TEST_LOG_DRIVER = $(SHELL) $(top_srcdir)/build-aux/test-driver
 TEST_LOG_COMPILE = $(TEST_LOG_COMPILER) $(AM_TEST_LOG_FLAGS) \
 	$(TEST_LOG_FLAGS)
-am__DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/capnp-rpc.pc.in \
-	$(srcdir)/capnp.pc.in $(srcdir)/config.h.in \
-	$(top_srcdir)/build-aux/compile \
+am__DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/capnp-json.pc.in \
+	$(srcdir)/capnp-rpc.pc.in $(srcdir)/capnp.pc.in \
+	$(srcdir)/config.h.in $(srcdir)/kj-async.pc.in \
+	$(srcdir)/kj.pc.in $(top_srcdir)/build-aux/compile \
 	$(top_srcdir)/build-aux/config.guess \
 	$(top_srcdir)/build-aux/config.sub \
 	$(top_srcdir)/build-aux/depcomp \
@@ -684,31 +749,6 @@ am__remove_distdir = \
       || { sleep 5 && rm -rf "$(distdir)"; }; \
   else :; fi
 am__post_remove_distdir = $(am__remove_distdir)
-am__relativize = \
-  dir0=`pwd`; \
-  sed_first='s,^\([^/]*\)/.*$$,\1,'; \
-  sed_rest='s,^[^/]*/*,,'; \
-  sed_last='s,^.*/\([^/]*\)$$,\1,'; \
-  sed_butlast='s,/*[^/]*$$,,'; \
-  while test -n "$$dir1"; do \
-    first=`echo "$$dir1" | sed -e "$$sed_first"`; \
-    if test "$$first" != "."; then \
-      if test "$$first" = ".."; then \
-        dir2=`echo "$$dir0" | sed -e "$$sed_last"`/"$$dir2"; \
-        dir0=`echo "$$dir0" | sed -e "$$sed_butlast"`; \
-      else \
-        first2=`echo "$$dir2" | sed -e "$$sed_first"`; \
-        if test "$$first2" = "$$first"; then \
-          dir2=`echo "$$dir2" | sed -e "$$sed_rest"`; \
-        else \
-          dir2="../$$dir2"; \
-        fi; \
-        dir0="$$dir0"/"$$first"; \
-      fi; \
-    fi; \
-    dir1=`echo "$$dir1" | sed -e "$$sed_rest"`; \
-  done; \
-  reldir="$$dir2"
 DIST_ARCHIVES = $(distdir).tar.gz
 GZIP_ENV = --best
 DIST_TARGETS = dist-gzip
@@ -720,6 +760,7 @@ ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
+ASYNC_LIBS = @ASYNC_LIBS@
 AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
@@ -840,7 +881,6 @@ runstatedir = @runstatedir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
-subdirs = @subdirs@
 sysconfdir = @sysconfdir@
 target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
@@ -848,9 +888,6 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
 AUTOMAKE_OPTIONS = foreign subdir-objects
-
-# Always include gtest in distributions.
-DIST_SUBDIRS = $(subdirs)
 AM_CXXFLAGS = -I$(srcdir)/src -I$(builddir)/src -DKJ_HEADER_WARNINGS -DCAPNP_HEADER_WARNINGS -DCAPNP_INCLUDE_DIR='"$(includedir)"' $(PTHREAD_CFLAGS)
 AM_LDFLAGS = $(PTHREAD_CFLAGS)
 EXTRA_DIST = \
@@ -867,8 +904,12 @@ EXTRA_DIST = \
   src/capnp/testdata/segmented                                               \
   src/capnp/testdata/packed                                                  \
   src/capnp/testdata/pretty.txt                                              \
+  src/capnp/testdata/lists.binary                                            \
+  src/capnp/testdata/packedflat                                              \
   CMakeLists.txt                                                             \
   cmake/FindCapnProto.cmake                                                  \
+  cmake/CapnProtoConfig.cmake.in                                             \
+  cmake/CapnProtoMacros.cmake                                                \
   src/CMakeLists.txt                                                         \
   src/kj/CMakeLists.txt                                                      \
   src/capnp/CMakeLists.txt
@@ -900,7 +941,8 @@ public_capnpc_inputs = \
   src/capnp/schema.capnp                                       \
   src/capnp/rpc.capnp                                          \
   src/capnp/rpc-twoparty.capnp                                 \
-  src/capnp/persistent.capnp
+  src/capnp/persistent.capnp                                   \
+  src/capnp/compat/json.capnp
 
 capnpc_inputs = \
   $(public_capnpc_inputs)                                      \
@@ -918,18 +960,25 @@ capnpc_outputs = \
   src/capnp/rpc-twoparty.capnp.h                               \
   src/capnp/persistent.capnp.c++                               \
   src/capnp/persistent.capnp.h                                 \
+  src/capnp/compat/json.capnp.h                                \
+  src/capnp/compat/json.capnp.c++                              \
   src/capnp/compiler/lexer.capnp.c++                           \
   src/capnp/compiler/lexer.capnp.h                             \
   src/capnp/compiler/grammar.capnp.c++                         \
   src/capnp/compiler/grammar.capnp.h
 
 includecapnpdir = $(includedir)/capnp
+includecapnpcompatdir = $(includecapnpdir)/compat
 includekjdir = $(includedir)/kj
 includekjparsedir = $(includekjdir)/parse
 includekjstddir = $(includekjdir)/std
+includekjcompatdir = $(includekjdir)/compat
 dist_includecapnp_DATA = $(public_capnpc_inputs)
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = capnp.pc capnp-rpc.pc
+pkgconfig_DATA = capnp.pc capnp-rpc.pc kj.pc kj-async.pc
+noinst_HEADERS = \
+  src/kj/miniposix.h
+
 includekj_HEADERS = \
   src/kj/common.h                                              \
   src/kj/units.h                                               \
@@ -942,7 +991,6 @@ includekj_HEADERS = \
   src/kj/exception.h                                           \
   src/kj/debug.h                                               \
   src/kj/arena.h                                               \
-  src/kj/miniposix.h                                           \
   src/kj/io.h                                                  \
   src/kj/tuple.h                                               \
   src/kj/one-of.h                                              \
@@ -955,8 +1003,10 @@ includekj_HEADERS = \
   src/kj/async-inl.h                                           \
   src/kj/time.h                                                \
   src/kj/async-unix.h                                          \
+  src/kj/async-win32.h                                         \
   src/kj/async-io.h                                            \
   src/kj/main.h                                                \
+  src/kj/test.h                                                \
   src/kj/windows-sanity.h
 
 includekjparse_HEADERS = \
@@ -965,6 +1015,10 @@ includekjparse_HEADERS = \
 
 includekjstd_HEADERS = \
   src/kj/std/iostream.h
+
+includekjcompat_HEADERS = \
+  src/kj/compat/gtest.h                                        \
+  src/kj/compat/http.h
 
 includecapnp_HEADERS = \
   src/capnp/c++.capnp.h                                        \
@@ -977,6 +1031,7 @@ includecapnp_HEADERS = \
   src/capnp/any.h                                              \
   src/capnp/message.h                                          \
   src/capnp/capability.h                                       \
+  src/capnp/membrane.h                                         \
   src/capnp/schema.capnp.h                                     \
   src/capnp/schema-lite.h                                      \
   src/capnp/schema.h                                           \
@@ -987,8 +1042,10 @@ includecapnp_HEADERS = \
   src/capnp/serialize.h                                        \
   src/capnp/serialize-async.h                                  \
   src/capnp/serialize-packed.h                                 \
+  src/capnp/serialize-text.h                                   \
   src/capnp/pointer-helpers.h                                  \
   src/capnp/generated-header-support.h                         \
+  src/capnp/raw-schema.h                                       \
   src/capnp/rpc-prelude.h                                      \
   src/capnp/rpc.h                                              \
   src/capnp/rpc-twoparty.h                                     \
@@ -997,12 +1054,16 @@ includecapnp_HEADERS = \
   src/capnp/persistent.capnp.h                                 \
   src/capnp/ez-rpc.h
 
-@LITE_MODE_FALSE@lib_LTLIBRARIES = libkj.la libkj-async.la libcapnp.la libcapnp-rpc.la libcapnpc.la
-@LITE_MODE_TRUE@lib_LTLIBRARIES = libkj.la libcapnp.la
+includecapnpcompat_HEADERS = \
+  src/capnp/compat/json.h                                      \
+  src/capnp/compat/json.capnp.h
+
+@LITE_MODE_FALSE@lib_LTLIBRARIES = libkj.la libkj-test.la libkj-async.la libkj-http.la libcapnp.la libcapnp-rpc.la libcapnp-json.la libcapnpc.la
+@LITE_MODE_TRUE@lib_LTLIBRARIES = libkj.la libkj-test.la libcapnp.la
 
 # Don't include security release in soname -- we want to replace old binaries
 # in this case.
-SO_VERSION = $(shell echo $(VERSION) | sed -re 's/^([0-9]+[.][0-9]+[.][0-9]+)([.][0-9]+)?(-.*)?$$/\1\3/g')
+SO_VERSION = $(shell echo $(VERSION) | sed -e 's/^\([0-9]*[.][0-9]*[.][0-9]*\)\([.][0-9]*\)*\(-.*\)*$$/\1\3/g')
 libkj_la_LIBADD = $(PTHREAD_LIBS)
 libkj_la_LDFLAGS = -release $(SO_VERSION) -no-undefined
 libkj_la_SOURCES = \
@@ -1019,16 +1080,28 @@ libkj_la_SOURCES = \
   src/kj/io.c++                                                \
   src/kj/mutex.c++                                             \
   src/kj/thread.c++                                            \
+  src/kj/test-helpers.c++                                      \
   src/kj/main.c++                                              \
   src/kj/parse/char.c++
 
-@LITE_MODE_FALSE@libkj_async_la_LIBADD = libkj.la $(PTHREAD_LIBS)
+libkj_test_la_LIBADD = libkj.la $(PTHREAD_LIBS)
+libkj_test_la_LDFLAGS = -release $(VERSION) -no-undefined
+libkj_test_la_SOURCES = src/kj/test.c++
+@LITE_MODE_FALSE@libkj_async_la_LIBADD = libkj.la $(ASYNC_LIBS) $(PTHREAD_LIBS)
 @LITE_MODE_FALSE@libkj_async_la_LDFLAGS = -release $(SO_VERSION) -no-undefined
 @LITE_MODE_FALSE@libkj_async_la_SOURCES = \
 @LITE_MODE_FALSE@  src/kj/async.c++                                             \
 @LITE_MODE_FALSE@  src/kj/async-unix.c++                                        \
+@LITE_MODE_FALSE@  src/kj/async-win32.c++                                       \
 @LITE_MODE_FALSE@  src/kj/async-io.c++                                          \
+@LITE_MODE_FALSE@  src/kj/async-io-unix.c++                                     \
+@LITE_MODE_FALSE@  src/kj/async-io-win32.c++                                    \
 @LITE_MODE_FALSE@  src/kj/time.c++
+
+@LITE_MODE_FALSE@libkj_http_la_LIBADD = libkj-async.la libkj.la $(ASYNC_LIBS) $(PTHREAD_LIBS)
+@LITE_MODE_FALSE@libkj_http_la_LDFLAGS = -release $(SO_VERSION) -no-undefined
+@LITE_MODE_FALSE@libkj_http_la_SOURCES = \
+@LITE_MODE_FALSE@  src/kj/compat/http.c++
 
 @LITE_MODE_FALSE@heavy_sources = \
 @LITE_MODE_FALSE@  src/capnp/schema.c++                                         \
@@ -1052,11 +1125,12 @@ libcapnp_la_SOURCES = \
   src/capnp/serialize-packed.c++                               \
   $(heavy_sources)
 
-@LITE_MODE_FALSE@libcapnp_rpc_la_LIBADD = libcapnp.la libkj-async.la libkj.la $(PTHREAD_LIBS)
+@LITE_MODE_FALSE@libcapnp_rpc_la_LIBADD = libcapnp.la libkj-async.la libkj.la $(ASYNC_LIBS) $(PTHREAD_LIBS)
 @LITE_MODE_FALSE@libcapnp_rpc_la_LDFLAGS = -release $(SO_VERSION) -no-undefined
 @LITE_MODE_FALSE@libcapnp_rpc_la_SOURCES = \
 @LITE_MODE_FALSE@  src/capnp/serialize-async.c++                                \
 @LITE_MODE_FALSE@  src/capnp/capability.c++                                     \
+@LITE_MODE_FALSE@  src/capnp/membrane.c++                                       \
 @LITE_MODE_FALSE@  src/capnp/dynamic-capability.c++                             \
 @LITE_MODE_FALSE@  src/capnp/rpc.c++                                            \
 @LITE_MODE_FALSE@  src/capnp/rpc.capnp.c++                                      \
@@ -1064,6 +1138,12 @@ libcapnp_la_SOURCES = \
 @LITE_MODE_FALSE@  src/capnp/rpc-twoparty.capnp.c++                             \
 @LITE_MODE_FALSE@  src/capnp/persistent.capnp.c++                               \
 @LITE_MODE_FALSE@  src/capnp/ez-rpc.c++
+
+@LITE_MODE_FALSE@libcapnp_json_la_LIBADD = libcapnp.la libkj.la $(PTHREAD_LIBS)
+@LITE_MODE_FALSE@libcapnp_json_la_LDFLAGS = -release $(SO_VERSION) -no-undefined
+@LITE_MODE_FALSE@libcapnp_json_la_SOURCES = \
+@LITE_MODE_FALSE@  src/capnp/compat/json.c++                                    \
+@LITE_MODE_FALSE@  src/capnp/compat/json.capnp.c++
 
 @LITE_MODE_FALSE@libcapnpc_la_LIBADD = libcapnp.la libkj.la $(PTHREAD_LIBS)
 @LITE_MODE_FALSE@libcapnpc_la_LDFLAGS = -release $(SO_VERSION) -no-undefined
@@ -1084,7 +1164,8 @@ libcapnp_la_SOURCES = \
 @LITE_MODE_FALSE@  src/capnp/compiler/node-translator.c++                       \
 @LITE_MODE_FALSE@  src/capnp/compiler/compiler.h                                \
 @LITE_MODE_FALSE@  src/capnp/compiler/compiler.c++                              \
-@LITE_MODE_FALSE@  src/capnp/schema-parser.c++
+@LITE_MODE_FALSE@  src/capnp/schema-parser.c++                                  \
+@LITE_MODE_FALSE@  src/capnp/serialize-text.c++
 
 @LITE_MODE_FALSE@capnp_LDADD = libcapnpc.la libcapnp.la libkj.la $(PTHREAD_LIBS)
 @LITE_MODE_FALSE@capnp_SOURCES = \
@@ -1117,33 +1198,52 @@ test_capnpc_outputs = \
   src/capnp/test-import2.capnp.h
 
 BUILT_SOURCES = $(test_capnpc_outputs)
+check_LIBRARIES = libcapnp-test.a
+libcapnp_test_a_SOURCES = \
+  src/capnp/test-util.c++                                      \
+  src/capnp/test-util.h
+
+nodist_libcapnp_test_a_SOURCES = $(test_capnpc_outputs)
 @LITE_MODE_TRUE@compiler_tests = 
-@LITE_MODE_FALSE@capnp_test_LDADD = gtest/lib/libgtest.la gtest/lib/libgtest_main.la \
-@LITE_MODE_FALSE@                   libcapnpc.la libcapnp-rpc.la libcapnp.la libkj-async.la libkj.la
+@LITE_MODE_FALSE@capnp_test_LDADD = \
+@LITE_MODE_FALSE@  libcapnp-test.a                                              \
+@LITE_MODE_FALSE@  libcapnpc.la                                                 \
+@LITE_MODE_FALSE@  libcapnp-rpc.la                                              \
+@LITE_MODE_FALSE@  libcapnp-json.la                                             \
+@LITE_MODE_FALSE@  libcapnp.la                                                  \
+@LITE_MODE_FALSE@  libkj-http.la                                                \
+@LITE_MODE_FALSE@  libkj-async.la                                               \
+@LITE_MODE_FALSE@  libkj-test.la                                                \
+@LITE_MODE_FALSE@  libkj.la
 
-@LITE_MODE_TRUE@capnp_test_LDADD = gtest/lib/libgtest.la gtest/lib/libgtest_main.la \
-@LITE_MODE_TRUE@                   libcapnp.la libkj.la
-
+@LITE_MODE_TRUE@capnp_test_LDADD = libcapnp-test.a libcapnp.la libkj-test.la libkj.la
 @LITE_MODE_FALSE@heavy_tests = \
 @LITE_MODE_FALSE@  src/kj/async-test.c++                                        \
 @LITE_MODE_FALSE@  src/kj/async-unix-test.c++                                   \
+@LITE_MODE_FALSE@  src/kj/async-win32-test.c++                                  \
 @LITE_MODE_FALSE@  src/kj/async-io-test.c++                                     \
 @LITE_MODE_FALSE@  src/kj/parse/common-test.c++                                 \
 @LITE_MODE_FALSE@  src/kj/parse/char-test.c++                                   \
 @LITE_MODE_FALSE@  src/kj/std/iostream-test.c++                                 \
+@LITE_MODE_FALSE@  src/kj/compat/http-test.c++                                  \
+@LITE_MODE_FALSE@  src/capnp/canonicalize-test.c++                              \
 @LITE_MODE_FALSE@  src/capnp/capability-test.c++                                \
+@LITE_MODE_FALSE@  src/capnp/membrane-test.c++                                  \
 @LITE_MODE_FALSE@  src/capnp/schema-test.c++                                    \
 @LITE_MODE_FALSE@  src/capnp/schema-loader-test.c++                             \
+@LITE_MODE_FALSE@  src/capnp/schema-parser-test.c++                             \
 @LITE_MODE_FALSE@  src/capnp/dynamic-test.c++                                   \
 @LITE_MODE_FALSE@  src/capnp/stringify-test.c++                                 \
 @LITE_MODE_FALSE@  src/capnp/serialize-async-test.c++                           \
+@LITE_MODE_FALSE@  src/capnp/serialize-text-test.c++                            \
 @LITE_MODE_FALSE@  src/capnp/rpc-test.c++                                       \
 @LITE_MODE_FALSE@  src/capnp/rpc-twoparty-test.c++                              \
 @LITE_MODE_FALSE@  src/capnp/ez-rpc-test.c++                                    \
+@LITE_MODE_FALSE@  src/capnp/compat/json-test.c++                               \
 @LITE_MODE_FALSE@  src/capnp/compiler/lexer-test.c++                            \
 @LITE_MODE_FALSE@  src/capnp/compiler/md5-test.c++
 
-capnp_test_CPPFLAGS = -Wno-deprecated-declarations -Igtest/include -I$(srcdir)/gtest/include
+capnp_test_CPPFLAGS = -Wno-deprecated-declarations
 capnp_test_SOURCES = \
   src/kj/common-test.c++                                       \
   src/kj/memory-test.c++                                       \
@@ -1162,6 +1262,7 @@ capnp_test_SOURCES = \
   src/kj/mutex-test.c++                                        \
   src/kj/threadlocal-test.c++                                  \
   src/kj/threadlocal-pthread-test.c++                          \
+  src/kj/test-test.c++                                         \
   src/capnp/common-test.c++                                    \
   src/capnp/blob-test.c++                                      \
   src/capnp/endian-test.c++                                    \
@@ -1174,15 +1275,15 @@ capnp_test_SOURCES = \
   src/capnp/orphan-test.c++                                    \
   src/capnp/serialize-test.c++                                 \
   src/capnp/serialize-packed-test.c++                          \
-  src/capnp/test-util.c++                                      \
-  src/capnp/test-util.h                                        \
+  src/capnp/fuzz-test.c++                                      \
   $(heavy_tests)
 
-nodist_capnp_test_SOURCES = $(test_capnpc_outputs)
 @LITE_MODE_FALSE@capnp_evolution_test_LDADD = libcapnpc.la libcapnp.la libkj.la
 @LITE_MODE_FALSE@capnp_evolution_test_SOURCES = src/capnp/compiler/evolution-test.c++
+@LITE_MODE_FALSE@capnp_afl_testcase_LDADD = libcapnp-test.a libcapnp-rpc.la libcapnp.la libkj.la libkj-async.la
+@LITE_MODE_FALSE@capnp_afl_testcase_SOURCES = src/capnp/afl-testcase.c++
 all: $(BUILT_SOURCES) config.h
-	$(MAKE) $(AM_MAKEFLAGS) all-recursive
+	$(MAKE) $(AM_MAKEFLAGS) all-am
 
 .SUFFIXES:
 .SUFFIXES: .c++ .lo .log .o .obj .test .test$(EXEEXT) .trs
@@ -1238,6 +1339,34 @@ capnp.pc: $(top_builddir)/config.status $(srcdir)/capnp.pc.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
 capnp-rpc.pc: $(top_builddir)/config.status $(srcdir)/capnp-rpc.pc.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
+capnp-json.pc: $(top_builddir)/config.status $(srcdir)/capnp-json.pc.in
+	cd $(top_builddir) && $(SHELL) ./config.status $@
+kj.pc: $(top_builddir)/config.status $(srcdir)/kj.pc.in
+	cd $(top_builddir) && $(SHELL) ./config.status $@
+kj-async.pc: $(top_builddir)/config.status $(srcdir)/kj-async.pc.in
+	cd $(top_builddir) && $(SHELL) ./config.status $@
+
+clean-checkLIBRARIES:
+	-test -z "$(check_LIBRARIES)" || rm -f $(check_LIBRARIES)
+src/capnp/$(am__dirstamp):
+	@$(MKDIR_P) src/capnp
+	@: > src/capnp/$(am__dirstamp)
+src/capnp/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) src/capnp/$(DEPDIR)
+	@: > src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/test-util.$(OBJEXT): src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/test.capnp.$(OBJEXT): src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/test-import.capnp.$(OBJEXT): src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/test-import2.capnp.$(OBJEXT): src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+
+libcapnp-test.a: $(libcapnp_test_a_OBJECTS) $(libcapnp_test_a_DEPENDENCIES) $(EXTRA_libcapnp_test_a_DEPENDENCIES) 
+	$(AM_V_at)-rm -f libcapnp-test.a
+	$(AM_V_AR)$(libcapnp_test_a_AR) libcapnp-test.a $(libcapnp_test_a_OBJECTS) $(libcapnp_test_a_LIBADD)
+	$(AM_V_at)$(RANLIB) libcapnp-test.a
 
 install-libLTLIBRARIES: $(lib_LTLIBRARIES)
 	@$(NORMAL_INSTALL)
@@ -1273,15 +1402,24 @@ clean-libLTLIBRARIES:
 	  echo rm -f $${locs}; \
 	  rm -f $${locs}; \
 	}
-src/capnp/$(am__dirstamp):
-	@$(MKDIR_P) src/capnp
-	@: > src/capnp/$(am__dirstamp)
-src/capnp/$(DEPDIR)/$(am__dirstamp):
-	@$(MKDIR_P) src/capnp/$(DEPDIR)
-	@: > src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compat/$(am__dirstamp):
+	@$(MKDIR_P) src/capnp/compat
+	@: > src/capnp/compat/$(am__dirstamp)
+src/capnp/compat/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) src/capnp/compat/$(DEPDIR)
+	@: > src/capnp/compat/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compat/json.lo: src/capnp/compat/$(am__dirstamp) \
+	src/capnp/compat/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compat/json.capnp.lo: src/capnp/compat/$(am__dirstamp) \
+	src/capnp/compat/$(DEPDIR)/$(am__dirstamp)
+
+libcapnp-json.la: $(libcapnp_json_la_OBJECTS) $(libcapnp_json_la_DEPENDENCIES) $(EXTRA_libcapnp_json_la_DEPENDENCIES) 
+	$(AM_V_CXXLD)$(libcapnp_json_la_LINK) $(am_libcapnp_json_la_rpath) $(libcapnp_json_la_OBJECTS) $(libcapnp_json_la_LIBADD) $(LIBS)
 src/capnp/serialize-async.lo: src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capability.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/membrane.lo: src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/dynamic-capability.lo: src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
@@ -1358,6 +1496,8 @@ src/capnp/compiler/compiler.lo: src/capnp/compiler/$(am__dirstamp) \
 	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
 src/capnp/schema-parser.lo: src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/serialize-text.lo: src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
 
 libcapnpc.la: $(libcapnpc_la_OBJECTS) $(libcapnpc_la_DEPENDENCIES) $(EXTRA_libcapnpc_la_DEPENDENCIES) 
 	$(AM_V_CXXLD)$(libcapnpc_la_LINK) $(am_libcapnpc_la_rpath) $(libcapnpc_la_OBJECTS) $(libcapnpc_la_LIBADD) $(LIBS)
@@ -1371,13 +1511,35 @@ src/kj/async.lo: src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/async-unix.lo: src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
+src/kj/async-win32.lo: src/kj/$(am__dirstamp) \
+	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/async-io.lo: src/kj/$(am__dirstamp) \
+	src/kj/$(DEPDIR)/$(am__dirstamp)
+src/kj/async-io-unix.lo: src/kj/$(am__dirstamp) \
+	src/kj/$(DEPDIR)/$(am__dirstamp)
+src/kj/async-io-win32.lo: src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/time.lo: src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
 
 libkj-async.la: $(libkj_async_la_OBJECTS) $(libkj_async_la_DEPENDENCIES) $(EXTRA_libkj_async_la_DEPENDENCIES) 
 	$(AM_V_CXXLD)$(libkj_async_la_LINK) $(am_libkj_async_la_rpath) $(libkj_async_la_OBJECTS) $(libkj_async_la_LIBADD) $(LIBS)
+src/kj/compat/$(am__dirstamp):
+	@$(MKDIR_P) src/kj/compat
+	@: > src/kj/compat/$(am__dirstamp)
+src/kj/compat/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) src/kj/compat/$(DEPDIR)
+	@: > src/kj/compat/$(DEPDIR)/$(am__dirstamp)
+src/kj/compat/http.lo: src/kj/compat/$(am__dirstamp) \
+	src/kj/compat/$(DEPDIR)/$(am__dirstamp)
+
+libkj-http.la: $(libkj_http_la_OBJECTS) $(libkj_http_la_DEPENDENCIES) $(EXTRA_libkj_http_la_DEPENDENCIES) 
+	$(AM_V_CXXLD)$(libkj_http_la_LINK) $(am_libkj_http_la_rpath) $(libkj_http_la_OBJECTS) $(libkj_http_la_LIBADD) $(LIBS)
+src/kj/test.lo: src/kj/$(am__dirstamp) \
+	src/kj/$(DEPDIR)/$(am__dirstamp)
+
+libkj-test.la: $(libkj_test_la_OBJECTS) $(libkj_test_la_DEPENDENCIES) $(EXTRA_libkj_test_la_DEPENDENCIES) 
+	$(AM_V_CXXLD)$(libkj_test_la_LINK) $(am_libkj_test_la_rpath) $(libkj_test_la_OBJECTS) $(libkj_test_la_LIBADD) $(LIBS)
 src/kj/common.lo: src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/units.lo: src/kj/$(am__dirstamp) \
@@ -1402,6 +1564,8 @@ src/kj/io.lo: src/kj/$(am__dirstamp) src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/mutex.lo: src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/thread.lo: src/kj/$(am__dirstamp) \
+	src/kj/$(DEPDIR)/$(am__dirstamp)
+src/kj/test-helpers.lo: src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/main.lo: src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
@@ -1484,6 +1648,12 @@ src/capnp/compiler/capnp.$(OBJEXT):  \
 capnp$(EXEEXT): $(capnp_OBJECTS) $(capnp_DEPENDENCIES) $(EXTRA_capnp_DEPENDENCIES) 
 	@rm -f capnp$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(capnp_OBJECTS) $(capnp_LDADD) $(LIBS)
+src/capnp/afl-testcase.$(OBJEXT): src/capnp/$(am__dirstamp) \
+	src/capnp/$(DEPDIR)/$(am__dirstamp)
+
+capnp-afl-testcase$(EXEEXT): $(capnp_afl_testcase_OBJECTS) $(capnp_afl_testcase_DEPENDENCIES) $(EXTRA_capnp_afl_testcase_DEPENDENCIES) 
+	@rm -f capnp-afl-testcase$(EXEEXT)
+	$(AM_V_CXXLD)$(CXXLINK) $(capnp_afl_testcase_OBJECTS) $(capnp_afl_testcase_LDADD) $(LIBS)
 src/capnp/compiler/evolution-test.$(OBJEXT):  \
 	src/capnp/compiler/$(am__dirstamp) \
 	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
@@ -1525,6 +1695,8 @@ src/kj/capnp_test-threadlocal-test.$(OBJEXT): src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/capnp_test-threadlocal-pthread-test.$(OBJEXT):  \
 	src/kj/$(am__dirstamp) src/kj/$(DEPDIR)/$(am__dirstamp)
+src/kj/capnp_test-test-test.$(OBJEXT): src/kj/$(am__dirstamp) \
+	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-common-test.$(OBJEXT): src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-blob-test.$(OBJEXT): src/capnp/$(am__dirstamp) \
@@ -1549,11 +1721,13 @@ src/capnp/capnp_test-serialize-test.$(OBJEXT):  \
 	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-serialize-packed-test.$(OBJEXT):  \
 	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/capnp_test-test-util.$(OBJEXT): src/capnp/$(am__dirstamp) \
+src/capnp/capnp_test-fuzz-test.$(OBJEXT): src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/kj/capnp_test-async-test.$(OBJEXT): src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/capnp_test-async-unix-test.$(OBJEXT): src/kj/$(am__dirstamp) \
+	src/kj/$(DEPDIR)/$(am__dirstamp)
+src/kj/capnp_test-async-win32-test.$(OBJEXT): src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
 src/kj/capnp_test-async-io-test.$(OBJEXT): src/kj/$(am__dirstamp) \
 	src/kj/$(DEPDIR)/$(am__dirstamp)
@@ -1572,11 +1746,20 @@ src/kj/std/$(DEPDIR)/$(am__dirstamp):
 src/kj/std/capnp_test-iostream-test.$(OBJEXT):  \
 	src/kj/std/$(am__dirstamp) \
 	src/kj/std/$(DEPDIR)/$(am__dirstamp)
+src/kj/compat/capnp_test-http-test.$(OBJEXT):  \
+	src/kj/compat/$(am__dirstamp) \
+	src/kj/compat/$(DEPDIR)/$(am__dirstamp)
+src/capnp/capnp_test-canonicalize-test.$(OBJEXT):  \
+	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-capability-test.$(OBJEXT):  \
+	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/capnp_test-membrane-test.$(OBJEXT):  \
 	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-schema-test.$(OBJEXT): src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-schema-loader-test.$(OBJEXT):  \
+	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/capnp_test-schema-parser-test.$(OBJEXT):  \
 	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-dynamic-test.$(OBJEXT):  \
 	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
@@ -1584,24 +1767,23 @@ src/capnp/capnp_test-stringify-test.$(OBJEXT):  \
 	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-serialize-async-test.$(OBJEXT):  \
 	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/capnp_test-serialize-text-test.$(OBJEXT):  \
+	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-rpc-test.$(OBJEXT): src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-rpc-twoparty-test.$(OBJEXT):  \
 	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
 src/capnp/capnp_test-ez-rpc-test.$(OBJEXT): src/capnp/$(am__dirstamp) \
 	src/capnp/$(DEPDIR)/$(am__dirstamp)
+src/capnp/compat/capnp_test-json-test.$(OBJEXT):  \
+	src/capnp/compat/$(am__dirstamp) \
+	src/capnp/compat/$(DEPDIR)/$(am__dirstamp)
 src/capnp/compiler/capnp_test-lexer-test.$(OBJEXT):  \
 	src/capnp/compiler/$(am__dirstamp) \
 	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
 src/capnp/compiler/capnp_test-md5-test.$(OBJEXT):  \
 	src/capnp/compiler/$(am__dirstamp) \
 	src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
-src/capnp/capnp_test-test.capnp.$(OBJEXT): src/capnp/$(am__dirstamp) \
-	src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/capnp_test-test-import.capnp.$(OBJEXT):  \
-	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
-src/capnp/capnp_test-test-import2.capnp.$(OBJEXT):  \
-	src/capnp/$(am__dirstamp) src/capnp/$(DEPDIR)/$(am__dirstamp)
 
 capnp-test$(EXEEXT): $(capnp_test_OBJECTS) $(capnp_test_DEPENDENCIES) $(EXTRA_capnp_test_DEPENDENCIES) 
 	@rm -f capnp-test$(EXEEXT)
@@ -1625,10 +1807,14 @@ mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
 	-rm -f src/capnp/*.$(OBJEXT)
 	-rm -f src/capnp/*.lo
+	-rm -f src/capnp/compat/*.$(OBJEXT)
+	-rm -f src/capnp/compat/*.lo
 	-rm -f src/capnp/compiler/*.$(OBJEXT)
 	-rm -f src/capnp/compiler/*.lo
 	-rm -f src/kj/*.$(OBJEXT)
 	-rm -f src/kj/*.lo
+	-rm -f src/kj/compat/*.$(OBJEXT)
+	-rm -f src/kj/compat/*.lo
 	-rm -f src/kj/parse/*.$(OBJEXT)
 	-rm -f src/kj/parse/*.lo
 	-rm -f src/kj/std/*.$(OBJEXT)
@@ -1636,6 +1822,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/afl-testcase.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/any.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/arena.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/blob.Plo@am__quote@
@@ -1643,6 +1830,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capability.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-any-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-blob-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-canonicalize-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-capability-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-common-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-dynamic-test.Po@am__quote@
@@ -1651,26 +1839,27 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-endian-reverse-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-endian-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-ez-rpc-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-fuzz-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-layout-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-membrane-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-message-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-orphan-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-rpc-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-rpc-twoparty-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-schema-loader-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-schema-parser-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-schema-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-serialize-async-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-serialize-packed-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-serialize-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-serialize-text-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-stringify-test.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-test-import.capnp.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-test-util.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/capnp_test-test.capnp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/dynamic-capability.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/dynamic.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/ez-rpc.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/layout.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/list.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/membrane.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/message.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/persistent.capnp.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/rpc-twoparty.Plo@am__quote@
@@ -1683,8 +1872,16 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/schema.capnp.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/serialize-async.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/serialize-packed.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/serialize-text.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/serialize.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/stringify.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/test-import.capnp.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/test-import2.capnp.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/test-util.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/$(DEPDIR)/test.capnp.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compat/$(DEPDIR)/capnp_test-json-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compat/$(DEPDIR)/json.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compat/$(DEPDIR)/json.capnp.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/capnp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/capnp_test-lexer-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/capnp_test-md5-test.Po@am__quote@
@@ -1702,14 +1899,18 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/capnp/compiler/$(DEPDIR)/parser.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/arena.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/array.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/async-io-unix.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/async-io-win32.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/async-io.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/async-unix.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/async-win32.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/async.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-arena-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-array-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-async-io-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-async-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-async-unix-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-async-win32-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-common-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-debug-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-exception-test.Po@am__quote@
@@ -1721,6 +1922,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-refcount-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-string-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-string-tree-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-test-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-threadlocal-pthread-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-threadlocal-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/capnp_test-tuple-test.Po@am__quote@
@@ -1735,9 +1937,13 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/refcount.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/string-tree.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/string.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/test-helpers.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/test.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/thread.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/time.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/$(DEPDIR)/units.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/kj/compat/$(DEPDIR)/capnp_test-http-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/kj/compat/$(DEPDIR)/http.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/parse/$(DEPDIR)/capnp_test-char-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/parse/$(DEPDIR)/capnp_test-common-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@src/kj/parse/$(DEPDIR)/char.Plo@am__quote@
@@ -2005,6 +2211,20 @@ src/kj/capnp_test-threadlocal-pthread-test.obj: src/kj/threadlocal-pthread-test.
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/kj/capnp_test-threadlocal-pthread-test.obj `if test -f 'src/kj/threadlocal-pthread-test.c++'; then $(CYGPATH_W) 'src/kj/threadlocal-pthread-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/kj/threadlocal-pthread-test.c++'; fi`
 
+src/kj/capnp_test-test-test.o: src/kj/test-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/kj/capnp_test-test-test.o -MD -MP -MF src/kj/$(DEPDIR)/capnp_test-test-test.Tpo -c -o src/kj/capnp_test-test-test.o `test -f 'src/kj/test-test.c++' || echo '$(srcdir)/'`src/kj/test-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/kj/$(DEPDIR)/capnp_test-test-test.Tpo src/kj/$(DEPDIR)/capnp_test-test-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/kj/test-test.c++' object='src/kj/capnp_test-test-test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/kj/capnp_test-test-test.o `test -f 'src/kj/test-test.c++' || echo '$(srcdir)/'`src/kj/test-test.c++
+
+src/kj/capnp_test-test-test.obj: src/kj/test-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/kj/capnp_test-test-test.obj -MD -MP -MF src/kj/$(DEPDIR)/capnp_test-test-test.Tpo -c -o src/kj/capnp_test-test-test.obj `if test -f 'src/kj/test-test.c++'; then $(CYGPATH_W) 'src/kj/test-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/kj/test-test.c++'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/kj/$(DEPDIR)/capnp_test-test-test.Tpo src/kj/$(DEPDIR)/capnp_test-test-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/kj/test-test.c++' object='src/kj/capnp_test-test-test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/kj/capnp_test-test-test.obj `if test -f 'src/kj/test-test.c++'; then $(CYGPATH_W) 'src/kj/test-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/kj/test-test.c++'; fi`
+
 src/capnp/capnp_test-common-test.o: src/capnp/common-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-common-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-common-test.Tpo -c -o src/capnp/capnp_test-common-test.o `test -f 'src/capnp/common-test.c++' || echo '$(srcdir)/'`src/capnp/common-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-common-test.Tpo src/capnp/$(DEPDIR)/capnp_test-common-test.Po
@@ -2173,19 +2393,19 @@ src/capnp/capnp_test-serialize-packed-test.obj: src/capnp/serialize-packed-test.
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-serialize-packed-test.obj `if test -f 'src/capnp/serialize-packed-test.c++'; then $(CYGPATH_W) 'src/capnp/serialize-packed-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/serialize-packed-test.c++'; fi`
 
-src/capnp/capnp_test-test-util.o: src/capnp/test-util.c++
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-test-util.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-test-util.Tpo -c -o src/capnp/capnp_test-test-util.o `test -f 'src/capnp/test-util.c++' || echo '$(srcdir)/'`src/capnp/test-util.c++
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-test-util.Tpo src/capnp/$(DEPDIR)/capnp_test-test-util.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/test-util.c++' object='src/capnp/capnp_test-test-util.o' libtool=no @AMDEPBACKSLASH@
+src/capnp/capnp_test-fuzz-test.o: src/capnp/fuzz-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-fuzz-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-fuzz-test.Tpo -c -o src/capnp/capnp_test-fuzz-test.o `test -f 'src/capnp/fuzz-test.c++' || echo '$(srcdir)/'`src/capnp/fuzz-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-fuzz-test.Tpo src/capnp/$(DEPDIR)/capnp_test-fuzz-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/fuzz-test.c++' object='src/capnp/capnp_test-fuzz-test.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test-util.o `test -f 'src/capnp/test-util.c++' || echo '$(srcdir)/'`src/capnp/test-util.c++
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-fuzz-test.o `test -f 'src/capnp/fuzz-test.c++' || echo '$(srcdir)/'`src/capnp/fuzz-test.c++
 
-src/capnp/capnp_test-test-util.obj: src/capnp/test-util.c++
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-test-util.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-test-util.Tpo -c -o src/capnp/capnp_test-test-util.obj `if test -f 'src/capnp/test-util.c++'; then $(CYGPATH_W) 'src/capnp/test-util.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test-util.c++'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-test-util.Tpo src/capnp/$(DEPDIR)/capnp_test-test-util.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/test-util.c++' object='src/capnp/capnp_test-test-util.obj' libtool=no @AMDEPBACKSLASH@
+src/capnp/capnp_test-fuzz-test.obj: src/capnp/fuzz-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-fuzz-test.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-fuzz-test.Tpo -c -o src/capnp/capnp_test-fuzz-test.obj `if test -f 'src/capnp/fuzz-test.c++'; then $(CYGPATH_W) 'src/capnp/fuzz-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/fuzz-test.c++'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-fuzz-test.Tpo src/capnp/$(DEPDIR)/capnp_test-fuzz-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/fuzz-test.c++' object='src/capnp/capnp_test-fuzz-test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test-util.obj `if test -f 'src/capnp/test-util.c++'; then $(CYGPATH_W) 'src/capnp/test-util.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test-util.c++'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-fuzz-test.obj `if test -f 'src/capnp/fuzz-test.c++'; then $(CYGPATH_W) 'src/capnp/fuzz-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/fuzz-test.c++'; fi`
 
 src/kj/capnp_test-async-test.o: src/kj/async-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/kj/capnp_test-async-test.o -MD -MP -MF src/kj/$(DEPDIR)/capnp_test-async-test.Tpo -c -o src/kj/capnp_test-async-test.o `test -f 'src/kj/async-test.c++' || echo '$(srcdir)/'`src/kj/async-test.c++
@@ -2214,6 +2434,20 @@ src/kj/capnp_test-async-unix-test.obj: src/kj/async-unix-test.c++
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/kj/async-unix-test.c++' object='src/kj/capnp_test-async-unix-test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/kj/capnp_test-async-unix-test.obj `if test -f 'src/kj/async-unix-test.c++'; then $(CYGPATH_W) 'src/kj/async-unix-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/kj/async-unix-test.c++'; fi`
+
+src/kj/capnp_test-async-win32-test.o: src/kj/async-win32-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/kj/capnp_test-async-win32-test.o -MD -MP -MF src/kj/$(DEPDIR)/capnp_test-async-win32-test.Tpo -c -o src/kj/capnp_test-async-win32-test.o `test -f 'src/kj/async-win32-test.c++' || echo '$(srcdir)/'`src/kj/async-win32-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/kj/$(DEPDIR)/capnp_test-async-win32-test.Tpo src/kj/$(DEPDIR)/capnp_test-async-win32-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/kj/async-win32-test.c++' object='src/kj/capnp_test-async-win32-test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/kj/capnp_test-async-win32-test.o `test -f 'src/kj/async-win32-test.c++' || echo '$(srcdir)/'`src/kj/async-win32-test.c++
+
+src/kj/capnp_test-async-win32-test.obj: src/kj/async-win32-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/kj/capnp_test-async-win32-test.obj -MD -MP -MF src/kj/$(DEPDIR)/capnp_test-async-win32-test.Tpo -c -o src/kj/capnp_test-async-win32-test.obj `if test -f 'src/kj/async-win32-test.c++'; then $(CYGPATH_W) 'src/kj/async-win32-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/kj/async-win32-test.c++'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/kj/$(DEPDIR)/capnp_test-async-win32-test.Tpo src/kj/$(DEPDIR)/capnp_test-async-win32-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/kj/async-win32-test.c++' object='src/kj/capnp_test-async-win32-test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/kj/capnp_test-async-win32-test.obj `if test -f 'src/kj/async-win32-test.c++'; then $(CYGPATH_W) 'src/kj/async-win32-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/kj/async-win32-test.c++'; fi`
 
 src/kj/capnp_test-async-io-test.o: src/kj/async-io-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/kj/capnp_test-async-io-test.o -MD -MP -MF src/kj/$(DEPDIR)/capnp_test-async-io-test.Tpo -c -o src/kj/capnp_test-async-io-test.o `test -f 'src/kj/async-io-test.c++' || echo '$(srcdir)/'`src/kj/async-io-test.c++
@@ -2271,6 +2505,34 @@ src/kj/std/capnp_test-iostream-test.obj: src/kj/std/iostream-test.c++
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/kj/std/capnp_test-iostream-test.obj `if test -f 'src/kj/std/iostream-test.c++'; then $(CYGPATH_W) 'src/kj/std/iostream-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/kj/std/iostream-test.c++'; fi`
 
+src/kj/compat/capnp_test-http-test.o: src/kj/compat/http-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/kj/compat/capnp_test-http-test.o -MD -MP -MF src/kj/compat/$(DEPDIR)/capnp_test-http-test.Tpo -c -o src/kj/compat/capnp_test-http-test.o `test -f 'src/kj/compat/http-test.c++' || echo '$(srcdir)/'`src/kj/compat/http-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/kj/compat/$(DEPDIR)/capnp_test-http-test.Tpo src/kj/compat/$(DEPDIR)/capnp_test-http-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/kj/compat/http-test.c++' object='src/kj/compat/capnp_test-http-test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/kj/compat/capnp_test-http-test.o `test -f 'src/kj/compat/http-test.c++' || echo '$(srcdir)/'`src/kj/compat/http-test.c++
+
+src/kj/compat/capnp_test-http-test.obj: src/kj/compat/http-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/kj/compat/capnp_test-http-test.obj -MD -MP -MF src/kj/compat/$(DEPDIR)/capnp_test-http-test.Tpo -c -o src/kj/compat/capnp_test-http-test.obj `if test -f 'src/kj/compat/http-test.c++'; then $(CYGPATH_W) 'src/kj/compat/http-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/kj/compat/http-test.c++'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/kj/compat/$(DEPDIR)/capnp_test-http-test.Tpo src/kj/compat/$(DEPDIR)/capnp_test-http-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/kj/compat/http-test.c++' object='src/kj/compat/capnp_test-http-test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/kj/compat/capnp_test-http-test.obj `if test -f 'src/kj/compat/http-test.c++'; then $(CYGPATH_W) 'src/kj/compat/http-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/kj/compat/http-test.c++'; fi`
+
+src/capnp/capnp_test-canonicalize-test.o: src/capnp/canonicalize-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-canonicalize-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-canonicalize-test.Tpo -c -o src/capnp/capnp_test-canonicalize-test.o `test -f 'src/capnp/canonicalize-test.c++' || echo '$(srcdir)/'`src/capnp/canonicalize-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-canonicalize-test.Tpo src/capnp/$(DEPDIR)/capnp_test-canonicalize-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/canonicalize-test.c++' object='src/capnp/capnp_test-canonicalize-test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-canonicalize-test.o `test -f 'src/capnp/canonicalize-test.c++' || echo '$(srcdir)/'`src/capnp/canonicalize-test.c++
+
+src/capnp/capnp_test-canonicalize-test.obj: src/capnp/canonicalize-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-canonicalize-test.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-canonicalize-test.Tpo -c -o src/capnp/capnp_test-canonicalize-test.obj `if test -f 'src/capnp/canonicalize-test.c++'; then $(CYGPATH_W) 'src/capnp/canonicalize-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/canonicalize-test.c++'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-canonicalize-test.Tpo src/capnp/$(DEPDIR)/capnp_test-canonicalize-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/canonicalize-test.c++' object='src/capnp/capnp_test-canonicalize-test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-canonicalize-test.obj `if test -f 'src/capnp/canonicalize-test.c++'; then $(CYGPATH_W) 'src/capnp/canonicalize-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/canonicalize-test.c++'; fi`
+
 src/capnp/capnp_test-capability-test.o: src/capnp/capability-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-capability-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-capability-test.Tpo -c -o src/capnp/capnp_test-capability-test.o `test -f 'src/capnp/capability-test.c++' || echo '$(srcdir)/'`src/capnp/capability-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-capability-test.Tpo src/capnp/$(DEPDIR)/capnp_test-capability-test.Po
@@ -2284,6 +2546,20 @@ src/capnp/capnp_test-capability-test.obj: src/capnp/capability-test.c++
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/capability-test.c++' object='src/capnp/capnp_test-capability-test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-capability-test.obj `if test -f 'src/capnp/capability-test.c++'; then $(CYGPATH_W) 'src/capnp/capability-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/capability-test.c++'; fi`
+
+src/capnp/capnp_test-membrane-test.o: src/capnp/membrane-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-membrane-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-membrane-test.Tpo -c -o src/capnp/capnp_test-membrane-test.o `test -f 'src/capnp/membrane-test.c++' || echo '$(srcdir)/'`src/capnp/membrane-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-membrane-test.Tpo src/capnp/$(DEPDIR)/capnp_test-membrane-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/membrane-test.c++' object='src/capnp/capnp_test-membrane-test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-membrane-test.o `test -f 'src/capnp/membrane-test.c++' || echo '$(srcdir)/'`src/capnp/membrane-test.c++
+
+src/capnp/capnp_test-membrane-test.obj: src/capnp/membrane-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-membrane-test.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-membrane-test.Tpo -c -o src/capnp/capnp_test-membrane-test.obj `if test -f 'src/capnp/membrane-test.c++'; then $(CYGPATH_W) 'src/capnp/membrane-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/membrane-test.c++'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-membrane-test.Tpo src/capnp/$(DEPDIR)/capnp_test-membrane-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/membrane-test.c++' object='src/capnp/capnp_test-membrane-test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-membrane-test.obj `if test -f 'src/capnp/membrane-test.c++'; then $(CYGPATH_W) 'src/capnp/membrane-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/membrane-test.c++'; fi`
 
 src/capnp/capnp_test-schema-test.o: src/capnp/schema-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-schema-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-schema-test.Tpo -c -o src/capnp/capnp_test-schema-test.o `test -f 'src/capnp/schema-test.c++' || echo '$(srcdir)/'`src/capnp/schema-test.c++
@@ -2312,6 +2588,20 @@ src/capnp/capnp_test-schema-loader-test.obj: src/capnp/schema-loader-test.c++
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/schema-loader-test.c++' object='src/capnp/capnp_test-schema-loader-test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-schema-loader-test.obj `if test -f 'src/capnp/schema-loader-test.c++'; then $(CYGPATH_W) 'src/capnp/schema-loader-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/schema-loader-test.c++'; fi`
+
+src/capnp/capnp_test-schema-parser-test.o: src/capnp/schema-parser-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-schema-parser-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-schema-parser-test.Tpo -c -o src/capnp/capnp_test-schema-parser-test.o `test -f 'src/capnp/schema-parser-test.c++' || echo '$(srcdir)/'`src/capnp/schema-parser-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-schema-parser-test.Tpo src/capnp/$(DEPDIR)/capnp_test-schema-parser-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/schema-parser-test.c++' object='src/capnp/capnp_test-schema-parser-test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-schema-parser-test.o `test -f 'src/capnp/schema-parser-test.c++' || echo '$(srcdir)/'`src/capnp/schema-parser-test.c++
+
+src/capnp/capnp_test-schema-parser-test.obj: src/capnp/schema-parser-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-schema-parser-test.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-schema-parser-test.Tpo -c -o src/capnp/capnp_test-schema-parser-test.obj `if test -f 'src/capnp/schema-parser-test.c++'; then $(CYGPATH_W) 'src/capnp/schema-parser-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/schema-parser-test.c++'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-schema-parser-test.Tpo src/capnp/$(DEPDIR)/capnp_test-schema-parser-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/schema-parser-test.c++' object='src/capnp/capnp_test-schema-parser-test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-schema-parser-test.obj `if test -f 'src/capnp/schema-parser-test.c++'; then $(CYGPATH_W) 'src/capnp/schema-parser-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/schema-parser-test.c++'; fi`
 
 src/capnp/capnp_test-dynamic-test.o: src/capnp/dynamic-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-dynamic-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-dynamic-test.Tpo -c -o src/capnp/capnp_test-dynamic-test.o `test -f 'src/capnp/dynamic-test.c++' || echo '$(srcdir)/'`src/capnp/dynamic-test.c++
@@ -2355,6 +2645,20 @@ src/capnp/capnp_test-serialize-async-test.obj: src/capnp/serialize-async-test.c+
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-serialize-async-test.obj `if test -f 'src/capnp/serialize-async-test.c++'; then $(CYGPATH_W) 'src/capnp/serialize-async-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/serialize-async-test.c++'; fi`
 
+src/capnp/capnp_test-serialize-text-test.o: src/capnp/serialize-text-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-serialize-text-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-serialize-text-test.Tpo -c -o src/capnp/capnp_test-serialize-text-test.o `test -f 'src/capnp/serialize-text-test.c++' || echo '$(srcdir)/'`src/capnp/serialize-text-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-serialize-text-test.Tpo src/capnp/$(DEPDIR)/capnp_test-serialize-text-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/serialize-text-test.c++' object='src/capnp/capnp_test-serialize-text-test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-serialize-text-test.o `test -f 'src/capnp/serialize-text-test.c++' || echo '$(srcdir)/'`src/capnp/serialize-text-test.c++
+
+src/capnp/capnp_test-serialize-text-test.obj: src/capnp/serialize-text-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-serialize-text-test.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-serialize-text-test.Tpo -c -o src/capnp/capnp_test-serialize-text-test.obj `if test -f 'src/capnp/serialize-text-test.c++'; then $(CYGPATH_W) 'src/capnp/serialize-text-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/serialize-text-test.c++'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-serialize-text-test.Tpo src/capnp/$(DEPDIR)/capnp_test-serialize-text-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/serialize-text-test.c++' object='src/capnp/capnp_test-serialize-text-test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-serialize-text-test.obj `if test -f 'src/capnp/serialize-text-test.c++'; then $(CYGPATH_W) 'src/capnp/serialize-text-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/serialize-text-test.c++'; fi`
+
 src/capnp/capnp_test-rpc-test.o: src/capnp/rpc-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-rpc-test.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-rpc-test.Tpo -c -o src/capnp/capnp_test-rpc-test.o `test -f 'src/capnp/rpc-test.c++' || echo '$(srcdir)/'`src/capnp/rpc-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-rpc-test.Tpo src/capnp/$(DEPDIR)/capnp_test-rpc-test.Po
@@ -2397,6 +2701,20 @@ src/capnp/capnp_test-ez-rpc-test.obj: src/capnp/ez-rpc-test.c++
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-ez-rpc-test.obj `if test -f 'src/capnp/ez-rpc-test.c++'; then $(CYGPATH_W) 'src/capnp/ez-rpc-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/ez-rpc-test.c++'; fi`
 
+src/capnp/compat/capnp_test-json-test.o: src/capnp/compat/json-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/compat/capnp_test-json-test.o -MD -MP -MF src/capnp/compat/$(DEPDIR)/capnp_test-json-test.Tpo -c -o src/capnp/compat/capnp_test-json-test.o `test -f 'src/capnp/compat/json-test.c++' || echo '$(srcdir)/'`src/capnp/compat/json-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/compat/$(DEPDIR)/capnp_test-json-test.Tpo src/capnp/compat/$(DEPDIR)/capnp_test-json-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/compat/json-test.c++' object='src/capnp/compat/capnp_test-json-test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/compat/capnp_test-json-test.o `test -f 'src/capnp/compat/json-test.c++' || echo '$(srcdir)/'`src/capnp/compat/json-test.c++
+
+src/capnp/compat/capnp_test-json-test.obj: src/capnp/compat/json-test.c++
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/compat/capnp_test-json-test.obj -MD -MP -MF src/capnp/compat/$(DEPDIR)/capnp_test-json-test.Tpo -c -o src/capnp/compat/capnp_test-json-test.obj `if test -f 'src/capnp/compat/json-test.c++'; then $(CYGPATH_W) 'src/capnp/compat/json-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/compat/json-test.c++'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/compat/$(DEPDIR)/capnp_test-json-test.Tpo src/capnp/compat/$(DEPDIR)/capnp_test-json-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/compat/json-test.c++' object='src/capnp/compat/capnp_test-json-test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/compat/capnp_test-json-test.obj `if test -f 'src/capnp/compat/json-test.c++'; then $(CYGPATH_W) 'src/capnp/compat/json-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/compat/json-test.c++'; fi`
+
 src/capnp/compiler/capnp_test-lexer-test.o: src/capnp/compiler/lexer-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/compiler/capnp_test-lexer-test.o -MD -MP -MF src/capnp/compiler/$(DEPDIR)/capnp_test-lexer-test.Tpo -c -o src/capnp/compiler/capnp_test-lexer-test.o `test -f 'src/capnp/compiler/lexer-test.c++' || echo '$(srcdir)/'`src/capnp/compiler/lexer-test.c++
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/compiler/$(DEPDIR)/capnp_test-lexer-test.Tpo src/capnp/compiler/$(DEPDIR)/capnp_test-lexer-test.Po
@@ -2425,56 +2743,16 @@ src/capnp/compiler/capnp_test-md5-test.obj: src/capnp/compiler/md5-test.c++
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/compiler/capnp_test-md5-test.obj `if test -f 'src/capnp/compiler/md5-test.c++'; then $(CYGPATH_W) 'src/capnp/compiler/md5-test.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/compiler/md5-test.c++'; fi`
 
-src/capnp/capnp_test-test.capnp.o: src/capnp/test.capnp.c++
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-test.capnp.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-test.capnp.Tpo -c -o src/capnp/capnp_test-test.capnp.o `test -f 'src/capnp/test.capnp.c++' || echo '$(srcdir)/'`src/capnp/test.capnp.c++
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-test.capnp.Tpo src/capnp/$(DEPDIR)/capnp_test-test.capnp.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/test.capnp.c++' object='src/capnp/capnp_test-test.capnp.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test.capnp.o `test -f 'src/capnp/test.capnp.c++' || echo '$(srcdir)/'`src/capnp/test.capnp.c++
-
-src/capnp/capnp_test-test.capnp.obj: src/capnp/test.capnp.c++
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-test.capnp.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-test.capnp.Tpo -c -o src/capnp/capnp_test-test.capnp.obj `if test -f 'src/capnp/test.capnp.c++'; then $(CYGPATH_W) 'src/capnp/test.capnp.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test.capnp.c++'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-test.capnp.Tpo src/capnp/$(DEPDIR)/capnp_test-test.capnp.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/test.capnp.c++' object='src/capnp/capnp_test-test.capnp.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test.capnp.obj `if test -f 'src/capnp/test.capnp.c++'; then $(CYGPATH_W) 'src/capnp/test.capnp.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test.capnp.c++'; fi`
-
-src/capnp/capnp_test-test-import.capnp.o: src/capnp/test-import.capnp.c++
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-test-import.capnp.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-test-import.capnp.Tpo -c -o src/capnp/capnp_test-test-import.capnp.o `test -f 'src/capnp/test-import.capnp.c++' || echo '$(srcdir)/'`src/capnp/test-import.capnp.c++
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-test-import.capnp.Tpo src/capnp/$(DEPDIR)/capnp_test-test-import.capnp.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/test-import.capnp.c++' object='src/capnp/capnp_test-test-import.capnp.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test-import.capnp.o `test -f 'src/capnp/test-import.capnp.c++' || echo '$(srcdir)/'`src/capnp/test-import.capnp.c++
-
-src/capnp/capnp_test-test-import.capnp.obj: src/capnp/test-import.capnp.c++
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-test-import.capnp.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-test-import.capnp.Tpo -c -o src/capnp/capnp_test-test-import.capnp.obj `if test -f 'src/capnp/test-import.capnp.c++'; then $(CYGPATH_W) 'src/capnp/test-import.capnp.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test-import.capnp.c++'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-test-import.capnp.Tpo src/capnp/$(DEPDIR)/capnp_test-test-import.capnp.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/test-import.capnp.c++' object='src/capnp/capnp_test-test-import.capnp.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test-import.capnp.obj `if test -f 'src/capnp/test-import.capnp.c++'; then $(CYGPATH_W) 'src/capnp/test-import.capnp.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test-import.capnp.c++'; fi`
-
-src/capnp/capnp_test-test-import2.capnp.o: src/capnp/test-import2.capnp.c++
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-test-import2.capnp.o -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Tpo -c -o src/capnp/capnp_test-test-import2.capnp.o `test -f 'src/capnp/test-import2.capnp.c++' || echo '$(srcdir)/'`src/capnp/test-import2.capnp.c++
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Tpo src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/test-import2.capnp.c++' object='src/capnp/capnp_test-test-import2.capnp.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test-import2.capnp.o `test -f 'src/capnp/test-import2.capnp.c++' || echo '$(srcdir)/'`src/capnp/test-import2.capnp.c++
-
-src/capnp/capnp_test-test-import2.capnp.obj: src/capnp/test-import2.capnp.c++
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT src/capnp/capnp_test-test-import2.capnp.obj -MD -MP -MF src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Tpo -c -o src/capnp/capnp_test-test-import2.capnp.obj `if test -f 'src/capnp/test-import2.capnp.c++'; then $(CYGPATH_W) 'src/capnp/test-import2.capnp.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test-import2.capnp.c++'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Tpo src/capnp/$(DEPDIR)/capnp_test-test-import2.capnp.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='src/capnp/test-import2.capnp.c++' object='src/capnp/capnp_test-test-import2.capnp.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(capnp_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o src/capnp/capnp_test-test-import2.capnp.obj `if test -f 'src/capnp/test-import2.capnp.c++'; then $(CYGPATH_W) 'src/capnp/test-import2.capnp.c++'; else $(CYGPATH_W) '$(srcdir)/src/capnp/test-import2.capnp.c++'; fi`
-
 mostlyclean-libtool:
 	-rm -f *.lo
 
 clean-libtool:
 	-rm -rf .libs _libs
 	-rm -rf src/capnp/.libs src/capnp/_libs
+	-rm -rf src/capnp/compat/.libs src/capnp/compat/_libs
 	-rm -rf src/capnp/compiler/.libs src/capnp/compiler/_libs
 	-rm -rf src/kj/.libs src/kj/_libs
+	-rm -rf src/kj/compat/.libs src/kj/compat/_libs
 	-rm -rf src/kj/parse/.libs src/kj/parse/_libs
 
 distclean-libtool:
@@ -2542,6 +2820,27 @@ uninstall-includecapnpHEADERS:
 	@list='$(includecapnp_HEADERS)'; test -n "$(includecapnpdir)" || list=; \
 	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
 	dir='$(DESTDIR)$(includecapnpdir)'; $(am__uninstall_files_from_dir)
+install-includecapnpcompatHEADERS: $(includecapnpcompat_HEADERS)
+	@$(NORMAL_INSTALL)
+	@list='$(includecapnpcompat_HEADERS)'; test -n "$(includecapnpcompatdir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(includecapnpcompatdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(includecapnpcompatdir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_HEADER) $$files '$(DESTDIR)$(includecapnpcompatdir)'"; \
+	  $(INSTALL_HEADER) $$files "$(DESTDIR)$(includecapnpcompatdir)" || exit $$?; \
+	done
+
+uninstall-includecapnpcompatHEADERS:
+	@$(NORMAL_UNINSTALL)
+	@list='$(includecapnpcompat_HEADERS)'; test -n "$(includecapnpcompatdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(includecapnpcompatdir)'; $(am__uninstall_files_from_dir)
 install-includekjHEADERS: $(includekj_HEADERS)
 	@$(NORMAL_INSTALL)
 	@list='$(includekj_HEADERS)'; test -n "$(includekjdir)" || list=; \
@@ -2563,6 +2862,27 @@ uninstall-includekjHEADERS:
 	@list='$(includekj_HEADERS)'; test -n "$(includekjdir)" || list=; \
 	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
 	dir='$(DESTDIR)$(includekjdir)'; $(am__uninstall_files_from_dir)
+install-includekjcompatHEADERS: $(includekjcompat_HEADERS)
+	@$(NORMAL_INSTALL)
+	@list='$(includekjcompat_HEADERS)'; test -n "$(includekjcompatdir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(includekjcompatdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(includekjcompatdir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_HEADER) $$files '$(DESTDIR)$(includekjcompatdir)'"; \
+	  $(INSTALL_HEADER) $$files "$(DESTDIR)$(includekjcompatdir)" || exit $$?; \
+	done
+
+uninstall-includekjcompatHEADERS:
+	@$(NORMAL_UNINSTALL)
+	@list='$(includekjcompat_HEADERS)'; test -n "$(includekjcompatdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(includekjcompatdir)'; $(am__uninstall_files_from_dir)
 install-includekjparseHEADERS: $(includekjparse_HEADERS)
 	@$(NORMAL_INSTALL)
 	@list='$(includekjparse_HEADERS)'; test -n "$(includekjparsedir)" || list=; \
@@ -2606,61 +2926,14 @@ uninstall-includekjstdHEADERS:
 	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
 	dir='$(DESTDIR)$(includekjstddir)'; $(am__uninstall_files_from_dir)
 
-# This directory's subdirectories are mostly independent; you can cd
-# into them and run 'make' without going through this Makefile.
-# To change the values of 'make' variables: instead of editing Makefiles,
-# (1) if the variable is set in 'config.status', edit 'config.status'
-#     (which will cause the Makefiles to be regenerated when you run 'make');
-# (2) otherwise, pass the desired values on the 'make' command line.
-$(am__recursive_targets):
-	@fail=; \
-	if $(am__make_keepgoing); then \
-	  failcom='fail=yes'; \
-	else \
-	  failcom='exit 1'; \
-	fi; \
-	dot_seen=no; \
-	target=`echo $@ | sed s/-recursive//`; \
-	case "$@" in \
-	  distclean-* | maintainer-clean-*) list='$(DIST_SUBDIRS)' ;; \
-	  *) list='$(SUBDIRS)' ;; \
-	esac; \
-	for subdir in $$list; do \
-	  echo "Making $$target in $$subdir"; \
-	  if test "$$subdir" = "."; then \
-	    dot_seen=yes; \
-	    local_target="$$target-am"; \
-	  else \
-	    local_target="$$target"; \
-	  fi; \
-	  ($(am__cd) $$subdir && $(MAKE) $(AM_MAKEFLAGS) $$local_target) \
-	  || eval $$failcom; \
-	done; \
-	if test "$$dot_seen" = "no"; then \
-	  $(MAKE) $(AM_MAKEFLAGS) "$$target-am" || exit 1; \
-	fi; test -z "$$fail"
-
 ID: $(am__tagged_files)
 	$(am__define_uniq_tagged_files); mkid -fID $$unique
-tags: tags-recursive
+tags: tags-am
 TAGS: tags
 
 tags-am: $(TAGS_DEPENDENCIES) $(am__tagged_files)
 	set x; \
 	here=`pwd`; \
-	if ($(ETAGS) --etags-include --version) >/dev/null 2>&1; then \
-	  include_option=--etags-include; \
-	  empty_fix=.; \
-	else \
-	  include_option=--include; \
-	  empty_fix=; \
-	fi; \
-	list='$(SUBDIRS)'; for subdir in $$list; do \
-	  if test "$$subdir" = .; then :; else \
-	    test ! -f $$subdir/TAGS || \
-	      set "$$@" "$$include_option=$$here/$$subdir/TAGS"; \
-	  fi; \
-	done; \
 	$(am__define_uniq_tagged_files); \
 	shift; \
 	if test -z "$(ETAGS_ARGS)$$*$$unique"; then :; else \
@@ -2673,7 +2946,7 @@ tags-am: $(TAGS_DEPENDENCIES) $(am__tagged_files)
 	      $$unique; \
 	  fi; \
 	fi
-ctags: ctags-recursive
+ctags: ctags-am
 
 CTAGS: ctags
 ctags-am: $(TAGS_DEPENDENCIES) $(am__tagged_files)
@@ -2692,7 +2965,7 @@ cscope: cscope.files
 clean-cscope:
 	-rm -f cscope.files
 cscope.files: clean-cscope cscopelist
-cscopelist: cscopelist-recursive
+cscopelist: cscopelist-am
 
 cscopelist-am: $(am__tagged_files)
 	list='$(am__tagged_files)'; \
@@ -2842,7 +3115,7 @@ check-TESTS:
 	log_list=`echo $$log_list`; trs_list=`echo $$trs_list`; \
 	$(MAKE) $(AM_MAKEFLAGS) $(TEST_SUITE_LOG) TEST_LOGS="$$log_list"; \
 	exit $$?;
-recheck: all $(check_PROGRAMS)
+recheck: all $(check_LIBRARIES) $(check_PROGRAMS)
 	@test -z "$(TEST_SUITE_LOG)" || rm -f $(TEST_SUITE_LOG)
 	@set +e; $(am__set_TESTS_bases); \
 	bases=`for i in $$bases; do echo $$i; done \
@@ -2919,31 +3192,6 @@ distdir: $(DISTFILES)
 	    test -f "$(distdir)/$$file" \
 	    || cp -p $$d/$$file "$(distdir)/$$file" \
 	    || exit 1; \
-	  fi; \
-	done
-	@list='$(DIST_SUBDIRS)'; for subdir in $$list; do \
-	  if test "$$subdir" = .; then :; else \
-	    $(am__make_dryrun) \
-	      || test -d "$(distdir)/$$subdir" \
-	      || $(MKDIR_P) "$(distdir)/$$subdir" \
-	      || exit 1; \
-	    dir1=$$subdir; dir2="$(distdir)/$$subdir"; \
-	    $(am__relativize); \
-	    new_distdir=$$reldir; \
-	    dir1=$$subdir; dir2="$(top_distdir)"; \
-	    $(am__relativize); \
-	    new_top_distdir=$$reldir; \
-	    echo " (cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) top_distdir="$$new_top_distdir" distdir="$$new_distdir" \\"; \
-	    echo "     am__remove_distdir=: am__skip_length_check=: am__skip_mode_fix=: distdir)"; \
-	    ($(am__cd) $$subdir && \
-	      $(MAKE) $(AM_MAKEFLAGS) \
-	        top_distdir="$$new_top_distdir" \
-	        distdir="$$new_distdir" \
-		am__remove_distdir=: \
-		am__skip_length_check=: \
-		am__skip_mode_fix=: \
-	        distdir) \
-	      || exit 1; \
 	  fi; \
 	done
 	-test -n "$(am__skip_mode_fix)" \
@@ -3079,29 +3327,28 @@ distcleancheck: distclean
 	       $(distcleancheck_listfiles) ; \
 	       exit 1; } >&2
 check-am: all-am
-	$(MAKE) $(AM_MAKEFLAGS) $(check_PROGRAMS)
+	$(MAKE) $(AM_MAKEFLAGS) $(check_LIBRARIES) $(check_PROGRAMS)
 	$(MAKE) $(AM_MAKEFLAGS) check-TESTS
 check: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) check-recursive
+	$(MAKE) $(AM_MAKEFLAGS) check-am
 all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(DATA) $(HEADERS) \
 		config.h
 install-binPROGRAMS: install-libLTLIBRARIES
 
-installdirs: installdirs-recursive
-installdirs-am:
-	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(includecapnpdir)" "$(DESTDIR)$(pkgconfigdir)" "$(DESTDIR)$(includecapnpdir)" "$(DESTDIR)$(includekjdir)" "$(DESTDIR)$(includekjparsedir)" "$(DESTDIR)$(includekjstddir)"; do \
+installdirs:
+	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(includecapnpdir)" "$(DESTDIR)$(pkgconfigdir)" "$(DESTDIR)$(includecapnpdir)" "$(DESTDIR)$(includecapnpcompatdir)" "$(DESTDIR)$(includekjdir)" "$(DESTDIR)$(includekjcompatdir)" "$(DESTDIR)$(includekjparsedir)" "$(DESTDIR)$(includekjstddir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) install-recursive
-install-exec: install-exec-recursive
-install-data: install-data-recursive
-uninstall: uninstall-recursive
+	$(MAKE) $(AM_MAKEFLAGS) install-am
+install-exec: install-exec-am
+install-data: install-data-am
+uninstall: uninstall-am
 
 install-am: all-am
 	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am install-data-am
 
-installcheck: installcheck-recursive
+installcheck: installcheck-am
 install-strip:
 	if test -z '$(STRIP)'; then \
 	  $(MAKE) $(AM_MAKEFLAGS) INSTALL_PROGRAM="$(INSTALL_STRIP_PROGRAM)" \
@@ -3125,10 +3372,14 @@ distclean-generic:
 	-test . = "$(srcdir)" || test -z "$(CONFIG_CLEAN_VPATH_FILES)" || rm -f $(CONFIG_CLEAN_VPATH_FILES)
 	-rm -f src/capnp/$(DEPDIR)/$(am__dirstamp)
 	-rm -f src/capnp/$(am__dirstamp)
+	-rm -f src/capnp/compat/$(DEPDIR)/$(am__dirstamp)
+	-rm -f src/capnp/compat/$(am__dirstamp)
 	-rm -f src/capnp/compiler/$(DEPDIR)/$(am__dirstamp)
 	-rm -f src/capnp/compiler/$(am__dirstamp)
 	-rm -f src/kj/$(DEPDIR)/$(am__dirstamp)
 	-rm -f src/kj/$(am__dirstamp)
+	-rm -f src/kj/compat/$(DEPDIR)/$(am__dirstamp)
+	-rm -f src/kj/compat/$(am__dirstamp)
 	-rm -f src/kj/parse/$(DEPDIR)/$(am__dirstamp)
 	-rm -f src/kj/parse/$(am__dirstamp)
 	-rm -f src/kj/std/$(DEPDIR)/$(am__dirstamp)
@@ -3140,148 +3391,128 @@ maintainer-clean-generic:
 	-test -z "$(BUILT_SOURCES)" || rm -f $(BUILT_SOURCES)
 	-test -z "$(MAINTAINERCLEANFILES)" || rm -f $(MAINTAINERCLEANFILES)
 @LITE_MODE_TRUE@uninstall-hook:
-clean: clean-recursive
+clean: clean-am
 
-clean-am: clean-binPROGRAMS clean-checkPROGRAMS clean-generic \
-	clean-libLTLIBRARIES clean-libtool clean-local mostlyclean-am
+clean-am: clean-binPROGRAMS clean-checkLIBRARIES clean-checkPROGRAMS \
+	clean-generic clean-libLTLIBRARIES clean-libtool \
+	mostlyclean-am
 
-distclean: distclean-recursive
+distclean: distclean-am
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
-	-rm -rf src/capnp/$(DEPDIR) src/capnp/compiler/$(DEPDIR) src/kj/$(DEPDIR) src/kj/parse/$(DEPDIR) src/kj/std/$(DEPDIR)
+	-rm -rf src/capnp/$(DEPDIR) src/capnp/compat/$(DEPDIR) src/capnp/compiler/$(DEPDIR) src/kj/$(DEPDIR) src/kj/compat/$(DEPDIR) src/kj/parse/$(DEPDIR) src/kj/std/$(DEPDIR)
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-hdr distclean-libtool distclean-tags
 
-dvi: dvi-recursive
+dvi: dvi-am
 
 dvi-am:
 
-html: html-recursive
+html: html-am
 
 html-am:
 
-info: info-recursive
+info: info-am
 
 info-am:
 
 install-data-am: install-dist_includecapnpDATA \
-	install-includecapnpHEADERS install-includekjHEADERS \
+	install-includecapnpHEADERS install-includecapnpcompatHEADERS \
+	install-includekjHEADERS install-includekjcompatHEADERS \
 	install-includekjparseHEADERS install-includekjstdHEADERS \
 	install-pkgconfigDATA
 
-install-dvi: install-dvi-recursive
+install-dvi: install-dvi-am
 
 install-dvi-am:
 
 install-exec-am: install-binPROGRAMS install-libLTLIBRARIES
 	@$(NORMAL_INSTALL)
 	$(MAKE) $(AM_MAKEFLAGS) install-exec-hook
-install-html: install-html-recursive
+install-html: install-html-am
 
 install-html-am:
 
-install-info: install-info-recursive
+install-info: install-info-am
 
 install-info-am:
 
 install-man:
 
-install-pdf: install-pdf-recursive
+install-pdf: install-pdf-am
 
 install-pdf-am:
 
-install-ps: install-ps-recursive
+install-ps: install-ps-am
 
 install-ps-am:
 
 installcheck-am:
 
-maintainer-clean: maintainer-clean-recursive
+maintainer-clean: maintainer-clean-am
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
 	-rm -rf $(top_srcdir)/autom4te.cache
-	-rm -rf src/capnp/$(DEPDIR) src/capnp/compiler/$(DEPDIR) src/kj/$(DEPDIR) src/kj/parse/$(DEPDIR) src/kj/std/$(DEPDIR)
+	-rm -rf src/capnp/$(DEPDIR) src/capnp/compat/$(DEPDIR) src/capnp/compiler/$(DEPDIR) src/kj/$(DEPDIR) src/kj/compat/$(DEPDIR) src/kj/parse/$(DEPDIR) src/kj/std/$(DEPDIR)
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic \
 	maintainer-clean-local
 
-mostlyclean: mostlyclean-recursive
+mostlyclean: mostlyclean-am
 
 mostlyclean-am: mostlyclean-compile mostlyclean-generic \
 	mostlyclean-libtool
 
-pdf: pdf-recursive
+pdf: pdf-am
 
 pdf-am:
 
-ps: ps-recursive
+ps: ps-am
 
 ps-am:
 
 uninstall-am: uninstall-binPROGRAMS uninstall-dist_includecapnpDATA \
-	uninstall-includecapnpHEADERS uninstall-includekjHEADERS \
+	uninstall-includecapnpHEADERS \
+	uninstall-includecapnpcompatHEADERS uninstall-includekjHEADERS \
+	uninstall-includekjcompatHEADERS \
 	uninstall-includekjparseHEADERS uninstall-includekjstdHEADERS \
 	uninstall-libLTLIBRARIES uninstall-pkgconfigDATA
 	@$(NORMAL_INSTALL)
 	$(MAKE) $(AM_MAKEFLAGS) uninstall-hook
-.MAKE: $(am__recursive_targets) all check check-am install install-am \
-	install-exec-am install-strip uninstall-am
+.MAKE: all check check-am install install-am install-exec-am \
+	install-strip uninstall-am
 
-.PHONY: $(am__recursive_targets) CTAGS GTAGS TAGS all all-am \
-	am--refresh check check-TESTS check-am clean clean-binPROGRAMS \
+.PHONY: CTAGS GTAGS TAGS all all-am am--refresh check check-TESTS \
+	check-am clean clean-binPROGRAMS clean-checkLIBRARIES \
 	clean-checkPROGRAMS clean-cscope clean-generic \
-	clean-libLTLIBRARIES clean-libtool clean-local cscope \
-	cscopelist-am ctags ctags-am dist dist-all dist-bzip2 \
-	dist-gzip dist-lzip dist-shar dist-tarZ dist-xz dist-zip \
-	distcheck distclean distclean-compile distclean-generic \
-	distclean-hdr distclean-libtool distclean-tags distcleancheck \
-	distdir distuninstallcheck dvi dvi-am html html-am info \
-	info-am install install-am install-binPROGRAMS install-data \
+	clean-libLTLIBRARIES clean-libtool cscope cscopelist-am ctags \
+	ctags-am dist dist-all dist-bzip2 dist-gzip dist-lzip \
+	dist-shar dist-tarZ dist-xz dist-zip distcheck distclean \
+	distclean-compile distclean-generic distclean-hdr \
+	distclean-libtool distclean-tags distcleancheck distdir \
+	distuninstallcheck dvi dvi-am html html-am info info-am \
+	install install-am install-binPROGRAMS install-data \
 	install-data-am install-dist_includecapnpDATA install-dvi \
 	install-dvi-am install-exec install-exec-am install-exec-hook \
 	install-html install-html-am install-includecapnpHEADERS \
-	install-includekjHEADERS install-includekjparseHEADERS \
+	install-includecapnpcompatHEADERS install-includekjHEADERS \
+	install-includekjcompatHEADERS install-includekjparseHEADERS \
 	install-includekjstdHEADERS install-info install-info-am \
 	install-libLTLIBRARIES install-man install-pdf install-pdf-am \
 	install-pkgconfigDATA install-ps install-ps-am install-strip \
-	installcheck installcheck-am installdirs installdirs-am \
-	maintainer-clean maintainer-clean-generic \
-	maintainer-clean-local mostlyclean mostlyclean-compile \
-	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	recheck tags tags-am uninstall uninstall-am \
-	uninstall-binPROGRAMS uninstall-dist_includecapnpDATA \
-	uninstall-hook uninstall-includecapnpHEADERS \
-	uninstall-includekjHEADERS uninstall-includekjparseHEADERS \
-	uninstall-includekjstdHEADERS uninstall-libLTLIBRARIES \
-	uninstall-pkgconfigDATA
+	installcheck installcheck-am installdirs maintainer-clean \
+	maintainer-clean-generic maintainer-clean-local mostlyclean \
+	mostlyclean-compile mostlyclean-generic mostlyclean-libtool \
+	pdf pdf-am ps ps-am recheck tags tags-am uninstall \
+	uninstall-am uninstall-binPROGRAMS \
+	uninstall-dist_includecapnpDATA uninstall-hook \
+	uninstall-includecapnpHEADERS \
+	uninstall-includecapnpcompatHEADERS uninstall-includekjHEADERS \
+	uninstall-includekjcompatHEADERS \
+	uninstall-includekjparseHEADERS uninstall-includekjstdHEADERS \
+	uninstall-libLTLIBRARIES uninstall-pkgconfigDATA
 
 .PRECIOUS: Makefile
 
-
-# Build gtest before we build Cap'n Proto tests.  We don't add gtest to SUBDIRS
-# because then "make check" would also build and run all of gtest's own tests,
-# which takes a lot of time and is generally not useful to us.  Also, we don't
-# want "make install" to recurse into gtest since we don't want to overwrite
-# the installed version of gtest if there is one (and, actually, gtest doesn't
-# even support "make install" anyway).  So we define a rule such that it will
-# only be built when needed.
-gtest/lib/libgtest.la:
-	@echo "Making lib/libgtest.a lib/libgtest_main.a in gtest"
-	@cd gtest && $(MAKE) $(AM_MAKEFLAGS) lib/libgtest.la lib/libgtest_main.la
-
-gtest/lib/libgtest_main.la: gtest/lib/libgtest.la
-	@:
-
-# We would like to clean gtest when "make clean" is invoked.  But we have to
-# be careful because clean-local is also invoked during "make distclean", but
-# "make distclean" already recurses into gtest because it's listed among the
-# DIST_SUBDIRS.  distclean will delete gtest/Makefile, so if we then try to
-# cd to the directory again and "make clean" it will fail.  So, check that the
-# Makefile exists before recursing.
-clean-local:
-	@if test -e gtest/Makefile; then \
-	  echo "Making clean in gtest"; \
-	  cd gtest && $(MAKE) $(AM_MAKEFLAGS) clean; \
-	fi
 
 # When running distcheck, verify that we've included all the files needed by
 # the cmake build.
@@ -3319,10 +3550,12 @@ maintainer-clean-local:
 @LITE_MODE_TRUE@	ldconfig < /dev/null > /dev/null 2>&1 || true
 
 @USE_EXTERNAL_CAPNP_TRUE@test_capnpc_middleman: $(test_capnpc_inputs)
+@USE_EXTERNAL_CAPNP_TRUE@	@$(MKDIR_P) src
 @USE_EXTERNAL_CAPNP_TRUE@	$(CAPNP) compile --src-prefix=$(srcdir)/src -o$(CAPNPC_CXX):src -I$(srcdir)/src $^
 @USE_EXTERNAL_CAPNP_TRUE@	touch test_capnpc_middleman
 
 @USE_EXTERNAL_CAPNP_FALSE@test_capnpc_middleman: capnp$(EXEEXT) capnpc-c++$(EXEEXT) $(test_capnpc_inputs)
+@USE_EXTERNAL_CAPNP_FALSE@	@$(MKDIR_P) src
 @USE_EXTERNAL_CAPNP_FALSE@	echo $^ | (read CAPNP CAPNPC_CXX SOURCES && ./$$CAPNP compile --src-prefix=$(srcdir)/src -o./$$CAPNPC_CXX:src -I$(srcdir)/src $$SOURCES)
 @USE_EXTERNAL_CAPNP_FALSE@	touch test_capnpc_middleman
 
