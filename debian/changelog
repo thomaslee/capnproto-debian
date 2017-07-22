@@ -1,10 +1,13 @@
-capnproto (0.6.1-1) UNRELEASED; urgency=medium
+capnproto (0.6.1-1) unstable; urgency=medium
 
-  * Imported Upstream version 0.6.1 (Closes: #860960)
+  * Imported Upstream version 0.6.1 (Closes: #866525) which includes:
+     - a fix for CVE-2017-7892 (Closes: #860960)
+     - a fix for broken GCC 7 builds (Closes: #853342, #853539)
+     - a possible fix for the hurd-i386 FTBFS in #804122
   * MultiArch support (Closes: #809065)
-  * Updated to debhelper 9, Standards-Version 3.9.8
+  * Updated to debhelper 9, Standards-Version 4.0.0
 
- -- Tom Lee <debian@tomlee.co>  Fri, 21 Jul 2017 22:46:42 -0700
+ -- Tom Lee <debian@tomlee.co>  Fri, 21 Jul 2017 23:45:51 -0700
 
 capnproto (0.5.3-2) unstable; urgency=medium
 
