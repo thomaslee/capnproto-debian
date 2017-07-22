@@ -1,6 +1,0 @@
-01_fix-hurd-i386.patch
-02_install-cmake-find-pkg.patch
-03_fix-hppa-ftbfs-781787.patch
-04_fix-eagain-test-failure-790571.patch
-05_big-endian-async-unix.patch
-06_fix-hurd-i386-enoprotoopt.patch
