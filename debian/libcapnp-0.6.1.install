@@ -1,0 +1,7 @@
+#!/usr/bin/dh-exec
+
+usr/lib/${DEB_HOST_MULTIARCH}/libcapnp-0.6.1.so
+usr/lib/${DEB_HOST_MULTIARCH}/libcapnp-rpc-0.6.1.so
+usr/lib/${DEB_HOST_MULTIARCH}/libcapnpc-*.so
+usr/lib/${DEB_HOST_MULTIARCH}/libkj-0.6.1.so
+usr/lib/${DEB_HOST_MULTIARCH}/libkj-async-0.6.1.so
