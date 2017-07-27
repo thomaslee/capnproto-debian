@@ -7,8 +7,8 @@ Build-Depends: debhelper (>= 9), dh-exec (>= 0.3), gcc (>= 4.7),
  xsltproc, dh-autoreconf, netbase
 Standards-Version: 4.0.0
 Homepage: https://capnproto.org/
-Vcs-Git: git://github.com/thomaslee/capnproto-debian
-Vcs-Browser: http://github.com/thomaslee/capnproto-debian
+Vcs-Git: https://github.com/thomaslee/capnproto-debian
+Vcs-Browser: https://github.com/thomaslee/capnproto-debian
 
 Package: libcapnp-0.6.1
 Architecture: any
