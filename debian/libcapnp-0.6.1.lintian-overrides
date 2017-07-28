@@ -1,7 +1,5 @@
-#!/usr/bin/dh-exec
-
-libcapnp-0.6.1 binary: no-symbols-control-file usr/lib/${DEB_HOST_MULTIARCH}/libcapnp-0.6.1.so
-libcapnp-0.6.1 binary: no-symbols-control-file usr/lib/${DEB_HOST_MULTIARCH}/libcapnp-rpc-0.6.1.so
-libcapnp-0.6.1 binary: no-symbols-control-file usr/lib/${DEB_HOST_MULTIARCH}/libcapnpc-0.6.1.so
-libcapnp-0.6.1 binary: no-symbols-control-file usr/lib/${DEB_HOST_MULTIARCH}/libkj-0.6.1.so
-libcapnp-0.6.1 binary: no-symbols-control-file usr/lib/${DEB_HOST_MULTIARCH}/libkj-async-0.6.1.so
+libcapnp-0.6.1 binary: no-symbols-control-file usr/lib/*/libcapnp-0.6.1.so
+libcapnp-0.6.1 binary: no-symbols-control-file usr/lib/*/libcapnp-rpc-0.6.1.so
+libcapnp-0.6.1 binary: no-symbols-control-file usr/lib/*/libcapnpc-0.6.1.so
+libcapnp-0.6.1 binary: no-symbols-control-file usr/lib/*/libkj-0.6.1.so
+libcapnp-0.6.1 binary: no-symbols-control-file usr/lib/*/libkj-async-0.6.1.so
