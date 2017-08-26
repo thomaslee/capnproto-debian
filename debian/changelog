@@ -7,8 +7,9 @@ capnproto (0.6.1-1) unstable; urgency=medium
   * MultiArch support (Closes: #809065)
   * Clean up some Lintian gripes
   * Updated to debhelper 9, Standards-Version 4.0.0
+  * License in debian/copyright changed from BSD-2-clause to MIT
 
- -- Tom Lee <debian@tomlee.co>  Wed, 26 Jul 2017 22:41:58 -0700
+ -- Tom Lee <debian@tomlee.co>  Sat, 26 Aug 2017 10:54:20 -0700
 
 capnproto (0.5.3-2) unstable; urgency=medium
 
