@@ -25,3 +25,4 @@ says to run tests in addition to building.  This can be omitted to make the
 build slightly faster, but running tests and reporting failures back to the
 developers helps us out!
 
+This repositoty has Travis configuration to build .deb packages using GCC 7.
