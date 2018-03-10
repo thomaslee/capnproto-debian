@@ -1,0 +1,14 @@
+sudo: required
+language: generic
+
+services:
+  - docker
+
+env:
+  - TRAVIS_DEBIAN_DERIVATIVE: ubuntu
+  - TRAVIS_DEBIAN_DISTRIBUTION: xenial
+  - TRAVIS_DEBIAN_EXTRA_REPOSITORY: '"http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu xenial main"'
+
+script:
+  - wget -O- http://travis.debian.net/script.sh | sh -
+
