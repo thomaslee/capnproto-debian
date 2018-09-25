@@ -63,4 +63,3 @@ Description: tool for working with the Cap'n Proto data interchange format
  This package contains a small suite of tools for developing & maintaining
  your Cap'n Proto schema files, including a code generator for compiling
  your schema files to supported languages.
-
