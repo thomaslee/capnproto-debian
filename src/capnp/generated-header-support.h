@@ -21,8 +21,7 @@
 
 // This file is included from all generated headers.
 
-#ifndef CAPNP_GENERATED_HEADER_SUPPORT_H_
-#define CAPNP_GENERATED_HEADER_SUPPORT_H_
+#pragma once
 
 #if defined(__GNUC__) && !defined(CAPNP_HEADER_WARNINGS)
 #pragma GCC system_header
@@ -36,6 +35,7 @@
 #include "any.h"
 #include <kj/string.h>
 #include <kj/string-tree.h>
+#include <kj/hash.h>
 
 namespace capnp {
 
@@ -403,5 +403,3 @@ inline constexpr uint sizeInWords() {
       static constexpr ::capnp::_::RawSchema const* schema = &::capnp::schemas::s_##id;
 
 #endif  // CAPNP_LITE, else
-
-#endif  // CAPNP_GENERATED_HEADER_SUPPORT_H_

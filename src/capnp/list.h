@@ -19,8 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef CAPNP_LIST_H_
-#define CAPNP_LIST_H_
+#pragma once
 
 #if defined(__GNUC__) && !defined(CAPNP_HEADER_WARNINGS)
 #pragma GCC system_header
@@ -124,6 +123,10 @@ struct List<T, Kind::PRIMITIVE> {
     inline Iterator begin() const { return Iterator(this, 0); }
     inline Iterator end() const { return Iterator(this, size()); }
 
+    inline MessageSize totalSize() const {
+      return reader.totalSize().asPublic();
+    }
+
   private:
     _::ListReader reader;
     template <typename U, Kind K>
@@ -219,6 +222,10 @@ struct List<T, Kind::STRUCT> {
     typedef _::IndexingIterator<const Reader, typename T::Reader> Iterator;
     inline Iterator begin() const { return Iterator(this, 0); }
     inline Iterator end() const { return Iterator(this, size()); }
+
+    inline MessageSize totalSize() const {
+      return reader.totalSize().asPublic();
+    }
 
   private:
     _::ListReader reader;
@@ -343,6 +350,10 @@ struct List<List<T>, Kind::LIST> {
     inline Iterator begin() const { return Iterator(this, 0); }
     inline Iterator end() const { return Iterator(this, size()); }
 
+    inline MessageSize totalSize() const {
+      return reader.totalSize().asPublic();
+    }
+
   private:
     _::ListReader reader;
     template <typename U, Kind K>
@@ -452,6 +463,10 @@ struct List<T, Kind::BLOB> {
     inline Iterator begin() const { return Iterator(this, 0); }
     inline Iterator end() const { return Iterator(this, size()); }
 
+    inline MessageSize totalSize() const {
+      return reader.totalSize().asPublic();
+    }
+
   private:
     _::ListReader reader;
     template <typename U, Kind K>
@@ -542,5 +557,3 @@ struct iterator_traits<capnp::_::IndexingIterator<Container, Element>>
 
 }  // namespace std
 #endif  // KJ_STD_COMPAT
-
-#endif  // CAPNP_LIST_H_

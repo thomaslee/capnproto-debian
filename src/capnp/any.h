@@ -19,8 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef CAPNP_ANY_H_
-#define CAPNP_ANY_H_
+#pragma once
 
 #if defined(__GNUC__) && !defined(CAPNP_HEADER_WARNINGS)
 #pragma GCC system_header
@@ -30,6 +29,7 @@
 #include "pointer-helpers.h"
 #include "orphan.h"
 #include "list.h"
+#include <kj/windows-sanity.h>  // work-around macro conflict with `VOID`
 
 namespace capnp {
 
@@ -105,9 +105,9 @@ struct AnyPointer {
     inline bool isList() const { return getPointerType() == PointerType::LIST; }
     inline bool isCapability() const { return getPointerType() == PointerType::CAPABILITY; }
 
-    Equality equals(AnyPointer::Reader right);
-    bool operator==(AnyPointer::Reader right);
-    inline bool operator!=(AnyPointer::Reader right) {
+    Equality equals(AnyPointer::Reader right) const;
+    bool operator==(AnyPointer::Reader right) const;
+    inline bool operator!=(AnyPointer::Reader right) const {
       return !(*this == right);
     }
 
@@ -159,13 +159,13 @@ struct AnyPointer {
     inline bool isList() { return getPointerType() == PointerType::LIST; }
     inline bool isCapability() { return getPointerType() == PointerType::CAPABILITY; }
 
-    inline Equality equals(AnyPointer::Reader right) {
+    inline Equality equals(AnyPointer::Reader right) const {
       return asReader().equals(right);
     }
-    inline bool operator==(AnyPointer::Reader right) {
+    inline bool operator==(AnyPointer::Reader right) const {
       return asReader() == right;
     }
-    inline bool operator!=(AnyPointer::Reader right) {
+    inline bool operator!=(AnyPointer::Reader right) const {
       return !(*this == right);
     }
 
@@ -408,6 +408,10 @@ struct List<AnyPointer, Kind::OTHER> {
     inline Iterator begin() const { return Iterator(this, 0); }
     inline Iterator end() const { return Iterator(this, size()); }
 
+    inline MessageSize totalSize() const {
+      return reader.totalSize().asPublic();
+    }
+
   private:
     _::ListReader reader;
     template <typename U, Kind K>
@@ -461,10 +465,12 @@ public:
   inline Reader(T&& value)
       : _reader(_::PointerHelpers<FromReader<T>>::getInternalReader(kj::fwd<T>(value))) {}
 
-  kj::ArrayPtr<const byte> getDataSection() {
+  inline MessageSize totalSize() const { return _reader.totalSize().asPublic(); }
+
+  kj::ArrayPtr<const byte> getDataSection() const {
     return _reader.getDataSectionAsBlob();
   }
-  List<AnyPointer>::Reader getPointerSection() {
+  List<AnyPointer>::Reader getPointerSection() const {
     return List<AnyPointer>::Reader(_reader.getPointerSectionAsList());
   }
 
@@ -472,9 +478,9 @@ public:
     return _reader.canonicalize();
   }
 
-  Equality equals(AnyStruct::Reader right);
-  bool operator==(AnyStruct::Reader right);
-  inline bool operator!=(AnyStruct::Reader right) {
+  Equality equals(AnyStruct::Reader right) const;
+  bool operator==(AnyStruct::Reader right) const;
+  inline bool operator!=(AnyStruct::Reader right) const {
     return !(*this == right);
   }
 
@@ -483,6 +489,11 @@ public:
     // T must be a struct type.
     return typename T::Reader(_reader);
   }
+
+  template <typename T>
+  ReaderFor<T> as(StructSchema schema) const;
+  // T must be DynamicStruct. Defined in dynamic.h.
+
 private:
   _::StructReader _reader;
 
@@ -511,13 +522,13 @@ public:
     return List<AnyPointer>::Builder(_builder.getPointerSectionAsList());
   }
 
-  inline Equality equals(AnyStruct::Reader right) {
+  inline Equality equals(AnyStruct::Reader right) const {
     return asReader().equals(right);
   }
-  inline bool operator==(AnyStruct::Reader right) {
+  inline bool operator==(AnyStruct::Reader right) const {
     return asReader() == right;
   }
-  inline bool operator!=(AnyStruct::Reader right) {
+  inline bool operator!=(AnyStruct::Reader right) const {
     return !(*this == right);
   }
 
@@ -529,6 +540,11 @@ public:
     // T must be a struct type.
     return typename T::Builder(_builder);
   }
+
+  template <typename T>
+  BuilderFor<T> as(StructSchema schema);
+  // T must be DynamicStruct. Defined in dynamic.h.
+
 private:
   _::StructBuilder _builder;
   friend class Orphanage;
@@ -572,6 +588,10 @@ public:
   typedef _::IndexingIterator<const Reader, typename AnyStruct::Reader> Iterator;
   inline Iterator begin() const { return Iterator(this, 0); }
   inline Iterator end() const { return Iterator(this, size()); }
+
+  inline MessageSize totalSize() const {
+    return reader.totalSize().asPublic();
+  }
 
 private:
   _::ListReader reader;
@@ -627,18 +647,22 @@ public:
       : _reader(_::PointerHelpers<FromReader<T>>::getInternalReader(kj::fwd<T>(value))) {}
 #endif
 
-  inline ElementSize getElementSize() { return _reader.getElementSize(); }
-  inline uint size() { return unbound(_reader.size() / ELEMENTS); }
+  inline ElementSize getElementSize() const { return _reader.getElementSize(); }
+  inline uint size() const { return unbound(_reader.size() / ELEMENTS); }
 
-  inline kj::ArrayPtr<const byte> getRawBytes() { return _reader.asRawBytes(); }
+  inline kj::ArrayPtr<const byte> getRawBytes() const { return _reader.asRawBytes(); }
 
-  Equality equals(AnyList::Reader right);
-  bool operator==(AnyList::Reader right);
-  inline bool operator!=(AnyList::Reader right) {
+  Equality equals(AnyList::Reader right) const;
+  bool operator==(AnyList::Reader right) const;
+  inline bool operator!=(AnyList::Reader right) const {
     return !(*this == right);
   }
 
-  template <typename T> ReaderFor<T> as() {
+  inline MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+  template <typename T> ReaderFor<T> as() const {
     // T must be List<U>.
     return ReaderFor<T>(_reader);
   }
@@ -666,11 +690,11 @@ public:
   inline ElementSize getElementSize() { return _builder.getElementSize(); }
   inline uint size() { return unbound(_builder.size() / ELEMENTS); }
 
-  Equality equals(AnyList::Reader right);
-  inline bool operator==(AnyList::Reader right) {
+  Equality equals(AnyList::Reader right) const;
+  inline bool operator==(AnyList::Reader right) const{
     return asReader() == right;
   }
-  inline bool operator!=(AnyList::Reader right) {
+  inline bool operator!=(AnyList::Reader right) const{
     return !(*this == right);
   }
 
@@ -1069,5 +1093,3 @@ inline kj::Own<PipelineHook> PipelineHook::from(Pipeline&& pipeline) {
 #endif  // !CAPNP_LITE
 
 }  // namespace capnp
-
-#endif  // CAPNP_ANY_H_

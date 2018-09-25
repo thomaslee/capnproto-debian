@@ -19,8 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef KJ_ASYNC_H_
-#define KJ_ASYNC_H_
+#pragma once
 
 #if defined(__GNUC__) && !KJ_HEADER_WARNINGS
 #pragma GCC system_header
@@ -45,7 +44,7 @@ template <typename T>
 struct PromiseFulfillerPair;
 
 template <typename Func, typename T>
-using PromiseForResult = Promise<_::JoinPromises<_::ReturnType<Func, T>>>;
+using PromiseForResult = _::ReducePromises<_::ReturnType<Func, T>>;
 // Evaluates to the type of Promise for the result of calling functor type Func with parameter type
 // T.  If T is void, then the promise is for the result of calling Func with no arguments.  If
 // Func itself returns a promise, the promises are joined, so you never get Promise<Promise<T>>.
@@ -235,6 +234,19 @@ public:
   // TODO(someday):  Implement fibers, and let them call wait() even when they are handling an
   //   event.
 
+  bool poll(WaitScope& waitScope);
+  // Returns true if a call to wait() would complete without blocking, false if it would block.
+  //
+  // If the promise is not yet resolved, poll() will pump the event loop and poll for I/O in an
+  // attempt to resolve it. Only when there is nothing left to do will it return false.
+  //
+  // Generally, poll() is most useful in tests. Often, you may want to verify that a promise does
+  // not resolve until some specific event occurs. To do so, poll() the promise before the event to
+  // verify it isn't resolved, then trigger the event, then poll() again to verify that it resolves.
+  // The first poll() verifies that the promise doesn't resolve early, which would otherwise be
+  // hard to do deterministically. The second poll() allows you to check that the promise has
+  // resolved and avoid a wait() that might deadlock in the case that it hasn't.
+
   ForkedPromise<T> fork() KJ_WARN_UNUSED_RESULT;
   // Forks the promise, so that multiple different clients can independently wait on the result.
   // `T` must be copy-constructable for this to work.  Or, in the special case where `T` is
@@ -269,7 +281,7 @@ public:
   // processes it.
   //
   // `errorHandler` is a function that takes `kj::Exception&&`, like the second parameter to
-  // `then()`, except that it must return void.  We make you specify this because otherwise it's
+  // `then()`, or the parameter to `catch_()`.  We make you specify this because otherwise it's
   // easy to forget to handle errors in a promise that you never use.  You may specify nullptr for
   // the error handler if you are sure that ignoring errors is fine, or if you know that you'll
   // eventually wait on the promise somewhere.
@@ -304,7 +316,7 @@ private:
   friend PromiseFulfillerPair<U> newPromiseAndFulfiller();
   template <typename>
   friend class _::ForkHub;
-  friend class _::TaskSetImpl;
+  friend class TaskSet;
   friend Promise<void> _::yield();
   friend class _::NeverDone;
   template <typename U>
@@ -470,7 +482,7 @@ Promise<T> newAdaptedPromise(Params&&... adapterConstructorParams);
 
 template <typename T>
 struct PromiseFulfillerPair {
-  Promise<_::JoinPromises<T>> promise;
+  _::ReducePromises<T> promise;
   Own<PromiseFulfiller<T>> fulfiller;
 };
 
@@ -487,6 +499,109 @@ PromiseFulfillerPair<T> newPromiseAndFulfiller();
 // `newPromiseAndFulfiller<Promise<U>>()` will produce a promise of type `Promise<U>` but the
 // fulfiller will be of type `PromiseFulfiller<Promise<U>>`.  Thus you pass a `Promise<U>` to the
 // `fulfill()` callback, and the promises are chained.
+
+// =======================================================================================
+// Canceler
+
+class Canceler {
+  // A Canceler can wrap some set of Promises and then forcefully cancel them on-demand, or
+  // implicitly when the Canceler is destroyed.
+  //
+  // The cancellation is done in such a way that once cancel() (or the Canceler's destructor)
+  // returns, it's guaranteed that the promise has already been canceled and destroyed. This
+  // guarantee is important for enforcing ownership constraints. For example, imagine that Alice
+  // calls a method on Bob that returns a Promise. That Promise encapsulates a task that uses Bob's
+  // internal state. But, imagine that Alice does not own Bob, and indeed Bob might be destroyed
+  // at random without Alice having canceled the promise. In this case, it is necessary for Bob to
+  // ensure that the promise will be forcefully canceled. Bob can do this by constructing a
+  // Canceler and using it to wrap promises before returning them to callers. When Bob is
+  // destroyed, the Canceler is destroyed too, and all promises Bob wrapped with it throw errors.
+  //
+  // Note that another common strategy for cancelation is to use exclusiveJoin() to join a promise
+  // with some "cancellation promise" which only resolves if the operation should be canceled. The
+  // cancellation promise could itself be created by newPromiseAndFulfiller<void>(), and thus
+  // calling the PromiseFulfiller cancels the operation. There is a major problem with this
+  // approach: upon invoking the fulfiller, an arbitrary amount of time may pass before the
+  // exclusive-joined promise actually resolves and cancels its other fork. During that time, the
+  // task might continue to execute. If it holds pointers to objects that have been destroyed, this
+  // might cause segfaults. Thus, it is safer to use a Canceler.
+
+public:
+  inline Canceler() {}
+  ~Canceler() noexcept(false);
+  KJ_DISALLOW_COPY(Canceler);
+
+  template <typename T>
+  Promise<T> wrap(Promise<T> promise) {
+    return newAdaptedPromise<T, AdapterImpl<T>>(*this, kj::mv(promise));
+  }
+
+  void cancel(StringPtr cancelReason);
+  void cancel(const Exception& exception);
+  // Cancel all previously-wrapped promises that have not already completed, causing them to throw
+  // the given exception. If you provide just a description message instead of an exception, then
+  // an exception object will be constructed from it -- but only if there are requests to cancel.
+
+  void release();
+  // Releases previously-wrapped promises, so that they will not be canceled regardless of what
+  // happens to this Canceler.
+
+  bool isEmpty() const { return list == nullptr; }
+  // Indicates if any previously-wrapped promises are still executing. (If this returns false, then
+  // cancel() would be a no-op.)
+
+private:
+  class AdapterBase {
+  public:
+    AdapterBase(Canceler& canceler);
+    ~AdapterBase() noexcept(false);
+
+    virtual void cancel(Exception&& e) = 0;
+
+  private:
+    Maybe<Maybe<AdapterBase&>&> prev;
+    Maybe<AdapterBase&> next;
+    friend class Canceler;
+  };
+
+  template <typename T>
+  class AdapterImpl: public AdapterBase {
+  public:
+    AdapterImpl(PromiseFulfiller<T>& fulfiller,
+                Canceler& canceler, Promise<T> inner)
+        : AdapterBase(canceler),
+          fulfiller(fulfiller),
+          inner(inner.then(
+              [&fulfiller](T&& value) { fulfiller.fulfill(kj::mv(value)); },
+              [&fulfiller](Exception&& e) { fulfiller.reject(kj::mv(e)); })
+              .eagerlyEvaluate(nullptr)) {}
+
+    void cancel(Exception&& e) override {
+      fulfiller.reject(kj::mv(e));
+      inner = nullptr;
+    }
+
+  private:
+    PromiseFulfiller<T>& fulfiller;
+    Promise<void> inner;
+  };
+
+  Maybe<AdapterBase&> list;
+};
+
+template <>
+class Canceler::AdapterImpl<void>: public AdapterBase {
+public:
+  AdapterImpl(kj::PromiseFulfiller<void>& fulfiller,
+              Canceler& canceler, kj::Promise<void> inner);
+  void cancel(kj::Exception&& e) override;
+  // These must be defined in async.c++ to prevent translation units compiled by MSVC from trying to
+  // link with symbols defined in async.c++ merely because they included async.h.
+
+private:
+  kj::PromiseFulfiller<void>& fulfiller;
+  kj::Promise<void> inner;
+};
 
 // =======================================================================================
 // TaskSet
@@ -509,8 +624,8 @@ public:
   };
 
   TaskSet(ErrorHandler& errorHandler);
-  // `loop` will be used to wait on promises.  `errorHandler` will be executed any time a task
-  // throws an exception, and will execute within the given EventLoop.
+  // `errorHandler` will be executed any time a task throws an exception, and will execute within
+  // the given EventLoop.
 
   ~TaskSet() noexcept(false);
 
@@ -519,8 +634,19 @@ public:
   kj::String trace();
   // Return debug info about all promises currently in the TaskSet.
 
+  bool isEmpty() { return tasks == nullptr; }
+  // Check if any tasks are running.
+
+  Promise<void> onEmpty();
+  // Returns a promise that fulfills the next time the TaskSet is empty. Only one such promise can
+  // exist at a time.
+
 private:
-  Own<_::TaskSetImpl> impl;
+  class Task;
+
+  TaskSet::ErrorHandler& errorHandler;
+  Maybe<Own<Task>> tasks;
+  Maybe<Own<PromiseFulfiller<void>>> emptyFulfiller;
 };
 
 // =======================================================================================
@@ -640,7 +766,7 @@ private:
   _::Event** tail = &head;
   _::Event** depthFirstInsertPoint = &head;
 
-  Own<_::TaskSetImpl> daemons;
+  Own<TaskSet> daemons;
 
   bool turn();
   void setRunnable(bool runnable);
@@ -650,6 +776,7 @@ private:
   friend void _::detach(kj::Promise<void>&& promise);
   friend void _::waitImpl(Own<_::PromiseNode>&& node, _::ExceptionOrValue& result,
                           WaitScope& waitScope);
+  friend bool _::pollImpl(_::PromiseNode& node, WaitScope& waitScope);
   friend class _::Event;
   friend class WaitScope;
 };
@@ -668,15 +795,18 @@ public:
   inline ~WaitScope() { loop.leaveScope(); }
   KJ_DISALLOW_COPY(WaitScope);
 
+  void poll();
+  // Pumps the event queue and polls for I/O until there's nothing left to do (without blocking).
+
 private:
   EventLoop& loop;
   friend class EventLoop;
   friend void _::waitImpl(Own<_::PromiseNode>&& node, _::ExceptionOrValue& result,
                           WaitScope& waitScope);
+  friend bool _::pollImpl(_::PromiseNode& node, WaitScope& waitScope);
 };
 
 }  // namespace kj
 
+#define KJ_ASYNC_H_INCLUDED
 #include "async-inl.h"
-
-#endif  // KJ_ASYNC_H_

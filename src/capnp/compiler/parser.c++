@@ -20,7 +20,7 @@
 // THE SOFTWARE.
 
 #include "parser.h"
-#include "md5.h"
+#include "type-id.h"
 #include <capnp/dynamic.h>
 #include <kj/debug.h>
 #if !_MSC_VER
@@ -31,7 +31,9 @@
 #include <fcntl.h>
 
 #if _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <wincrypt.h>
 #undef VOID
 #endif
 
@@ -57,81 +59,6 @@ uint64_t generateRandomId() {
   KJ_SYSCALL(n = read(fd, &result, sizeof(result)), "/dev/urandom");
   KJ_ASSERT(n == sizeof(result), "Incomplete read from /dev/urandom.", n);
 #endif
-
-  return result | (1ull << 63);
-}
-
-uint64_t generateChildId(uint64_t parentId, kj::StringPtr childName) {
-  // Compute ID by MD5 hashing the concatenation of the parent ID and the declaration name, and
-  // then taking the first 8 bytes.
-
-  kj::byte parentIdBytes[sizeof(uint64_t)];
-  for (uint i = 0; i < sizeof(uint64_t); i++) {
-    parentIdBytes[i] = (parentId >> (i * 8)) & 0xff;
-  }
-
-  Md5 md5;
-  md5.update(kj::arrayPtr(parentIdBytes, kj::size(parentIdBytes)));
-  md5.update(childName);
-
-  kj::ArrayPtr<const kj::byte> resultBytes = md5.finish();
-
-  uint64_t result = 0;
-  for (uint i = 0; i < sizeof(uint64_t); i++) {
-    result = (result << 8) | resultBytes[i];
-  }
-
-  return result | (1ull << 63);
-}
-
-uint64_t generateGroupId(uint64_t parentId, uint16_t groupIndex) {
-  // Compute ID by MD5 hashing the concatenation of the parent ID and the group index, and
-  // then taking the first 8 bytes.
-
-  kj::byte bytes[sizeof(uint64_t) + sizeof(uint16_t)];
-  for (uint i = 0; i < sizeof(uint64_t); i++) {
-    bytes[i] = (parentId >> (i * 8)) & 0xff;
-  }
-  for (uint i = 0; i < sizeof(uint16_t); i++) {
-    bytes[sizeof(uint64_t) + i] = (groupIndex >> (i * 8)) & 0xff;
-  }
-
-  Md5 md5;
-  md5.update(bytes);
-
-  kj::ArrayPtr<const kj::byte> resultBytes = md5.finish();
-
-  uint64_t result = 0;
-  for (uint i = 0; i < sizeof(uint64_t); i++) {
-    result = (result << 8) | resultBytes[i];
-  }
-
-  return result | (1ull << 63);
-}
-
-uint64_t generateMethodParamsId(uint64_t parentId, uint16_t methodOrdinal, bool isResults) {
-  // Compute ID by MD5 hashing the concatenation of the parent ID, the method ordinal, and a
-  // boolean indicating whether this is the params or the results, and then taking the first 8
-  // bytes.
-
-  kj::byte bytes[sizeof(uint64_t) + sizeof(uint16_t) + 1];
-  for (uint i = 0; i < sizeof(uint64_t); i++) {
-    bytes[i] = (parentId >> (i * 8)) & 0xff;
-  }
-  for (uint i = 0; i < sizeof(uint16_t); i++) {
-    bytes[sizeof(uint64_t) + i] = (methodOrdinal >> (i * 8)) & 0xff;
-  }
-  bytes[sizeof(bytes) - 1] = isResults;
-
-  Md5 md5;
-  md5.update(bytes);
-
-  kj::ArrayPtr<const kj::byte> resultBytes = md5.finish();
-
-  uint64_t result = 0;
-  for (uint i = 0; i < sizeof(uint64_t); i++) {
-    result = (result << 8) | resultBytes[i];
-  }
 
   return result | (1ull << 63);
 }
@@ -505,12 +432,14 @@ CapnpParser::CapnpParser(Orphanage orphanageParam, ErrorReporter& errorReporterP
                     initLocation(location, builder);
                     return result;
                   }),
-              p::transform(stringLiteral,
-                  [this](Located<Text::Reader>&& value) -> Orphan<Expression> {
+              p::transform(p::oneOrMore(stringLiteral),
+                  [this](kj::Array<Located<Text::Reader>>&& value) -> Orphan<Expression> {
                     auto result = orphanage.newOrphan<Expression>();
                     auto builder = result.get();
-                    builder.setString(value.value);
-                    value.copyLocationTo(builder);
+                    builder.setString(kj::strArray(
+                        KJ_MAP(part, value) { return part.value; }, ""));
+                    builder.setStartByte(value.front().startByte);
+                    builder.setEndByte(value.back().endByte);
                     return result;
                   }),
               p::transform(binaryLiteral,

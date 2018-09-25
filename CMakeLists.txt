@@ -1,18 +1,18 @@
-project("Cap'n Proto" CXX)
 cmake_minimum_required(VERSION 3.1)
-set(VERSION 0.6.1)
+project("Cap'n Proto" CXX)
+set(VERSION 0.7.0)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(CheckIncludeFileCXX)
 include(GNUInstallDirs)
 if(MSVC)
-  check_include_file_cxx(initializer_list HAS_CXX11)
+  check_include_file_cxx(initializer_list HAS_CXX14)
 else()
-  check_include_file_cxx(initializer_list HAS_CXX11 "-std=gnu++0x")
+  check_include_file_cxx(initializer_list HAS_CXX14 "-std=gnu++1y")
 endif()
-if(NOT HAS_CXX11)
-  message(SEND_ERROR "Requires a C++11 compiler and standard library.")
+if(NOT HAS_CXX14)
+  message(SEND_ERROR "Requires a C++14 compiler and standard library.")
 endif()
 
 # these arguments are passed to all install(TARGETS) calls
@@ -66,7 +66,7 @@ else()
   add_compile_options(-Wall -Wextra -Wno-strict-aliasing -Wno-sign-compare -Wno-unused-parameter)
 
   if(DEFINED CMAKE_CXX_EXTENSIONS AND NOT CMAKE_CXX_EXTENSIONS)
-    message(SEND_ERROR "Cap'n Proto requires compiler-specific extensions (e.g., -std=gnu++11). Please leave CMAKE_CXX_EXTENSIONS undefined or ON.")
+    message(SEND_ERROR "Cap'n Proto requires compiler-specific extensions (e.g., -std=gnu++14). Please leave CMAKE_CXX_EXTENSIONS undefined or ON.")
   endif()
 
   if (NOT ANDROID)
@@ -81,11 +81,17 @@ add_subdirectory(src)
 # Install ======================================================================
 
 include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/cmake/CapnProtoConfigVersion.cmake"
-  VERSION ${VERSION}
-  COMPATIBILITY AnyNewerVersion
-)
+
+# We used to use write_basic_package_version_file(), but since the autotools build needs to install
+# a config version script as well, I copied the AnyNewerVersion template from my CMake Modules
+# directory to Cap'n Proto's cmake/ directory (alternatively, we could make the autotools build
+# depend on CMake).
+#
+# We might as well use the local copy of the template. In the future we can modify the project's
+# version compatibility policy just by changing that file.
+set(PACKAGE_VERSION ${VERSION})
+configure_file(cmake/CapnProtoConfigVersion.cmake.in cmake/CapnProtoConfigVersion.cmake @ONLY)
+
 set(CONFIG_PACKAGE_LOCATION ${CMAKE_INSTALL_LIBDIR}/cmake/CapnProto)
 
 configure_package_config_file(cmake/CapnProtoConfig.cmake.in
@@ -120,22 +126,25 @@ if(NOT MSVC)  # Don't install pkg-config files when building with MSVC
   set(PTHREAD_CFLAGS "-pthread")
   set(STDLIB_FLAG)  # TODO: Unsupported
 
-  configure_file(kj.pc.in "${CMAKE_CURRENT_BINARY_DIR}/kj.pc" @ONLY)
-  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/kj.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
-
-  configure_file(capnp.pc.in "${CMAKE_CURRENT_BINARY_DIR}/capnp.pc" @ONLY)
-  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/capnp.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+  set(CAPNP_PKG_CONFIG_FILES
+    pkgconfig/kj.pc
+    pkgconfig/capnp.pc
+  )
 
   if(NOT CAPNP_LITE)
-    configure_file(kj-async.pc.in "${CMAKE_CURRENT_BINARY_DIR}/kj-async.pc" @ONLY)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/kj-async.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
-
-    configure_file(capnp-rpc.pc.in "${CMAKE_CURRENT_BINARY_DIR}/capnp-rpc.pc" @ONLY)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/capnp-rpc.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
-
-    configure_file(capnp-json.pc.in "${CMAKE_CURRENT_BINARY_DIR}/capnp-json.pc" @ONLY)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/capnp-json.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+    list(APPEND CAPNP_PKG_CONFIG_FILES
+      pkgconfig/kj-async.pc
+      pkgconfig/kj-http.pc
+      pkgconfig/kj-test.pc
+      pkgconfig/capnp-rpc.pc
+      pkgconfig/capnp-json.pc
+    )
   endif()
+
+  foreach(pcfile ${CAPNP_PKG_CONFIG_FILES})
+    configure_file(${pcfile}.in "${CMAKE_CURRENT_BINARY_DIR}/${pcfile}" @ONLY)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${pcfile}" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+  endforeach()
 
   unset(STDLIB_FLAG)
   unset(PTHREAD_CFLAGS)

@@ -19,8 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef CAPNP_ARENA_H_
-#define CAPNP_ARENA_H_
+#pragma once
 
 #if defined(__GNUC__) && !defined(CAPNP_HEADER_WARNINGS)
 #pragma GCC system_header
@@ -38,7 +37,7 @@
 #include "common.h"
 #include "message.h"
 #include "layout.h"
-#include <unordered_map>
+#include <kj/map.h>
 
 #if !CAPNP_LITE
 #include "capability.h"
@@ -242,8 +241,8 @@ private:
   // Optimize for single-segment messages so that small messages are handled quickly.
   SegmentReader segment0;
 
-  typedef std::unordered_map<uint, kj::Own<SegmentReader>> SegmentMap;
-  kj::MutexGuarded<kj::Maybe<kj::Own<SegmentMap>>> moreSegments;
+  typedef kj::HashMap<uint, kj::Own<SegmentReader>> SegmentMap;
+  kj::MutexGuarded<kj::Maybe<SegmentMap>> moreSegments;
   // We need to mutex-guard the segment map because we lazily initialize segments when they are
   // first requested, but a Reader is allowed to be used concurrently in multiple threads.  Luckily
   // this only applies to large messages.
@@ -492,5 +491,3 @@ inline bool SegmentBuilder::tryExtend(word* from, word* to) {
 
 }  // namespace _ (private)
 }  // namespace capnp
-
-#endif  // CAPNP_ARENA_H_

@@ -19,8 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef ERROR_REPORTER_H_
-#define ERROR_REPORTER_H_
+#pragma once
 
 #if defined(__GNUC__) && !defined(CAPNP_HEADER_WARNINGS)
 #pragma GCC system_header
@@ -30,6 +29,7 @@
 #include <kj/string.h>
 #include <kj/exception.h>
 #include <kj/vector.h>
+#include <kj/filesystem.h>
 
 namespace capnp {
 namespace compiler {
@@ -68,7 +68,8 @@ public:
     uint column;
   };
 
-  virtual void addError(kj::StringPtr file, SourcePos start, SourcePos end,
+  virtual void addError(const kj::ReadableDirectory& directory, kj::PathPtr path,
+                        SourcePos start, SourcePos end,
                         kj::StringPtr message) = 0;
   // Report an error at the given location in the given file.
 
@@ -93,5 +94,3 @@ private:
 
 }  // namespace compiler
 }  // namespace capnp
-
-#endif  // ERROR_REPORTER_H_

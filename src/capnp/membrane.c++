@@ -198,6 +198,8 @@ public:
     auto newPipeline = AnyPointer::Pipeline(kj::refcounted<MembranePipelineHook>(
         PipelineHook::from(kj::mv(promise)), policy->addRef(), reverse));
 
+    auto onRevoked = policy->onRevoked();
+
     bool reverse = this->reverse;  // for capture
     auto newPromise = promise.then(kj::mvCapture(policy,
         [reverse](kj::Own<MembranePolicy>&& policy, Response<AnyPointer>&& response) {
@@ -207,6 +209,12 @@ public:
       reader = newRespHook->imbue(reader);
       return Response<AnyPointer>(reader, kj::mv(newRespHook));
     }));
+
+    KJ_IF_MAYBE(r, kj::mv(onRevoked)) {
+      newPromise = newPromise.exclusiveJoin(r->then([]() -> Response<AnyPointer> {
+        KJ_FAIL_REQUIRE("onRevoked() promise resolved; it should only reject");
+      }));
+    }
 
     return RemotePromise<AnyPointer>(kj::mv(newPromise), kj::mv(newPipeline));
   }
@@ -301,33 +309,53 @@ private:
 
 class MembraneHook final: public ClientHook, public kj::Refcounted {
 public:
-  MembraneHook(kj::Own<ClientHook>&& inner, kj::Own<MembranePolicy>&& policy, bool reverse)
-      : inner(kj::mv(inner)), policy(kj::mv(policy)), reverse(reverse) {}
+  MembraneHook(kj::Own<ClientHook>&& inner, kj::Own<MembranePolicy>&& policyParam, bool reverse)
+      : inner(kj::mv(inner)), policy(kj::mv(policyParam)), reverse(reverse) {
+    KJ_IF_MAYBE(r, policy->onRevoked()) {
+      revocationTask = r->eagerlyEvaluate([this](kj::Exception&& exception) {
+        this->inner = newBrokenCap(kj::mv(exception));
+      });
+    }
+  }
 
   static kj::Own<ClientHook> wrap(ClientHook& cap, MembranePolicy& policy, bool reverse) {
     if (cap.getBrand() == MEMBRANE_BRAND) {
       auto& otherMembrane = kj::downcast<MembraneHook>(cap);
-      if (otherMembrane.policy.get() == &policy && otherMembrane.reverse == !reverse) {
+      auto& rootPolicy = policy.rootPolicy();
+      if (&otherMembrane.policy->rootPolicy() == &rootPolicy &&
+          otherMembrane.reverse == !reverse) {
         // Capability that passed across the membrane one way is now passing back the other way.
         // Unwrap it rather than double-wrap it.
-        return otherMembrane.inner->addRef();
+        Capability::Client unwrapped(otherMembrane.inner->addRef());
+        return ClientHook::from(
+            reverse ? rootPolicy.importInternal(kj::mv(unwrapped), *otherMembrane.policy, policy)
+                    : rootPolicy.exportExternal(kj::mv(unwrapped), *otherMembrane.policy, policy));
       }
     }
 
-    return kj::refcounted<MembraneHook>(cap.addRef(), policy.addRef(), reverse);
+    return ClientHook::from(
+        reverse ? policy.importExternal(Capability::Client(cap.addRef()))
+                : policy.exportInternal(Capability::Client(cap.addRef())));
   }
 
   static kj::Own<ClientHook> wrap(kj::Own<ClientHook> cap, MembranePolicy& policy, bool reverse) {
     if (cap->getBrand() == MEMBRANE_BRAND) {
       auto& otherMembrane = kj::downcast<MembraneHook>(*cap);
-      if (otherMembrane.policy.get() == &policy && otherMembrane.reverse == !reverse) {
+      auto& rootPolicy = policy.rootPolicy();
+      if (&otherMembrane.policy->rootPolicy() == &rootPolicy &&
+          otherMembrane.reverse == !reverse) {
         // Capability that passed across the membrane one way is now passing back the other way.
         // Unwrap it rather than double-wrap it.
-        return otherMembrane.inner->addRef();
+        Capability::Client unwrapped(otherMembrane.inner->addRef());
+        return ClientHook::from(
+            reverse ? rootPolicy.importInternal(kj::mv(unwrapped), *otherMembrane.policy, policy)
+                    : rootPolicy.exportExternal(kj::mv(unwrapped), *otherMembrane.policy, policy));
       }
     }
 
-    return kj::refcounted<MembraneHook>(kj::mv(cap), policy.addRef(), reverse);
+    return ClientHook::from(
+        reverse ? policy.importExternal(Capability::Client(kj::mv(cap)))
+                : policy.exportInternal(Capability::Client(kj::mv(cap))));
   }
 
   Request<AnyPointer, AnyPointer> newCall(
@@ -345,7 +373,8 @@ public:
       // something outside the membrane later. We have to wait before we actually redirect,
       // otherwise behavior will differ depending on whether the promise is resolved.
       KJ_IF_MAYBE(p, whenMoreResolved()) {
-        return newLocalPromiseClient(kj::mv(*p))->newCall(interfaceId, methodId, sizeHint);
+        return newLocalPromiseClient(p->attach(addRef()))
+            ->newCall(interfaceId, methodId, sizeHint);
       }
 
       return ClientHook::from(kj::mv(*r))->newCall(interfaceId, methodId, sizeHint);
@@ -372,7 +401,8 @@ public:
       // something outside the membrane later. We have to wait before we actually redirect,
       // otherwise behavior will differ depending on whether the promise is resolved.
       KJ_IF_MAYBE(p, whenMoreResolved()) {
-        return newLocalPromiseClient(kj::mv(*p))->call(interfaceId, methodId, kj::mv(context));
+        return newLocalPromiseClient(p->attach(addRef()))
+            ->call(interfaceId, methodId, kj::mv(context));
       }
 
       return ClientHook::from(kj::mv(*r))->call(interfaceId, methodId, kj::mv(context));
@@ -380,6 +410,10 @@ public:
       // !reverse because calls to the CallContext go in the opposite direction.
       auto result = inner->call(interfaceId, methodId,
           kj::refcounted<MembraneCallContextHook>(kj::mv(context), policy->addRef(), !reverse));
+
+      KJ_IF_MAYBE(r, policy->onRevoked()) {
+        result.promise = result.promise.exclusiveJoin(kj::mv(*r));
+      }
 
       return {
         kj::mv(result.promise),
@@ -409,6 +443,12 @@ public:
     }
 
     KJ_IF_MAYBE(promise, inner->whenMoreResolved()) {
+      KJ_IF_MAYBE(r, policy->onRevoked()) {
+        *promise = promise->exclusiveJoin(r->then([]() -> kj::Own<ClientHook> {
+          KJ_FAIL_REQUIRE("onRevoked() promise resolved; it should only reject");
+        }));
+      }
+
       return promise->then([this](kj::Own<ClientHook>&& newInner) {
         kj::Own<ClientHook> newResolved = wrap(*newInner, *policy, reverse);
         if (resolved == nullptr) {
@@ -434,6 +474,7 @@ private:
   kj::Own<MembranePolicy> policy;
   bool reverse;
   kj::Maybe<kj::Own<ClientHook>> resolved;
+  kj::Promise<void> revocationTask = nullptr;
 };
 
 kj::Own<ClientHook> membrane(kj::Own<ClientHook> inner, MembranePolicy& policy, bool reverse) {
@@ -441,6 +482,26 @@ kj::Own<ClientHook> membrane(kj::Own<ClientHook> inner, MembranePolicy& policy, 
 }
 
 }  // namespace
+
+Capability::Client MembranePolicy::importExternal(Capability::Client external) {
+  return Capability::Client(kj::refcounted<MembraneHook>(
+      ClientHook::from(kj::mv(external)), addRef(), true));
+}
+
+Capability::Client MembranePolicy::exportInternal(Capability::Client internal) {
+  return Capability::Client(kj::refcounted<MembraneHook>(
+      ClientHook::from(kj::mv(internal)), addRef(), false));
+}
+
+Capability::Client MembranePolicy::importInternal(
+    Capability::Client internal, MembranePolicy& exportPolicy, MembranePolicy& importPolicy) {
+  return kj::mv(internal);
+}
+
+Capability::Client MembranePolicy::exportExternal(
+    Capability::Client external, MembranePolicy& importPolicy, MembranePolicy& exportPolicy) {
+  return kj::mv(external);
+}
 
 Capability::Client membrane(Capability::Client inner, kj::Own<MembranePolicy> policy) {
   return Capability::Client(membrane(

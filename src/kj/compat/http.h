@@ -19,8 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef KJ_COMPAT_HTTP_H_
-#define KJ_COMPAT_HTTP_H_
+#pragma once
 // The KJ HTTP client/server library.
 //
 // This is a simple library which can be used to implement an HTTP client or server. Properties
@@ -65,6 +64,7 @@ namespace kj {
   MACRO(PROPPATCH) \
   MACRO(SEARCH) \
   MACRO(UNLOCK) \
+  MACRO(ACL) \
   /* WebDAV */ \
   \
   MACRO(REPORT) \
@@ -78,15 +78,6 @@ namespace kj {
   MACRO(SUBSCRIBE) \
   MACRO(UNSUBSCRIBE)
   /* UPnP */
-
-#define KJ_HTTP_FOR_EACH_CONNECTION_HEADER(MACRO) \
-  MACRO(connection, "Connection") \
-  MACRO(contentLength, "Content-Length") \
-  MACRO(keepAlive, "Keep-Alive") \
-  MACRO(te, "TE") \
-  MACRO(trailer, "Trailer") \
-  MACRO(transferEncoding, "Transfer-Encoding") \
-  MACRO(upgrade, "Upgrade")
 
 enum class HttpMethod {
   // Enum of known HTTP methods.
@@ -129,22 +120,39 @@ public:
 
   kj::StringPtr toString() const;
 
-  void requireFrom(HttpHeaderTable& table) const;
+  void requireFrom(const HttpHeaderTable& table) const;
   // In debug mode, throws an exception if the HttpHeaderId is not from the given table.
   //
   // In opt mode, no-op.
 
 #define KJ_HTTP_FOR_EACH_BUILTIN_HEADER(MACRO) \
+  /* Headers that are always read-only. */ \
+  MACRO(CONNECTION, "Connection") \
+  MACRO(KEEP_ALIVE, "Keep-Alive") \
+  MACRO(TE, "TE") \
+  MACRO(TRAILER, "Trailer") \
+  MACRO(UPGRADE, "Upgrade") \
+  \
+  /* Headers that are read-only except in the case of a response to a HEAD request. */ \
+  MACRO(CONTENT_LENGTH, "Content-Length") \
+  MACRO(TRANSFER_ENCODING, "Transfer-Encoding") \
+  \
+  /* Headers that are read-only for WebSocket handshakes. */ \
+  MACRO(SEC_WEBSOCKET_KEY, "Sec-WebSocket-Key") \
+  MACRO(SEC_WEBSOCKET_VERSION, "Sec-WebSocket-Version") \
+  MACRO(SEC_WEBSOCKET_ACCEPT, "Sec-WebSocket-Accept") \
+  MACRO(SEC_WEBSOCKET_EXTENSIONS, "Sec-WebSocket-Extensions") \
+  \
+  /* Headers that you can write. */ \
   MACRO(HOST, "Host") \
   MACRO(DATE, "Date") \
   MACRO(LOCATION, "Location") \
   MACRO(CONTENT_TYPE, "Content-Type")
-  // For convenience, these very-common headers are valid for all HttpHeaderTables. You can refer
-  // to them like:
+  // For convenience, these headers are valid for all HttpHeaderTables. You can refer to them like:
   //
   //     HttpHeaderId::HOST
   //
-  // TODO(0.7): Fill this out with more common headers.
+  // TODO(someday): Fill this out with more common headers.
 
 #define DECLARE_HEADER(id, name) \
   static const HttpHeaderId id;
@@ -154,10 +162,11 @@ public:
 #undef DECLARE_HEADER
 
 private:
-  HttpHeaderTable* table;
+  const HttpHeaderTable* table;
   uint id;
 
-  inline explicit constexpr HttpHeaderId(HttpHeaderTable* table, uint id): table(table), id(id) {}
+  inline explicit constexpr HttpHeaderId(const HttpHeaderTable* table, uint id)
+      : table(table), id(id) {}
   friend class HttpHeaderTable;
   friend class HttpHeaders;
 };
@@ -211,16 +220,16 @@ public:
   KJ_DISALLOW_COPY(HttpHeaderTable);  // Can't copy because HttpHeaderId points to the table.
   ~HttpHeaderTable() noexcept(false);
 
-  uint idCount();
+  uint idCount() const;
   // Return the number of IDs in the table.
 
-  kj::Maybe<HttpHeaderId> stringToId(kj::StringPtr name);
+  kj::Maybe<HttpHeaderId> stringToId(kj::StringPtr name) const;
   // Try to find an ID for the given name. The matching is case-insensitive, per the HTTP spec.
   //
   // Note: if `name` contains characters that aren't allowed in HTTP header names, this may return
   //   a bogus value rather than null, due to optimizations used in case-insensitive matching.
 
-  kj::StringPtr idToString(HttpHeaderId id);
+  kj::StringPtr idToString(HttpHeaderId id) const;
   // Get the canonical string name for the given ID.
 
 private:
@@ -236,7 +245,7 @@ class HttpHeaders {
   // exception.
 
 public:
-  explicit HttpHeaders(HttpHeaderTable& table);
+  explicit HttpHeaders(const HttpHeaderTable& table);
 
   KJ_DISALLOW_COPY(HttpHeaders);
   HttpHeaders(HttpHeaders&&) = default;
@@ -252,6 +261,13 @@ public:
   HttpHeaders cloneShallow() const;
   // Creates a shallow clone of the HttpHeaders. The returned object references the same strings
   // as the original, owning none of them.
+
+  bool isWebSocket() const;
+  // Convenience method that checks for the presence of the header `Upgrade: websocket`.
+  //
+  // Note that this does not actually validate that the request is a complete WebSocket handshake
+  // with the correct version number -- such validation will occur if and when you call
+  // acceptWebSocket().
 
   kj::Maybe<kj::StringPtr> get(HttpHeaderId id) const;
   // Read a header.
@@ -296,26 +312,13 @@ public:
   // Takes overship of a string so that it lives until the HttpHeaders object is destroyed. Useful
   // when you've passed a dynamic value to set() or add() or parse*().
 
-  struct ConnectionHeaders {
-    // These headers govern details of the specific HTTP connection or framing of the content.
-    // Hence, they are managed internally within the HTTP library, and never appear in an
-    // HttpHeaders structure.
-
-#define DECLARE_HEADER(id, name) \
-    kj::StringPtr id;
-    KJ_HTTP_FOR_EACH_CONNECTION_HEADER(DECLARE_HEADER)
-#undef DECLARE_HEADER
-  };
-
   struct Request {
     HttpMethod method;
     kj::StringPtr url;
-    ConnectionHeaders connectionHeaders;
   };
   struct Response {
     uint statusCode;
     kj::StringPtr statusText;
-    ConnectionHeaders connectionHeaders;
   };
 
   kj::Maybe<Request> tryParseRequest(kj::ArrayPtr<char> content);
@@ -330,16 +333,41 @@ public:
   // `HttpHeaders` is destroyed, or pass it to `takeOwnership()`.
 
   kj::String serializeRequest(HttpMethod method, kj::StringPtr url,
-                              const ConnectionHeaders& connectionHeaders) const;
+                              kj::ArrayPtr<const kj::StringPtr> connectionHeaders = nullptr) const;
   kj::String serializeResponse(uint statusCode, kj::StringPtr statusText,
-                               const ConnectionHeaders& connectionHeaders) const;
+                               kj::ArrayPtr<const kj::StringPtr> connectionHeaders = nullptr) const;
+  // **Most applications will not use these methods; they are called by the HTTP client and server
+  // implementations.**
+  //
   // Serialize the headers as a complete request or response blob. The blob uses '\r\n' newlines
   // and includes the double-newline to indicate the end of the headers.
+  //
+  // `connectionHeaders`, if provided, contains connection-level headers supplied by the HTTP
+  // implementation, in the order specified by the KJ_HTTP_FOR_EACH_BUILTIN_HEADER macro. These
+  // headers values override any corresponding header value in the HttpHeaders object. The
+  // CONNECTION_HEADERS_COUNT constants below can help you construct this `connectionHeaders` array.
+
+  enum class BuiltinIndicesEnum {
+  #define HEADER_ID(id, name) id,
+    KJ_HTTP_FOR_EACH_BUILTIN_HEADER(HEADER_ID)
+  #undef HEADER_ID
+  };
+
+  struct BuiltinIndices {
+  #define HEADER_ID(id, name) static constexpr uint id = static_cast<uint>(BuiltinIndicesEnum::id);
+    KJ_HTTP_FOR_EACH_BUILTIN_HEADER(HEADER_ID)
+  #undef HEADER_ID
+  };
+
+  static constexpr uint HEAD_RESPONSE_CONNECTION_HEADERS_COUNT = BuiltinIndices::CONTENT_LENGTH;
+  static constexpr uint CONNECTION_HEADERS_COUNT = BuiltinIndices::SEC_WEBSOCKET_KEY;
+  static constexpr uint WEBSOCKET_CONNECTION_HEADERS_COUNT = BuiltinIndices::HOST;
+  // Constants for use with HttpHeaders::serialize*().
 
   kj::String toString() const;
 
 private:
-  HttpHeaderTable* table;
+  const HttpHeaderTable* table;
 
   kj::Array<kj::StringPtr> indexedHeaders;
   // Size is always table->idCount().
@@ -352,29 +380,85 @@ private:
 
   kj::Vector<kj::Array<char>> ownedStrings;
 
-  kj::Maybe<uint> addNoCheck(kj::StringPtr name, kj::StringPtr value);
+  void addNoCheck(kj::StringPtr name, kj::StringPtr value);
 
   kj::StringPtr cloneToOwn(kj::StringPtr str);
 
   kj::String serialize(kj::ArrayPtr<const char> word1,
                        kj::ArrayPtr<const char> word2,
                        kj::ArrayPtr<const char> word3,
-                       const ConnectionHeaders& connectionHeaders) const;
+                       kj::ArrayPtr<const kj::StringPtr> connectionHeaders) const;
 
-  bool parseHeaders(char* ptr, char* end, ConnectionHeaders& connectionHeaders);
+  bool parseHeaders(char* ptr, char* end);
 
   // TODO(perf): Arguably we should store a map, but header sets are never very long
   // TODO(perf): We could optimize for common headers by storing them directly as fields. We could
   //   also add direct accessors for those headers.
 };
 
-class WebSocket {
-public:
-  WebSocket(kj::Own<kj::AsyncIoStream> stream);
-  // Create a WebSocket wrapping the given I/O stream.
+class EntropySource {
+  // Interface for an object that generates entropy. Typically, cryptographically-random entropy
+  // is expected.
+  //
+  // TODO(cleanup): Put this somewhere more general.
 
-  kj::Promise<void> send(kj::ArrayPtr<const byte> message);
-  kj::Promise<void> send(kj::ArrayPtr<const char> message);
+public:
+  virtual void generate(kj::ArrayPtr<byte> buffer) = 0;
+};
+
+class WebSocket {
+  // Interface representincg an open WebSocket session.
+  //
+  // Each side can send and receive data and "close" messages.
+  //
+  // Ping/Pong and message fragmentation are not exposed through this interface. These features of
+  // the underlying WebSocket protocol are not exposed by the browser-level Javascript API either,
+  // and thus applications typically need to implement these features at the application protocol
+  // level instead. The implementation is, however, expected to reply to Ping messages it receives.
+
+public:
+  virtual kj::Promise<void> send(kj::ArrayPtr<const byte> message) = 0;
+  virtual kj::Promise<void> send(kj::ArrayPtr<const char> message) = 0;
+  // Send a message (binary or text). The underlying buffer must remain valid, and you must not
+  // call send() again, until the returned promise resolves.
+
+  virtual kj::Promise<void> close(uint16_t code, kj::StringPtr reason) = 0;
+  // Send a Close message.
+  //
+  // Note that the returned Promise resolves once the message has been sent -- it does NOT wait
+  // for the other end to send a Close reply. The application should await a reply before dropping
+  // the WebSocket object.
+
+  virtual kj::Promise<void> disconnect() = 0;
+  // Sends EOF on the underlying connection without sending a "close" message. This is NOT a clean
+  // shutdown, but is sometimes useful when you want the other end to trigger whatever behavior
+  // it normally triggers when a connection is dropped.
+
+  struct Close {
+    uint16_t code;
+    kj::String reason;
+  };
+
+  typedef kj::OneOf<kj::String, kj::Array<byte>, Close> Message;
+
+  virtual kj::Promise<Message> receive() = 0;
+  // Read one message from the WebSocket and return it. Can only call once at a time. Do not call
+  // again after Close is received.
+
+  virtual kj::Promise<void> pumpTo(WebSocket& other);
+  // Continuously receives messages from this WebSocket and send them to `other`.
+  //
+  // On EOF, calls other.disconnect(), then resolves.
+  //
+  // On other read errors, calls other.close() with the error, then resolves.
+  //
+  // On write error, rejects with the error.
+
+  virtual kj::Maybe<kj::Promise<void>> tryPumpFrom(WebSocket& other);
+  // Either returns null, or performs the equivalent of other.pumpTo(*this). Only returns non-null
+  // if this WebSocket implementation is able to perform the pump in an optimized way, better than
+  // the default implementation of pumpTo(). The default implementation of pumpTo() always tries
+  // calling this first, and the default implementation of tryPumpFrom() always returns null.
 };
 
 class HttpClient {
@@ -392,7 +476,7 @@ public:
     kj::StringPtr statusText;
     const HttpHeaders* headers;
     kj::Own<kj::AsyncInputStream> body;
-    // `statusText` and `headers` remain valid until `body` is dropped.
+    // `statusText` and `headers` remain valid until `body` is dropped or read from.
   };
 
   struct Request {
@@ -424,16 +508,17 @@ public:
     uint statusCode;
     kj::StringPtr statusText;
     const HttpHeaders* headers;
-    kj::OneOf<kj::Own<kj::AsyncInputStream>, kj::Own<WebSocket>> upstreamOrBody;
-    // `statusText` and `headers` remain valid until `upstreamOrBody` is dropped.
+    kj::OneOf<kj::Own<kj::AsyncInputStream>, kj::Own<WebSocket>> webSocketOrBody;
+    // `statusText` and `headers` remain valid until `webSocketOrBody` is dropped or read from.
   };
   virtual kj::Promise<WebSocketResponse> openWebSocket(
-      kj::StringPtr url, const HttpHeaders& headers, kj::Own<WebSocket> downstream);
+      kj::StringPtr url, const HttpHeaders& headers);
   // Tries to open a WebSocket. Default implementation calls send() and never returns a WebSocket.
   //
-  // `url` and `headers` are invalidated when the returned promise resolves.
+  // `url` and `headers` need only remain valid until `openWebSocket()` returns (they can be
+  // stack-allocated).
 
-  virtual kj::Promise<kj::Own<kj::AsyncIoStream>> connect(kj::String host);
+  virtual kj::Promise<kj::Own<kj::AsyncIoStream>> connect(kj::StringPtr host);
   // Handles CONNECT requests. Only relevant for proxy clients. Default implementation throws
   // UNIMPLEMENTED.
 };
@@ -463,6 +548,20 @@ public:
     //
     // `statusText` and `headers` need only remain valid until send() returns (they can be
     // stack-allocated).
+
+    virtual kj::Own<WebSocket> acceptWebSocket(const HttpHeaders& headers) = 0;
+    // If headers.isWebSocket() is true then you can call acceptWebSocket() instead of send().
+
+    kj::Promise<void> sendError(uint statusCode, kj::StringPtr statusText,
+                                const HttpHeaders& headers);
+    kj::Promise<void> sendError(uint statusCode, kj::StringPtr statusText,
+                                const HttpHeaderTable& headerTable);
+    // Convenience wrapper around send() which sends a basic error. A generic error page specifying
+    // the error code is sent as the body.
+    //
+    // You must provide headers or a header table because downstream service wrappers may be
+    // expecting response headers built with a particular table so that they can insert additional
+    // headers.
   };
 
   virtual kj::Promise<void> request(
@@ -476,39 +575,58 @@ public:
   // `url` and `headers` are invalidated on the first read from `requestBody` or when the returned
   // promise resolves, whichever comes first.
 
-  class WebSocketResponse: public Response {
-  public:
-    kj::Own<WebSocket> startWebSocket(
-        uint statusCode, kj::StringPtr statusText, const HttpHeaders& headers,
-        WebSocket& upstream);
-    // Begin the response.
-    //
-    // `statusText` and `headers` need only remain valid until startWebSocket() returns (they can
-    // be stack-allocated).
-  };
-
-  virtual kj::Promise<void> openWebSocket(
-      kj::StringPtr url, const HttpHeaders& headers, WebSocketResponse& response);
-  // Tries to open a WebSocket. Default implementation calls request() and never returns a
-  // WebSocket.
-  //
-  // `url` and `headers` are invalidated when the returned promise resolves.
-
-  virtual kj::Promise<kj::Own<kj::AsyncIoStream>> connect(kj::String host);
+  virtual kj::Promise<kj::Own<kj::AsyncIoStream>> connect(kj::StringPtr host);
   // Handles CONNECT requests. Only relevant for proxy services. Default implementation throws
   // UNIMPLEMENTED.
 };
 
-kj::Own<HttpClient> newHttpClient(HttpHeaderTable& responseHeaderTable, kj::Network& network,
-                                  kj::Maybe<kj::Network&> tlsNetwork = nullptr);
-// Creates a proxy HttpClient that connects to hosts over the given network.
+struct HttpClientSettings {
+  kj::Duration idleTimout = 5 * kj::SECONDS;
+  // For clients which automatically create new connections, any connection idle for at least this
+  // long will be closed.
+
+  kj::Maybe<EntropySource&> entropySource = nullptr;
+  // Must be provided in order to use `openWebSocket`. If you don't need WebSockets, this can be
+  // omitted. The WebSocket protocol uses random values to avoid triggering flaws (including
+  // security flaws) in certain HTTP proxy software. Specifically, entropy is used to generate the
+  // `Sec-WebSocket-Key` header and to generate frame masks. If you know that there are no broken
+  // or vulnerable proxies between you and the server, you can provide a dummy entropy source that
+  // doesn't generate real entropy (e.g. returning the same value every time). Otherwise, you must
+  // provide a cryptographically-random entropy source.
+};
+
+kj::Own<HttpClient> newHttpClient(kj::Timer& timer, HttpHeaderTable& responseHeaderTable,
+                                  kj::Network& network, kj::Maybe<kj::Network&> tlsNetwork,
+                                  HttpClientSettings settings = HttpClientSettings());
+// Creates a proxy HttpClient that connects to hosts over the given network. The URL must always
+// be an absolute URL; the host is parsed from the URL. This implementation will automatically
+// add an appropriate Host header (and convert the URL to just a path) once it has connected.
+//
+// Note that if you wish to route traffic through an HTTP proxy server rather than connect to
+// remote hosts directly, you should use the form of newHttpClient() that takes a NetworkAddress,
+// and supply the proxy's address.
 //
 // `responseHeaderTable` is used when parsing HTTP responses. Requests can use any header table.
 //
-// `tlsNetwork` is required to support HTTPS destination URLs. Otherwise, only HTTP URLs can be
+// `tlsNetwork` is required to support HTTPS destination URLs. If null, only HTTP URLs can be
 // fetched.
 
-kj::Own<HttpClient> newHttpClient(HttpHeaderTable& responseHeaderTable, kj::AsyncIoStream& stream);
+kj::Own<HttpClient> newHttpClient(kj::Timer& timer, HttpHeaderTable& responseHeaderTable,
+                                  kj::NetworkAddress& addr,
+                                  HttpClientSettings settings = HttpClientSettings());
+// Creates an HttpClient that always connects to the given address no matter what URL is requested.
+// The client will open and close connections as needed. It will attempt to reuse connections for
+// multiple requests but will not send a new request before the previous response on the same
+// connection has completed, as doing so can result in head-of-line blocking issues. The client may
+// be used as a proxy client or a host client depending on whether the peer is operating as
+// a proxy. (Hint: This is the best kind of client to use when routing traffic through an HTTP
+// proxy. `addr` should be the address of the proxy, and the proxy itself will resolve remote hosts
+// based on the URLs passed to it.)
+//
+// `responseHeaderTable` is used when parsing HTTP responses. Requests can use any header table.
+
+kj::Own<HttpClient> newHttpClient(HttpHeaderTable& responseHeaderTable, kj::AsyncIoStream& stream,
+                                  HttpClientSettings settings = HttpClientSettings());
 // Creates an HttpClient that speaks over the given pre-established connection. The client may
 // be used as a proxy client or a host client depending on whether the peer is operating as
 // a proxy.
@@ -523,6 +641,29 @@ kj::Own<HttpClient> newHttpClient(HttpService& service);
 kj::Own<HttpService> newHttpService(HttpClient& client);
 // Adapts an HttpClient to an HttpService and vice versa.
 
+kj::Own<WebSocket> newWebSocket(kj::Own<kj::AsyncIoStream> stream,
+                                kj::Maybe<EntropySource&> maskEntropySource);
+// Create a new WebSocket on top of the given stream. It is assumed that the HTTP -> WebSocket
+// upgrade handshake has already occurred (or is not needed), and messages can immediately be
+// sent and received on the stream. Normally applications would not call this directly.
+//
+// `maskEntropySource` is used to generate cryptographically-random frame masks. If null, outgoing
+// frames will not be masked. Servers are required NOT to mask their outgoing frames, but clients
+// ARE required to do so. So, on the client side, you MUST specify an entropy source. The mask
+// must be crytographically random if the data being sent on the WebSocket may be malicious. The
+// purpose of the mask is to prevent badly-written HTTP proxies from interpreting "things that look
+// like HTTP requests" in a message as being actual HTTP requests, which could result in cache
+// poisoning. See RFC6455 section 10.3.
+
+struct WebSocketPipe {
+  kj::Own<WebSocket> ends[2];
+};
+
+WebSocketPipe newWebSocketPipe();
+// Create a WebSocket pipe. Messages written to one end of the pipe will be readable from the other
+// end. No buffering occurs -- a message send does not complete until a corresponding receive
+// accepts the message.
+
 struct HttpServerSettings {
   kj::Duration headerTimeout = 15 * kj::SECONDS;
   // After initial connection open, or after receiving the first byte of a pipelined request,
@@ -531,19 +672,34 @@ struct HttpServerSettings {
   kj::Duration pipelineTimeout = 5 * kj::SECONDS;
   // After one request/response completes, we'll wait up to this long for a pipelined request to
   // arrive.
+
+  kj::Duration canceledUploadGacePeriod = 1 * kj::SECONDS;
+  size_t canceledUploadGraceBytes = 65536;
+  // If the HttpService sends a response and returns without having read the entire request body,
+  // then we have to decide whether to close the connection or wait for the client to finish the
+  // request so that it can pipeline the next one. We'll give them a grace period defined by the
+  // above two values -- if they hit either one, we'll close the socket, but if the request
+  // completes, we'll let the connection stay open to handle more requests.
 };
 
-class HttpServer: private kj::TaskSet::ErrorHandler {
+class HttpServer final: private kj::TaskSet::ErrorHandler {
   // Class which listens for requests on ports or connections and sends them to an HttpService.
 
 public:
   typedef HttpServerSettings Settings;
+  typedef kj::Function<kj::Own<HttpService>(kj::AsyncIoStream&)> HttpServiceFactory;
 
   HttpServer(kj::Timer& timer, HttpHeaderTable& requestHeaderTable, HttpService& service,
              Settings settings = Settings());
   // Set up an HttpServer that directs incoming connections to the given service. The service
   // may be a host service or a proxy service depending on whether you are intending to implement
   // an HTTP server or an HTTP proxy.
+
+  HttpServer(kj::Timer& timer, HttpHeaderTable& requestHeaderTable,
+             HttpServiceFactory serviceFactory, Settings settings = Settings());
+  // Like the other constructor, but allows a new HttpService object to be used for each
+  // connection, based on the connection object. This is particularly useful for capturing the
+  // client's IP address and injecting it as a header.
 
   kj::Promise<void> drain();
   // Stop accepting new connections or new requests on existing connections. Finish any requests
@@ -564,12 +720,20 @@ public:
   // The promise throws if an unparseable request is received or if some I/O error occurs. Dropping
   // the returned promise will cancel all I/O on the connection and cancel any in-flight requests.
 
+  kj::Promise<bool> listenHttpCleanDrain(kj::AsyncIoStream& connection);
+  // Like listenHttp(), but allows you to potentially drain the server without closing connections.
+  // The returned promise resolves to `true` if the connection has been left in a state where a
+  // new HttpServer could potentially accept further requests from it. If `false`, then the
+  // connection is either in an inconsistent state or already completed a closing handshake; the
+  // caller should close it without any further reads/writes. Note this only ever returns `true`
+  // if you called `drain()` -- otherwise this server would keep handling the connection.
+
 private:
   class Connection;
 
   kj::Timer& timer;
   HttpHeaderTable& requestHeaderTable;
-  HttpService& service;
+  kj::OneOf<HttpService*, HttpServiceFactory> service;
   Settings settings;
 
   bool draining = false;
@@ -581,7 +745,8 @@ private:
 
   kj::TaskSet tasks;
 
-  HttpServer(kj::Timer& timer, HttpHeaderTable& requestHeaderTable, HttpService& service,
+  HttpServer(kj::Timer& timer, HttpHeaderTable& requestHeaderTable,
+             kj::OneOf<HttpService*, HttpServiceFactory> service,
              Settings settings, kj::PromiseFulfillerPair<void> paf);
 
   kj::Promise<void> listenLoop(kj::ConnectionReceiver& port);
@@ -592,7 +757,7 @@ private:
 // =======================================================================================
 // inline implementation
 
-inline void HttpHeaderId::requireFrom(HttpHeaderTable& table) const {
+inline void HttpHeaderId::requireFrom(const HttpHeaderTable& table) const {
   KJ_IREQUIRE(this->table == nullptr || this->table == &table,
       "the provided HttpHeaderId is from the wrong HttpHeaderTable");
 }
@@ -600,9 +765,9 @@ inline void HttpHeaderId::requireFrom(HttpHeaderTable& table) const {
 inline kj::Own<HttpHeaderTable> HttpHeaderTable::Builder::build() { return kj::mv(table); }
 inline HttpHeaderTable& HttpHeaderTable::Builder::getFutureTable() { return *table; }
 
-inline uint HttpHeaderTable::idCount() { return namesById.size(); }
+inline uint HttpHeaderTable::idCount() const { return namesById.size(); }
 
-inline kj::StringPtr HttpHeaderTable::idToString(HttpHeaderId id) {
+inline kj::StringPtr HttpHeaderTable::idToString(HttpHeaderId id) const {
   id.requireFrom(*this);
   return namesById[id.id];
 }
@@ -632,5 +797,3 @@ inline void HttpHeaders::forEach(Func&& func) const {
 }
 
 }  // namespace kj
-
-#endif // KJ_COMPAT_HTTP_H_

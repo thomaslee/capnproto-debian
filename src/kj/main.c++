@@ -19,6 +19,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "main.h"
 #include "debug.h"
 #include "arena.h"
@@ -631,7 +635,7 @@ void MainBuilder::MainImpl::usageError(StringPtr programName, StringPtr message)
 
 class MainBuilder::Impl::OptionDisplayOrder {
 public:
-  bool operator()(const Option* a, const Option* b) {
+  bool operator()(const Option* a, const Option* b) const {
     if (a == b) return false;
 
     char aShort = '\0';

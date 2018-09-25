@@ -26,8 +26,7 @@
 // as does other parts of the Cap'n proto library which provide a higher-level interface for
 // dynamic introspection.
 
-#ifndef CAPNP_LAYOUT_H_
-#define CAPNP_LAYOUT_H_
+#pragma once
 
 #if defined(__GNUC__) && !defined(CAPNP_HEADER_WARNINGS)
 #pragma GCC system_header
@@ -38,6 +37,7 @@
 #include "common.h"
 #include "blob.h"
 #include "endian.h"
+#include <kj/windows-sanity.h>  // work-around macro conflict with `VOID`
 
 #if (defined(__mips__) || defined(__hppa__)) && !defined(CAPNP_CANONICALIZE_NAN)
 #define CAPNP_CANONICALIZE_NAN 1
@@ -598,8 +598,8 @@ public:
 
   inline StructDataBitCount getDataSectionSize() const { return dataSize; }
   inline StructPointerCount getPointerSectionSize() const { return pointerCount; }
-  inline kj::ArrayPtr<const byte> getDataSectionAsBlob();
-  inline _::ListReader getPointerSectionAsList();
+  inline kj::ArrayPtr<const byte> getDataSectionAsBlob() const;
+  inline _::ListReader getPointerSectionAsList() const;
 
   kj::Array<word> canonicalize();
 
@@ -625,9 +625,7 @@ public:
   MessageSizeCounts totalSize() const;
   // Return the total size of the struct and everything to which it points.  Does not count far
   // pointer overhead.  This is useful for deciding how much space is needed to copy the struct
-  // into a flat array.  However, the caller is advised NOT to treat this value as secure.  Instead,
-  // use the result as a hint for allocating the first segment, do the copy, and then throw an
-  // exception if it overruns.
+  // into a flat array.
 
   CapTableReader* getCapTable();
   // Gets the capability context in which this object is operating.
@@ -783,7 +781,7 @@ public:
   Data::Reader asData();
   // Reinterpret the list as a blob.  Throws an exception if the elements are not byte-sized.
 
-  kj::ArrayPtr<const byte> asRawBytes();
+  kj::ArrayPtr<const byte> asRawBytes() const;
 
   template <typename T>
   KJ_ALWAYS_INLINE(T getDataElement(ElementCount index) const);
@@ -792,6 +790,9 @@ public:
   KJ_ALWAYS_INLINE(PointerReader getPointerElement(ElementCount index) const);
 
   StructReader getStructElement(ElementCount index) const;
+
+  MessageSizeCounts totalSize() const;
+  // Like StructReader::totalSize(). Note that for struct lists, the size includes the list tag.
 
   CapTableReader* getCapTable();
   // Gets the capability context in which this object is operating.
@@ -1080,12 +1081,12 @@ inline PointerBuilder StructBuilder::getPointerField(StructPointerOffset ptrInde
 
 // -------------------------------------------------------------------
 
-inline kj::ArrayPtr<const byte> StructReader::getDataSectionAsBlob() {
+inline kj::ArrayPtr<const byte> StructReader::getDataSectionAsBlob() const {
   return kj::ArrayPtr<const byte>(reinterpret_cast<const byte*>(data),
       unbound(dataSize / BITS_PER_BYTE / BYTES));
 }
 
-inline _::ListReader StructReader::getPointerSectionAsList() {
+inline _::ListReader StructReader::getPointerSectionAsList() const {
   return _::ListReader(segment, capTable, pointers, pointerCount * (ONE * ELEMENTS / POINTERS),
                        ONE * POINTERS * BITS_PER_POINTER / ELEMENTS, ZERO * BITS, ONE * POINTERS,
                        ElementSize::POINTER, nestingLimit);
@@ -1270,5 +1271,3 @@ inline OrphanBuilder& OrphanBuilder::operator=(OrphanBuilder&& other) {
 
 }  // namespace _ (private)
 }  // namespace capnp
-
-#endif  // CAPNP_LAYOUT_H_

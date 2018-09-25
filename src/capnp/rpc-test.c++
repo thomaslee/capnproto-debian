@@ -19,6 +19,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#define CAPNP_TESTING_CAPNP 1
+
 #include "rpc.h"
 #include "test-util.h"
 #include "schema.h"
@@ -1166,7 +1168,6 @@ TEST(Rpc, RealmGatewayImportExport) {
   kj::EventLoop loop;
   kj::WaitScope waitScope(loop);
   TestNetwork network;
-  TestRestorer restorer;
   TestNetworkAdapter& clientNetwork = network.add("client");
   TestNetworkAdapter& serverNetwork = network.add("server");
   RpcSystem<test::TestSturdyRefHostId> rpcClient =
@@ -1220,7 +1221,6 @@ TEST(Rpc, RealmGatewayImportExport) {
   kj::EventLoop loop;
   kj::WaitScope waitScope(loop);
   TestNetwork network;
-  TestRestorer restorer;
   TestNetworkAdapter& clientNetwork = network.add("client");
   TestNetworkAdapter& serverNetwork = network.add("server");
   RpcSystem<test::TestSturdyRefHostId> rpcClient =

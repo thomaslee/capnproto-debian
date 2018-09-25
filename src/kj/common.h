@@ -23,50 +23,44 @@
 //
 // This defines very simple utilities that are widely applicable.
 
-#ifndef KJ_COMMON_H_
-#define KJ_COMMON_H_
+#pragma once
 
 #if defined(__GNUC__) && !KJ_HEADER_WARNINGS
 #pragma GCC system_header
 #endif
 
 #ifndef KJ_NO_COMPILER_CHECK
-#if __cplusplus < 201103L && !__CDT_PARSER__ && !_MSC_VER
-  #error "This code requires C++11. Either your compiler does not support it or it is not enabled."
+// Technically, __cplusplus should be 201402L for C++14, but GCC 4.9 -- which is supported -- still
+// had it defined to 201300L even with -std=c++14.
+#if __cplusplus < 201300L && !__CDT_PARSER__ && !_MSC_VER
+  #error "This code requires C++14. Either your compiler does not support it or it is not enabled."
   #ifdef __GNUC__
     // Compiler claims compatibility with GCC, so presumably supports -std.
-    #error "Pass -std=c++11 on the compiler command line to enable C++11."
+    #error "Pass -std=c++14 on the compiler command line to enable C++14."
   #endif
 #endif
 
 #ifdef __GNUC__
   #if __clang__
-    #if __clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ < 2)
-      #warning "This library requires at least Clang 3.2."
-    #elif defined(__apple_build_version__) && __apple_build_version__ <= 4250028
-      #warning "This library requires at least Clang 3.2.  XCode 4.6's Clang, which claims to be "\
-               "version 4.2 (wat?), is actually built from some random SVN revision between 3.1 "\
-               "and 3.2.  Unfortunately, it is insufficient for compiling this library.  You can "\
-               "download the real Clang 3.2 (or newer) from the Clang web site.  Step-by-step "\
-               "instructions can be found in Cap'n Proto's documentation: "\
-               "http://kentonv.github.io/capnproto/install.html#clang_32_on_mac_osx"
-    #elif __cplusplus >= 201103L && !__has_include(<initializer_list>)
-      #warning "Your compiler supports C++11 but your C++ standard library does not.  If your "\
+    #if __clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ < 4)
+      #warning "This library requires at least Clang 3.4."
+    #elif __cplusplus >= 201402L && !__has_include(<initializer_list>)
+      #warning "Your compiler supports C++14 but your C++ standard library does not.  If your "\
                "system has libc++ installed (as should be the case on e.g. Mac OSX), try adding "\
                "-stdlib=libc++ to your CXXFLAGS."
     #endif
   #else
-    #if __GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 7)
-      #warning "This library requires at least GCC 4.7."
+    #if __GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 9)
+      #warning "This library requires at least GCC 4.9."
     #endif
   #endif
 #elif defined(_MSC_VER)
-  #if _MSC_VER < 1900
-    #error "You need Visual Studio 2015 or better to compile this code."
+  #if _MSC_VER < 1910
+    #error "You need Visual Studio 2017 or better to compile this code."
   #endif
 #else
-  #warning "I don't recognize your compiler.  As of this writing, Clang and GCC are the only "\
-           "known compilers with enough C++11 support for this library.  "\
+  #warning "I don't recognize your compiler. As of this writing, Clang, GCC, and Visual Studio "\
+           "are the only known compilers with enough C++14 support for this library. "\
            "#define KJ_NO_COMPILER_CHECK to make this warning go away."
 #endif
 #endif
@@ -166,7 +160,7 @@ typedef unsigned char byte;
 #define KJ_NOINLINE __attribute__((noinline))
 #endif
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !__clang__
 #define KJ_NORETURN(prototype) __declspec(noreturn) prototype
 #define KJ_UNUSED
 #define KJ_WARN_UNUSED_RESULT
@@ -200,6 +194,11 @@ typedef unsigned char byte;
 #define KJ_DEPRECATED(reason)
 #define KJ_UNAVAILABLE(reason)
 // TODO(msvc): Again, here, MSVC prefers a prefix, __declspec(deprecated).
+#endif
+
+#if KJ_TESTING_KJ  // defined in KJ's own unit tests; others should not define this
+#undef KJ_DEPRECATED
+#define KJ_DEPRECATED(reason)
 #endif
 
 namespace _ {  // private
@@ -256,7 +255,7 @@ KJ_NORETURN(void unreachable());
 #define KJ_STACK_ARRAY(type, name, size, minStack, maxStack) \
   size_t name##_size = (size); \
   bool name##_isOnStack = name##_size <= (maxStack); \
-  type name##_stack[name##_isOnStack ? size : 0]; \
+  type name##_stack[kj::max(1, name##_isOnStack ? name##_size : 0)]; \
   ::kj::Array<type> name##_heap = name##_isOnStack ? \
       nullptr : kj::heapArray<type>(name##_size); \
   ::kj::ArrayPtr<type> name = name##_isOnStack ? \
@@ -302,6 +301,14 @@ KJ_NORETURN(void unreachable());
 
 #else  // _MSC_VER
 #define KJ_CONSTEXPR(...) constexpr
+#endif
+
+#if defined(_MSC_VER) && _MSC_VER < 1910
+// TODO(msvc): Visual Studio 2015 mishandles declaring the no-arg constructor `= default` for
+//   certain template types -- it fails to call member constructors.
+#define KJ_DEFAULT_CONSTRUCTOR_VS2015_BUGGY {}
+#else
+#define KJ_DEFAULT_CONSTRUCTOR_VS2015_BUGGY = default;
 #endif
 
 // =======================================================================================
@@ -454,6 +461,10 @@ T refIfLvalue(T&&);
 //     KJ_DECLTYPE_REF(i + 1) i2(i + 1);          // i2 has type int.
 //     KJ_DECLTYPE_REF(i) i3(i);                  // i3 has type int&.
 //     KJ_DECLTYPE_REF(kj::mv(i)) i4(kj::mv(i));  // i4 has type int.
+
+template <typename T, typename U> struct IsSameType_ { static constexpr bool value = false; };
+template <typename T> struct IsSameType_<T, T> { static constexpr bool value = true; };
+template <typename T, typename U> constexpr bool isSameType() { return IsSameType_<T, U>::value; }
 
 template <typename T>
 struct CanConvert_ {
@@ -626,7 +637,7 @@ struct ThrowOverflow {
   void operator()() const;
 };
 
-#if __GNUC__
+#if __GNUC__ || __clang__
 inline constexpr float inf() { return __builtin_huge_valf(); }
 inline constexpr float nan() { return __builtin_nanf(""); }
 
@@ -911,7 +922,6 @@ public:
     return value;
   }
 
-private:  // internal interface used by friends only
   inline NullableValue() noexcept: isSet(false) {}
   inline NullableValue(T&& t) noexcept(noexcept(T(instance<T&&>())))
       : isSet(true) {
@@ -1089,18 +1099,32 @@ public:
   inline bool operator==(decltype(nullptr)) const { return ptr == nullptr; }
   inline bool operator!=(decltype(nullptr)) const { return ptr != nullptr; }
 
-  T& orDefault(T& defaultValue) {
+  T& orDefault(T& defaultValue) & {
     if (ptr == nullptr) {
       return defaultValue;
     } else {
       return *ptr;
     }
   }
-  const T& orDefault(const T& defaultValue) const {
+  const T& orDefault(const T& defaultValue) const & {
     if (ptr == nullptr) {
       return defaultValue;
     } else {
       return *ptr;
+    }
+  }
+  T&& orDefault(T&& defaultValue) && {
+    if (ptr == nullptr) {
+      return kj::mv(defaultValue);
+    } else {
+      return kj::mv(*ptr);
+    }
+  }
+  const T&& orDefault(const T&& defaultValue) const && {
+    if (ptr == nullptr) {
+      return kj::mv(defaultValue);
+    } else {
+      return kj::mv(*ptr);
     }
   }
 
@@ -1163,7 +1187,7 @@ public:
   template <typename U>
   inline Maybe(Maybe<U&>& other) noexcept: ptr(other.ptr) {}
   template <typename U>
-  inline Maybe(const Maybe<const U&>& other) noexcept: ptr(other.ptr) {}
+  inline Maybe(const Maybe<U&>& other) noexcept: ptr(const_cast<const U*>(other.ptr)) {}
   inline Maybe(decltype(nullptr)) noexcept: ptr(nullptr) {}
 
   inline Maybe& operator=(T& other) noexcept { ptr = &other; return *this; }
@@ -1200,6 +1224,16 @@ public:
     }
   }
 
+  template <typename Func>
+  auto map(Func&& f) const -> Maybe<decltype(f(instance<const T&>()))> {
+    if (ptr == nullptr) {
+      return nullptr;
+    } else {
+      const T& ref = *ptr;
+      return f(ref);
+    }
+  }
+
 private:
   T* ptr;
 
@@ -1217,6 +1251,9 @@ private:
 // So common that we put it in common.h rather than array.h.
 
 template <typename T>
+class Array;
+
+template <typename T>
 class ArrayPtr: public DisallowConstCopyIfNotConst<T> {
   // A pointer to an array.  Includes a size.  Like any pointer, it doesn't own the target data,
   // and passing by value only copies the pointer, not the target.
@@ -1230,8 +1267,31 @@ public:
       : ptr(init.begin()), size_(init.size()) {}
 
   template <size_t size>
-  inline constexpr ArrayPtr(T (&native)[size]): ptr(native), size_(size) {}
-  // Construct an ArrayPtr from a native C-style array.
+  inline constexpr ArrayPtr(T (&native)[size]): ptr(native), size_(size) {
+    // Construct an ArrayPtr from a native C-style array.
+    //
+    // We disable this constructor for const char arrays because otherwise you would be able to
+    // implicitly convert a character literal to ArrayPtr<const char>, which sounds really great,
+    // except that the NUL terminator would be included, which probably isn't what you intended.
+    //
+    // TODO(someday): Maybe we should support character literals but explicitly chop off the NUL
+    //   terminator. This could do the wrong thing if someone tries to construct an
+    //   ArrayPtr<const char> from a non-NUL-terminated char array, but evidence suggests that all
+    //   real use cases are in fact intending to remove the NUL terminator. It's convenient to be
+    //   able to specify ArrayPtr<const char> as a parameter type and be able to accept strings
+    //   as input in addition to arrays. Currently, you'll need overloading to support string
+    //   literals in this case, but if you overload StringPtr, then you'll find that several
+    //   conversions (e.g. from String and from a literal char array) become ambiguous! You end up
+    //   having to overload for literal char arrays specifically which is cumbersome.
+
+    static_assert(!isSameType<T, const char>(),
+        "Can't implicitly convert literal char array to ArrayPtr because we don't know if "
+        "you meant to include the NUL terminator. We may change this in the future to "
+        "automatically drop the NUL terminator. For now, try explicitly converting to StringPtr, "
+        "which can in turn implicitly convert to ArrayPtr<const char>.");
+    static_assert(!isSameType<T, const char16_t>(), "see above");
+    static_assert(!isSameType<T, const char32_t>(), "see above");
+  }
 
   inline operator ArrayPtr<const T>() const {
     return ArrayPtr<const T>(ptr, size_);
@@ -1240,7 +1300,7 @@ public:
     return ArrayPtr<const T>(ptr, size_);
   }
 
-  inline size_t size() const { return size_; }
+  inline constexpr size_t size() const { return size_; }
   inline const T& operator[](size_t index) const {
     KJ_IREQUIRE(index < size_, "Out-of-bounds ArrayPtr access.");
     return ptr[index];
@@ -1254,8 +1314,8 @@ public:
   inline T* end() { return ptr + size_; }
   inline T& front() { return *ptr; }
   inline T& back() { return *(ptr + size_ - 1); }
-  inline const T* begin() const { return ptr; }
-  inline const T* end() const { return ptr + size_; }
+  inline constexpr const T* begin() const { return ptr; }
+  inline constexpr const T* end() const { return ptr + size_; }
   inline const T& front() const { return *ptr; }
   inline const T& back() const { return *(ptr + size_ - 1); }
 
@@ -1290,6 +1350,24 @@ public:
     return true;
   }
   inline bool operator!=(const ArrayPtr& other) const { return !(*this == other); }
+
+  template <typename U>
+  inline bool operator==(const ArrayPtr<U>& other) const {
+    if (size_ != other.size()) return false;
+    for (size_t i = 0; i < size_; i++) {
+      if (ptr[i] != other[i]) return false;
+    }
+    return true;
+  }
+  template <typename U>
+  inline bool operator!=(const ArrayPtr<U>& other) const { return !(*this == other); }
+
+  template <typename... Attachments>
+  Array<T> attach(Attachments&&... attachments) const KJ_WARN_UNUSED_RESULT;
+  // Like Array<T>::attach(), but also promotes an ArrayPtr to an Array. Generally the attachment
+  // should be an object that actually owns the array that the ArrayPtr is pointing at.
+  //
+  // You must include kj/array.h to call this.
 
 private:
   T* ptr;
@@ -1396,5 +1474,3 @@ _::Deferred<Func> defer(Func&& func) {
 // Run the given code when the function exits, whether by return or exception.
 
 }  // namespace kj
-
-#endif  // KJ_COMMON_H_

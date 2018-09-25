@@ -19,8 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef CAPNP_RPC_H_
-#define CAPNP_RPC_H_
+#pragma once
 
 #if defined(__GNUC__) && !defined(CAPNP_HEADER_WARNINGS)
 #pragma GCC system_header
@@ -99,7 +98,7 @@ public:
   // Connect to the given vat and return its bootstrap interface.
 
   Capability::Client restore(typename VatId::Reader hostId, AnyPointer::Reader objectId)
-      KJ_DEPRECATED("Please transition to using a bootstrap interface instead.");
+      CAPNP_DEPRECATED("Please transition to using a bootstrap interface instead.");
   // ** DEPRECATED **
   //
   // Restores the given SturdyRef from the network and return the capability representing it.
@@ -167,7 +166,18 @@ template <typename VatId, typename ProvisionId, typename RecipientId,
           typename ExternalRef = _::ExternalRefFromRealmGatewayClient<RealmGatewayClient>>
 RpcSystem<VatId> makeRpcServer(
     VatNetwork<VatId, ProvisionId, RecipientId, ThirdPartyCapId, JoinResult>& network,
-    Capability::Client bootstrapInterface, RealmGatewayClient gateway);
+    Capability::Client bootstrapInterface, RealmGatewayClient gateway)
+    CAPNP_DEPRECATED("Please transition to using MembranePolicy instead of RealmGateway.");
+// ** DEPRECATED **
+//
+// This uses a RealmGateway to create a membrane between the external network and internal
+// capabilites to translate save() requests. However, MembranePolicy (membrane.h) allows for the
+// creation of much more powerful membranes and doesn't need to be tied to an RpcSystem.
+// Applications should transition to using membranes instead of RealmGateway. RealmGateway will be
+// removed in a future version of Cap'n Proto.
+//
+// Original description:
+//
 // Make an RPC server for a VatNetwork that resides in a different realm from the application.
 // The given RealmGateway is used to translate SturdyRefs between the app's ("internal") format
 // and the network's ("external") format.
@@ -186,7 +196,18 @@ template <typename VatId, typename ProvisionId, typename RecipientId,
           typename ExternalRef = _::ExternalRefFromRealmGatewayClient<RealmGatewayClient>>
 RpcSystem<VatId> makeRpcServer(
     VatNetwork<VatId, ProvisionId, RecipientId, ThirdPartyCapId, JoinResult>& network,
-    BootstrapFactory<VatId>& bootstrapFactory, RealmGatewayClient gateway);
+    BootstrapFactory<VatId>& bootstrapFactory, RealmGatewayClient gateway)
+    CAPNP_DEPRECATED("Please transition to using MembranePolicy instead of RealmGateway.");
+// ** DEPRECATED **
+//
+// This uses a RealmGateway to create a membrane between the external network and internal
+// capabilites to translate save() requests. However, MembranePolicy (membrane.h) allows for the
+// creation of much more powerful membranes and doesn't need to be tied to an RpcSystem.
+// Applications should transition to using membranes instead of RealmGateway. RealmGateway will be
+// removed in a future version of Cap'n Proto.
+//
+// Original description:
+//
 // Make an RPC server that can serve different bootstrap interfaces to different clients via a
 // BootstrapInterface and communicates with a different realm than the application is in via a
 // RealmGateway.
@@ -196,7 +217,7 @@ template <typename VatId, typename LocalSturdyRefObjectId,
 RpcSystem<VatId> makeRpcServer(
     VatNetwork<VatId, ProvisionId, RecipientId, ThirdPartyCapId, JoinResult>& network,
     SturdyRefRestorer<LocalSturdyRefObjectId>& restorer)
-    KJ_DEPRECATED("Please transition to using a bootstrap interface instead.");
+    CAPNP_DEPRECATED("Please transition to using a bootstrap interface instead.");
 // ** DEPRECATED **
 //
 // Create an RPC server which exports multiple main interfaces by object ID. The `restorer` object
@@ -232,7 +253,18 @@ template <typename VatId, typename ProvisionId, typename RecipientId,
           typename ExternalRef = _::ExternalRefFromRealmGatewayClient<RealmGatewayClient>>
 RpcSystem<VatId> makeRpcClient(
     VatNetwork<VatId, ProvisionId, RecipientId, ThirdPartyCapId, JoinResult>& network,
-    RealmGatewayClient gateway);
+    RealmGatewayClient gateway)
+    CAPNP_DEPRECATED("Please transition to using MembranePolicy instead of RealmGateway.");
+// ** DEPRECATED **
+//
+// This uses a RealmGateway to create a membrane between the external network and internal
+// capabilites to translate save() requests. However, MembranePolicy (membrane.h) allows for the
+// creation of much more powerful membranes and doesn't need to be tied to an RpcSystem.
+// Applications should transition to using membranes instead of RealmGateway. RealmGateway will be
+// removed in a future version of Cap'n Proto.
+//
+// Original description:
+//
 // Make an RPC client for a VatNetwork that resides in a different realm from the application.
 // The given RealmGateway is used to translate SturdyRefs between the app's ("internal") format
 // and the network's ("external") format.
@@ -254,9 +286,8 @@ class SturdyRefRestorer: public _::SturdyRefRestorerBase {
   //   string names.
 
 public:
-  virtual Capability::Client restore(typename SturdyRefObjectId::Reader ref)
-      KJ_DEPRECATED(
-          "Please transition to using bootstrap interfaces instead of SturdyRefRestorer.") = 0;
+  virtual Capability::Client restore(typename SturdyRefObjectId::Reader ref) CAPNP_DEPRECATED(
+      "Please transition to using bootstrap interfaces instead of SturdyRefRestorer.") = 0;
   // Restore the given object, returning a capability representing it.
 
 private:
@@ -533,5 +564,3 @@ RpcSystem<VatId> makeRpcClient(
 }
 
 }  // namespace capnp
-
-#endif  // CAPNP_RPC_H_

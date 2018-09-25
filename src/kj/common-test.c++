@@ -129,6 +129,24 @@ TEST(Common, Maybe) {
   }
 
   {
+    const Maybe<int&> m2 = &i;
+    Maybe<const int&> m = m2;
+    EXPECT_FALSE(m == nullptr);
+    EXPECT_TRUE(m != nullptr);
+    KJ_IF_MAYBE(v, m) {
+      EXPECT_EQ(&i, v);
+    } else {
+      ADD_FAILURE();
+    }
+    KJ_IF_MAYBE(v, mv(m)) {
+      EXPECT_EQ(&i, v);
+    } else {
+      ADD_FAILURE();
+    }
+    EXPECT_EQ(234, m.orDefault(456));
+  }
+
+  {
     Maybe<int&> m = implicitCast<int*>(nullptr);
     EXPECT_TRUE(m == nullptr);
     EXPECT_FALSE(m != nullptr);
@@ -141,6 +159,13 @@ TEST(Common, Maybe) {
       EXPECT_EQ(0, *v);  // avoid unused warning
     }
     EXPECT_EQ(456, m.orDefault(456));
+  }
+
+  {
+    // Verify orDefault() works with move-only types.
+    Maybe<kj::String> m = nullptr;
+    kj::String s = kj::mv(m).orDefault(kj::str("foo"));
+    EXPECT_EQ("foo", s);
   }
 
   {
@@ -462,6 +487,27 @@ TEST(Common, ArrayAsBytes) {
       EXPECT_EQ('\xf0', chars[4]);
     }
   }
+}
+
+KJ_TEST("ArrayPtr operator ==") {
+  KJ_EXPECT(ArrayPtr<const int>({123, 456}) == ArrayPtr<const int>({123, 456}));
+  KJ_EXPECT(!(ArrayPtr<const int>({123, 456}) != ArrayPtr<const int>({123, 456})));
+  KJ_EXPECT(ArrayPtr<const int>({123, 456}) != ArrayPtr<const int>({123, 321}));
+  KJ_EXPECT(ArrayPtr<const int>({123, 456}) != ArrayPtr<const int>({123}));
+
+  KJ_EXPECT(ArrayPtr<const int>({123, 456}) == ArrayPtr<const short>({123, 456}));
+  KJ_EXPECT(!(ArrayPtr<const int>({123, 456}) != ArrayPtr<const short>({123, 456})));
+  KJ_EXPECT(ArrayPtr<const int>({123, 456}) != ArrayPtr<const short>({123, 321}));
+  KJ_EXPECT(ArrayPtr<const int>({123, 456}) != ArrayPtr<const short>({123}));
+
+  KJ_EXPECT((ArrayPtr<const StringPtr>({"foo", "bar"}) ==
+             ArrayPtr<const char* const>({"foo", "bar"})));
+  KJ_EXPECT(!(ArrayPtr<const StringPtr>({"foo", "bar"}) !=
+             ArrayPtr<const char* const>({"foo", "bar"})));
+  KJ_EXPECT((ArrayPtr<const StringPtr>({"foo", "bar"}) !=
+             ArrayPtr<const char* const>({"foo", "baz"})));
+  KJ_EXPECT((ArrayPtr<const StringPtr>({"foo", "bar"}) !=
+             ArrayPtr<const char* const>({"foo"})));
 }
 
 KJ_TEST("kj::range()") {
