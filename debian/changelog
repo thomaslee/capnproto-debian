@@ -1,3 +1,9 @@
+capnproto (0.7.0-1) unstable; urgency=medium
+
+  * Import Upstream version 0.7.0
+
+ -- Tom Lee <debian@tomlee.co>  Mon, 24 Sep 2018 22:29:10 -0700
+
 capnproto (0.6.1-1) unstable; urgency=medium
 
   * Imported Upstream version 0.6.1 (Closes: #866525) which includes:

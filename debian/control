@@ -5,12 +5,12 @@ Maintainer: Tom Lee <debian@tomlee.co>
 Build-Depends: debhelper (>= 9), gcc (>= 4.7), python-all (>= 2.6),
  dpkg-dev (>= 1.16.1.1), docbook-xsl, docbook-xml, xsltproc, dh-autoreconf,
  netbase
-Standards-Version: 4.0.0
+Standards-Version: 4.2.1
 Homepage: https://capnproto.org/
 Vcs-Git: https://github.com/thomaslee/capnproto-debian
 Vcs-Browser: https://github.com/thomaslee/capnproto-debian
 
-Package: libcapnp-0.6.1
+Package: libcapnp-0.7.0
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -30,7 +30,7 @@ Description: Cap'n Proto C++ library
 Package: libcapnp-dev
 Architecture: any
 Section: libdevel
-Depends: ${misc:Depends}, libcapnp-0.6.1 (= ${binary:Version})
+Depends: ${misc:Depends}, libcapnp-0.7.0 (= ${binary:Version})
 Description: Cap'n Proto C++ library (development files)
  Similar to Protocol Buffers, Cap'n Proto is an efficient means of
  serializing structured data to be transferred across a network or
@@ -48,7 +48,7 @@ Description: Cap'n Proto C++ library (development files)
 Package: capnproto
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
- libcapnp-0.6.1 (= ${binary:Version})
+ libcapnp-0.7.0 (= ${binary:Version})
 Description: tool for working with the Cap'n Proto data interchange format
  Similar to Protocol Buffers, Cap'n Proto is an efficient means of
  serializing structured data to be transferred across a network or
