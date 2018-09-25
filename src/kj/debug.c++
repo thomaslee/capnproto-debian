@@ -34,6 +34,7 @@
 #define NOIME 1
 #include <windows.h>
 #include "windows-sanity.h"
+#include "encoding.h"
 #endif
 
 namespace kj {
@@ -136,7 +137,7 @@ Exception::Type typeOfErrno(int error) {
 
 Exception::Type typeOfWin32Error(DWORD error) {
   switch (error) {
-    // TODO(0.7): This needs more work.
+    // TODO(someday): This needs more work.
 
     case WSAETIMEDOUT:
       return Exception::Type::OVERLOADED;
@@ -243,7 +244,9 @@ static String makeDescriptionImpl(DescriptionStyle style, const char* code, int 
     StringPtr colon = ": ";
 
     StringPtr sysErrorArray;
-#if __USE_GNU
+// On android before marshmallow only the posix version of stderror_r was
+// available, even with __USE_GNU.
+#if __USE_GNU && !(defined(__ANDROID_API__) && __ANDROID_API__ < 23)
     char buffer[256];
     if (style == SYSCALL) {
       if (sysErrorString == nullptr) {
@@ -354,29 +357,33 @@ void Debug::Fault::init(
 
 #if _WIN32
 void Debug::Fault::init(
-    const char* file, int line, Win32Error osErrorNumber,
+    const char* file, int line, Win32Result osErrorNumber,
     const char* condition, const char* macroArgs, ArrayPtr<String> argValues) {
   LPVOID ptr;
-  // TODO(0.7): Use FormatMessageW() instead.
-  // TODO(0.7): Why doesn't this work for winsock errors?
-  DWORD result = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+  // TODO(someday): Why doesn't this work for winsock errors?
+  DWORD result = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
                                 FORMAT_MESSAGE_FROM_SYSTEM |
                                 FORMAT_MESSAGE_IGNORE_INSERTS,
                                 NULL, osErrorNumber.number,
                                 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                                (LPTSTR) &ptr, 0, NULL);
+                                (LPWSTR) &ptr, 0, NULL);
 
+  String message;
   if (result > 0) {
     KJ_DEFER(LocalFree(ptr));
-    exception = new Exception(typeOfWin32Error(osErrorNumber.number), file, line,
-        makeDescriptionImpl(SYSCALL, condition, 0, reinterpret_cast<char*>(ptr),
-                            macroArgs, argValues));
+    const wchar_t* desc = reinterpret_cast<wchar_t*>(ptr);
+    size_t len = wcslen(desc);
+    if (len > 0 && desc[len-1] == '\n') --len;
+    if (len > 0 && desc[len-1] == '\r') --len;
+    message = kj::str('#', osErrorNumber.number, ' ',
+        decodeWideString(arrayPtr(desc, len)));
   } else {
-    auto message = kj::str("win32 error code: ", osErrorNumber.number);
-    exception = new Exception(typeOfWin32Error(osErrorNumber.number), file, line,
-        makeDescriptionImpl(SYSCALL, condition, 0, message.cStr(),
-                            macroArgs, argValues));
+    message = kj::str("win32 error code: ", osErrorNumber.number);
   }
+
+  exception = new Exception(typeOfWin32Error(osErrorNumber.number), file, line,
+      makeDescriptionImpl(SYSCALL, condition, 0, message.cStr(),
+                          macroArgs, argValues));
 }
 #endif
 
@@ -395,8 +402,8 @@ int Debug::getOsErrorNumber(bool nonblocking) {
 }
 
 #if _WIN32
-Debug::Win32Error Debug::getWin32Error() {
-  return Win32Error(::GetLastError());
+uint Debug::getWin32ErrorCode() {
+  return ::GetLastError();
 }
 #endif
 

@@ -34,6 +34,9 @@
 #include <kj/compat/gtest.h>
 #include <pthread.h>
 #include <algorithm>
+#include <sys/wait.h>
+#include <sys/time.h>
+#include <errno.h>
 
 namespace kj {
 namespace {
@@ -57,6 +60,8 @@ void captureSignals() {
     // use SIGUSR1 because it is reserved by UnixEventPort and SIGUSR2 is used by Valgrind on OSX.
     UnixEventPort::captureSignal(SIGURG);
     UnixEventPort::captureSignal(SIGIO);
+
+    UnixEventPort::captureChildExit();
   }
 }
 
@@ -573,6 +578,50 @@ TEST(AsyncUnixTest, SteadyTimers) {
   }
 }
 
+bool dummySignalHandlerCalled = false;
+void dummySignalHandler(int) {
+  dummySignalHandlerCalled = true;
+}
+
+TEST(AsyncUnixTest, InterruptedTimer) {
+  captureSignals();
+  UnixEventPort port;
+  EventLoop loop(port);
+  WaitScope waitScope(loop);
+
+#if __linux__
+  // Linux timeslices are 1ms.
+  constexpr auto OS_SLOWNESS_FACTOR = 1;
+#else
+  // OSX timeslices are 10ms, so we need longer timeouts to avoid flakiness.
+  // To be safe we'll assume other OS's are similar.
+  constexpr auto OS_SLOWNESS_FACTOR = 10;
+#endif
+
+  // Schedule a timer event in 100ms.
+  auto& timer = port.getTimer();
+  auto start = timer.now();
+  constexpr auto timeout = 100 * MILLISECONDS * OS_SLOWNESS_FACTOR;
+
+  // Arrange SIGALRM to be delivered in 50ms, handled in an empty signal handler. This will cause
+  // our wait to be interrupted with EINTR. We should nevertheless continue waiting for the right
+  // amount of time.
+  dummySignalHandlerCalled = false;
+  if (signal(SIGALRM, &dummySignalHandler) == SIG_ERR) {
+    KJ_FAIL_SYSCALL("signal(SIGALRM)", errno);
+  }
+  struct itimerval itv;
+  memset(&itv, 0, sizeof(itv));
+  itv.it_value.tv_usec = 50000 * OS_SLOWNESS_FACTOR;  // signal after 50ms
+  setitimer(ITIMER_REAL, &itv, nullptr);
+
+  timer.afterDelay(timeout).wait(waitScope);
+
+  KJ_EXPECT(dummySignalHandlerCalled);
+  KJ_EXPECT(timer.now() - start >= timeout);
+  KJ_EXPECT(timer.now() - start <= timeout + (timeout / 5));  // allow 20ms error
+}
+
 TEST(AsyncUnixTest, Wake) {
   captureSignals();
   UnixEventPort port;
@@ -600,6 +649,92 @@ TEST(AsyncUnixTest, Wake) {
   });
 
   EXPECT_TRUE(port.wait());
+}
+
+int exitCodeForSignal = 0;
+void exitSignalHandler(int) {
+  _exit(exitCodeForSignal);
+}
+
+struct TestChild {
+  kj::Maybe<pid_t> pid;
+  kj::Promise<int> promise = nullptr;
+
+  TestChild(UnixEventPort& port, int exitCode) {
+    pid_t p;
+    KJ_SYSCALL(p = fork());
+    if (p == 0) {
+      // Arrange for SIGTERM to cause the process to exit normally.
+      exitCodeForSignal = exitCode;
+      signal(SIGTERM, &exitSignalHandler);
+      sigset_t sigs;
+      sigemptyset(&sigs);
+      sigaddset(&sigs, SIGTERM);
+      sigprocmask(SIG_UNBLOCK, &sigs, nullptr);
+
+      for (;;) pause();
+    }
+    pid = p;
+    promise = port.onChildExit(pid);
+  }
+
+  ~TestChild() noexcept(false) {
+    KJ_IF_MAYBE(p, pid) {
+      KJ_SYSCALL(::kill(*p, SIGKILL)) { return; }
+      int status;
+      KJ_SYSCALL(waitpid(*p, &status, 0)) { return; }
+    }
+  }
+
+  void kill(int signo) {
+    KJ_SYSCALL(::kill(KJ_REQUIRE_NONNULL(pid), signo));
+  }
+
+  KJ_DISALLOW_COPY(TestChild);
+};
+
+TEST(AsyncUnixTest, ChildProcess) {
+  captureSignals();
+  UnixEventPort port;
+  EventLoop loop(port);
+  WaitScope waitScope(loop);
+
+  // Block SIGTERM so that we can carefully un-block it in children.
+  sigset_t sigs, oldsigs;
+  KJ_SYSCALL(sigemptyset(&sigs));
+  KJ_SYSCALL(sigaddset(&sigs, SIGTERM));
+  KJ_SYSCALL(sigprocmask(SIG_BLOCK, &sigs, &oldsigs));
+  KJ_DEFER(KJ_SYSCALL(sigprocmask(SIG_SETMASK, &oldsigs, nullptr)) { break; });
+
+  TestChild child1(port, 123);
+  KJ_EXPECT(!child1.promise.poll(waitScope));
+
+  child1.kill(SIGTERM);
+
+  {
+    int status = child1.promise.wait(waitScope);
+    KJ_EXPECT(WIFEXITED(status));
+    KJ_EXPECT(WEXITSTATUS(status) == 123);
+  }
+
+  TestChild child2(port, 234);
+  TestChild child3(port, 345);
+
+  KJ_EXPECT(!child2.promise.poll(waitScope));
+  KJ_EXPECT(!child3.promise.poll(waitScope));
+
+  child2.kill(SIGKILL);
+
+  {
+    int status = child2.promise.wait(waitScope);
+    KJ_EXPECT(!WIFEXITED(status));
+    KJ_EXPECT(WIFSIGNALED(status));
+    KJ_EXPECT(WTERMSIG(status) == SIGKILL);
+  }
+
+  KJ_EXPECT(!child3.promise.poll(waitScope));
+
+  // child3 will be killed and synchronously waited on the way out.
 }
 
 }  // namespace

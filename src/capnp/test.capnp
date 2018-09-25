@@ -127,7 +127,8 @@ struct TestDefaults {
       textList      = ["quux", "corge", "grault"],
       dataList      = ["garply", "waldo", "fred"],
       structList    = [
-          (textField = "x structlist 1"),
+          (textField = "x " "structlist"
+                       " 1"),
           (textField = "x structlist 2"),
           (textField = "x structlist 3")],
       enumList      = [qux, bar, grault]
@@ -537,6 +538,9 @@ struct TestGenerics(Foo, Bar) {
     }
   }
 
+  list @4 :List(Inner);
+  # At one time this failed to compile with MSVC due to poor expression SFINAE support.
+
   struct Inner {
     foo @0 :Foo;
     bar @1 :Bar;
@@ -701,7 +705,8 @@ struct TestConstants {
       textList      = ["quux", "corge", "grault"],
       dataList      = ["garply", "waldo", "fred"],
       structList    = [
-          (textField = "x structlist 1"),
+          (textField = "x " "structlist"
+                       " 1"),
           (textField = "x structlist 2"),
           (textField = "x structlist 3")],
       enumList      = [qux, bar, grault]
@@ -862,6 +867,8 @@ interface TestMembrane {
   callPassThrough @1 (thing :Thing, tailCall :Bool) -> Result;
   callIntercept @2 (thing :Thing, tailCall :Bool) -> Result;
   loopback @3 (thing :Thing) -> (thing :Thing);
+
+  waitForever @4 ();
 
   interface Thing {
     passThrough @0 () -> Result;

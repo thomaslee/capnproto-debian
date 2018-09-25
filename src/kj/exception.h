@@ -19,8 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef KJ_EXCEPTION_H_
-#define KJ_EXCEPTION_H_
+#pragma once
 
 #if defined(__GNUC__) && !KJ_HEADER_WARNINGS
 #pragma GCC system_header
@@ -29,10 +28,12 @@
 #include "memory.h"
 #include "array.h"
 #include "string.h"
+#include "windows-sanity.h"  // work-around macro conflict with `ERROR`
 
 namespace kj {
 
 class ExceptionImpl;
+template <typename T> class Function;
 
 class Exception {
   // Exception thrown in case of fatal errors.
@@ -216,6 +217,11 @@ public:
   virtual StackTraceMode stackTraceMode();
   // Returns the current preferred stack trace mode.
 
+  virtual Function<void(Function<void()>)> getThreadInitializer();
+  // Called just before a new thread is spawned using kj::Thread. Returns a function which should
+  // be invoked inside the new thread to initialize the thread's ExceptionCallback. The initializer
+  // function itself receives, as its parameter, the thread's main function, which it must call.
+
 protected:
   ExceptionCallback& next;
 
@@ -224,6 +230,8 @@ private:
 
   class RootExceptionCallback;
   friend ExceptionCallback& getExceptionCallback();
+
+  friend class Thread;
 };
 
 ExceptionCallback& getExceptionCallback();
@@ -346,6 +354,15 @@ String stringifyStackTrace(ArrayPtr<void* const>);
 // Convert the stack trace to a string with file names and line numbers. This may involve executing
 // suprocesses.
 
+String stringifyStackTraceAddresses(ArrayPtr<void* const> trace);
+StringPtr stringifyStackTraceAddresses(ArrayPtr<void* const> trace, ArrayPtr<char> scratch);
+// Construct a string containing just enough information about a stack trace to be able to convert
+// it to file and line numbers later using offline tools. This produces a sequence of
+// space-separated code location identifiers. Each identifier may be an absolute address
+// (hex number starting with 0x) or may be a module-relative address "<module>@0x<hex>". The
+// latter case is preferred when ASLR is in effect and has loaded different modules at different
+// addresses.
+
 String getStackTrace();
 // Get a stack trace right now and stringify it. Useful for debugging.
 
@@ -358,6 +375,10 @@ kj::StringPtr trimSourceFilename(kj::StringPtr filename);
 // Given a source code file name, trim off noisy prefixes like "src/" or
 // "/ekam-provider/canonical/".
 
-}  // namespace kj
+kj::String getCaughtExceptionType();
+// Utility function which attempts to return the human-readable type name of the exception
+// currently being thrown. This can be called inside a catch block, including a catch (...) block,
+// for the purpose of error logging. This function is best-effort; on some platforms it may simply
+// return "(unknown)".
 
-#endif  // KJ_EXCEPTION_H_
+}  // namespace kj

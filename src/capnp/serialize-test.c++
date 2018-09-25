@@ -19,6 +19,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "serialize.h"
 #include <kj/debug.h>
 #include <kj/compat/gtest.h>
@@ -97,6 +101,20 @@ TEST(Serialize, FlatArray) {
     checkTestMessage(reader.getRoot<TestAllTypes>());
     EXPECT_EQ(serializedWithSuffix.end() - 5, reader.getEnd());
   }
+
+#if __i386__ || __x86_64__ || __aarch64__ || _MSC_VER
+  // Try unaligned.
+  {
+    auto bytes = kj::heapArray<byte>(serializedWithSuffix.size() * sizeof(word) + 1);
+    auto unalignedWords = kj::arrayPtr(
+        reinterpret_cast<word*>(bytes.begin() + 1), serializedWithSuffix.size());
+    memcpy(unalignedWords.asBytes().begin(), serializedWithSuffix.asBytes().begin(),
+        serializedWithSuffix.asBytes().size());
+    UnalignedFlatArrayMessageReader reader(unalignedWords);
+    checkTestMessage(reader.getRoot<TestAllTypes>());
+    EXPECT_EQ(unalignedWords.end() - 5, reader.getEnd());
+  }
+#endif
 
   {
     MallocMessageBuilder builder2;

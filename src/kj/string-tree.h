@@ -19,8 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef KJ_STRING_TREE_H_
-#define KJ_STRING_TREE_H_
+#pragma once
 
 #if defined(__GNUC__) && !KJ_HEADER_WARNINGS
 #pragma GCC system_header
@@ -63,8 +62,10 @@ public:
   // TODO(someday):  flatten() when *this is an rvalue and when branches.size() == 0 could simply
   //   return `kj::mv(text)`.  Requires reference qualifiers (Clang 3.3 / GCC 4.8).
 
-  void flattenTo(char* __restrict__ target) const;
-  // Copy the contents to the given character array.  Does not add a NUL terminator.
+  char* flattenTo(char* __restrict__ target) const;
+  char* flattenTo(char* __restrict__ target, char* limit) const;
+  // Copy the contents to the given character array.  Does not add a NUL terminator. Returns a
+  // pointer just past the end of what was filled.
 
 private:
   size_t size_;
@@ -123,6 +124,14 @@ char* fill(char* __restrict__ target, const StringTree& first, Rest&&... rest) {
 
   first.flattenTo(target);
   return fill(target + first.size(), kj::fwd<Rest>(rest)...);
+}
+
+template <typename... Rest>
+char* fillLimited(char* __restrict__ target, char* limit, const StringTree& first, Rest&&... rest) {
+  // Make str() work with stringifiers that return StringTree by patching fill().
+
+  target = first.flattenTo(target, limit);
+  return fillLimited(target + first.size(), limit, kj::fwd<Rest>(rest)...);
 }
 
 template <typename T> constexpr bool isStringTree() { return false; }
@@ -208,5 +217,3 @@ StringTree strTree(Params&&... params) {
 }
 
 }  // namespace kj
-
-#endif  // KJ_STRING_TREE_H_

@@ -104,8 +104,7 @@
 //   define it explicitly (e.g. -DKJ_DEBUG).  Generally, production builds should NOT use KJ_DEBUG
 //   as it may enable expensive checks that are unlikely to fail.
 
-#ifndef KJ_DEBUG_H_
-#define KJ_DEBUG_H_
+#pragma once
 
 #if defined(__GNUC__) && !KJ_HEADER_WARNINGS
 #pragma GCC system_header
@@ -113,11 +112,7 @@
 
 #include "string.h"
 #include "exception.h"
-
-#ifdef ERROR
-// This is problematic because windows.h #defines ERROR, which we use in an enum here.
-#error "Make sure to to undefine ERROR (or just #include <kj/windows-sanity.h>) before this file"
-#endif
+#include "windows-sanity.h"  // work-around macro conflict with `ERROR`
 
 namespace kj {
 
@@ -168,18 +163,18 @@ namespace kj {
 #if _WIN32
 
 #define KJ_WIN32(call, ...) \
-  if (::kj::_::Debug::isWin32Success(call)) {} else \
+  if (auto _kjWin32Result = ::kj::_::Debug::win32Call(call)) {} else \
     for (::kj::_::Debug::Fault f(__FILE__, __LINE__, \
-             ::kj::_::Debug::getWin32Error(), #call, "" #__VA_ARGS__, __VA_ARGS__);; f.fatal())
+             _kjWin32Result, #call, "" #__VA_ARGS__, __VA_ARGS__);; f.fatal())
 
 #define KJ_WINSOCK(call, ...) \
-  if ((call) != SOCKET_ERROR) {} else \
+  if (auto _kjWin32Result = ::kj::_::Debug::winsockCall(call)) {} else \
     for (::kj::_::Debug::Fault f(__FILE__, __LINE__, \
-             ::kj::_::Debug::getWin32Error(), #call, "" #__VA_ARGS__, __VA_ARGS__);; f.fatal())
+             _kjWin32Result, #call, "" #__VA_ARGS__, __VA_ARGS__);; f.fatal())
 
 #define KJ_FAIL_WIN32(code, errorNumber, ...) \
   for (::kj::_::Debug::Fault f(__FILE__, __LINE__, \
-           ::kj::_::Debug::Win32Error(errorNumber), code, "" #__VA_ARGS__, __VA_ARGS__);; f.fatal())
+           ::kj::_::Debug::Win32Result(errorNumber), code, "" #__VA_ARGS__, __VA_ARGS__);; f.fatal())
 
 #endif
 
@@ -247,18 +242,23 @@ namespace kj {
 #if _WIN32
 
 #define KJ_WIN32(call, ...) \
-  if (::kj::_::Debug::isWin32Success(call)) {} else \
+  if (auto _kjWin32Result = ::kj::_::Debug::win32Call(call)) {} else \
     for (::kj::_::Debug::Fault f(__FILE__, __LINE__, \
-             ::kj::_::Debug::getWin32Error(), #call, #__VA_ARGS__, ##__VA_ARGS__);; f.fatal())
+             _kjWin32Result, #call, #__VA_ARGS__, ##__VA_ARGS__);; f.fatal())
+// Invoke a Win32 syscall that returns either BOOL or HANDLE, and throw an exception if it fails.
 
 #define KJ_WINSOCK(call, ...) \
-  if ((call) != SOCKET_ERROR) {} else \
+  if (auto _kjWin32Result = ::kj::_::Debug::winsockCall(call)) {} else \
     for (::kj::_::Debug::Fault f(__FILE__, __LINE__, \
-             ::kj::_::Debug::getWin32Error(), #call, #__VA_ARGS__, ##__VA_ARGS__);; f.fatal())
+             _kjWin32Result, #call, #__VA_ARGS__, ##__VA_ARGS__);; f.fatal())
+// Like KJ_WIN32 but for winsock calls which return `int` with SOCKET_ERROR indicating failure.
+//
+// Unfortunately, it's impossible to distinguish these from BOOL-returning Win32 calls by type,
+// since BOOL is in fact an alias for `int`. :(
 
 #define KJ_FAIL_WIN32(code, errorNumber, ...) \
   for (::kj::_::Debug::Fault f(__FILE__, __LINE__, \
-           ::kj::_::Debug::Win32Error(errorNumber), code, #__VA_ARGS__, ##__VA_ARGS__);; f.fatal())
+           ::kj::_::Debug::Win32Result(errorNumber), code, #__VA_ARGS__, ##__VA_ARGS__);; f.fatal())
 
 #endif
 
@@ -292,7 +292,7 @@ namespace kj {
 
 #define KJ_SYSCALL_HANDLE_ERRORS(call) \
   if (int _kjSyscallError = ::kj::_::Debug::syscallError([&](){return (call);}, false)) \
-    switch (int error = _kjSyscallError)
+    switch (int error KJ_UNUSED = _kjSyscallError)
 // Like KJ_SYSCALL, but doesn't throw. Instead, the block after the macro is a switch block on the
 // error. Additionally, the int value `error` is defined within the block. So you can do:
 //
@@ -308,6 +308,29 @@ namespace kj {
 //     } else {
 //       handleSuccessCase();
 //     }
+
+#if _WIN32
+
+#define KJ_WIN32_HANDLE_ERRORS(call) \
+  if (uint _kjWin32Error = ::kj::_::Debug::win32Call(call).number) \
+    switch (uint error KJ_UNUSED = _kjWin32Error)
+// Like KJ_WIN32, but doesn't throw. Instead, the block after the macro is a switch block on the
+// error. Additionally, the int value `error` is defined within the block. So you can do:
+//
+//     KJ_SYSCALL_HANDLE_ERRORS(foo()) {
+//       case ERROR_FILE_NOT_FOUND:
+//         handleNoSuchFile();
+//         break;
+//       case ERROR_FILE_EXISTS:
+//         handleExists();
+//         break;
+//       default:
+//         KJ_FAIL_WIN32("foo()", error);
+//     } else {
+//       handleSuccessCase();
+//     }
+
+#endif
 
 #define KJ_ASSERT KJ_REQUIRE
 #define KJ_FAIL_ASSERT KJ_FAIL_REQUIRE
@@ -334,10 +357,10 @@ public:
   typedef LogSeverity Severity;  // backwards-compatibility
 
 #if _WIN32
-  struct Win32Error {
-    // Hack for overloading purposes.
+  struct Win32Result {
     uint number;
-    inline explicit Win32Error(uint number): number(number) {}
+    inline explicit Win32Result(uint number): number(number) {}
+    operator bool() const { return number == 0; }
   };
 #endif
 
@@ -363,7 +386,7 @@ public:
     Fault(const char* file, int line, int osErrorNumber,
           const char* condition, const char* macroArgs);
 #if _WIN32
-    Fault(const char* file, int line, Win32Error osErrorNumber,
+    Fault(const char* file, int line, Win32Result osErrorNumber,
           const char* condition, const char* macroArgs);
 #endif
     ~Fault() noexcept(false);
@@ -377,7 +400,7 @@ public:
     void init(const char* file, int line, int osErrorNumber,
               const char* condition, const char* macroArgs, ArrayPtr<String> argValues);
 #if _WIN32
-    void init(const char* file, int line, Win32Error osErrorNumber,
+    void init(const char* file, int line, Win32Result osErrorNumber,
               const char* condition, const char* macroArgs, ArrayPtr<String> argValues);
 #endif
 
@@ -400,9 +423,10 @@ public:
   static int syscallError(Call&& call, bool nonblocking);
 
 #if _WIN32
-  static bool isWin32Success(int boolean);
-  static bool isWin32Success(void* handle);
-  static Win32Error getWin32Error();
+  static Win32Result win32Call(int boolean);
+  static Win32Result win32Call(void* handle);
+  static Win32Result winsockCall(int result);
+  static uint getWin32ErrorCode();
 #endif
 
   class Context: public ExceptionCallback {
@@ -495,18 +519,22 @@ inline Debug::Fault::Fault(const char* file, int line, kj::Exception::Type type,
 }
 
 #if _WIN32
-inline Debug::Fault::Fault(const char* file, int line, Win32Error osErrorNumber,
+inline Debug::Fault::Fault(const char* file, int line, Win32Result osErrorNumber,
                            const char* condition, const char* macroArgs)
     : exception(nullptr) {
   init(file, line, osErrorNumber, condition, macroArgs, nullptr);
 }
 
-inline bool Debug::isWin32Success(int boolean) {
-  return boolean;
+inline Debug::Win32Result Debug::win32Call(int boolean) {
+  return boolean ? Win32Result(0) : Win32Result(getWin32ErrorCode());
 }
-inline bool Debug::isWin32Success(void* handle) {
+inline Debug::Win32Result Debug::win32Call(void* handle) {
   // Assume null and INVALID_HANDLE_VALUE mean failure.
-  return handle != nullptr && handle != (void*)-1;
+  return win32Call(handle != nullptr && handle != (void*)-1);
+}
+inline Debug::Win32Result Debug::winsockCall(int result) {
+  // Expect a return value of SOCKET_ERROR means failure.
+  return win32Call(result != -1);
 }
 #endif
 
@@ -551,5 +579,3 @@ inline String Debug::makeDescription<>(const char* macroArgs) {
 
 }  // namespace _ (private)
 }  // namespace kj
-
-#endif  // KJ_DEBUG_H_

@@ -19,8 +19,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef KJ_ASYNC_IO_H_
-#define KJ_ASYNC_IO_H_
+#pragma once
 
 #if defined(__GNUC__) && !KJ_HEADER_WARNINGS
 #pragma GCC system_header
@@ -29,7 +28,7 @@
 #include "async.h"
 #include "function.h"
 #include "thread.h"
-#include "time.h"
+#include "timer.h"
 
 struct sockaddr;
 
@@ -37,12 +36,15 @@ namespace kj {
 
 #if _WIN32
 class Win32EventPort;
+class AutoCloseHandle;
 #else
 class UnixEventPort;
 #endif
 
+class AutoCloseFd;
 class NetworkAddress;
 class AsyncOutputStream;
+class AsyncIoStream;
 
 // =======================================================================================
 // Streaming I/O
@@ -77,9 +79,13 @@ public:
   // The default implementation first tries calling output.tryPumpFrom(), but if that fails, it
   // performs a naive pump by allocating a buffer and reading to it / writing from it in a loop.
 
-  Promise<Array<byte>> readAllBytes();
-  Promise<String> readAllText();
-  // Read until EOF and return as one big byte array or string.
+  Promise<Array<byte>> readAllBytes(uint64_t limit = kj::maxValue);
+  Promise<String> readAllText(uint64_t limit = kj::maxValue);
+  // Read until EOF and return as one big byte array or string. Throw an exception if EOF is not
+  // seen before reading `limit` bytes.
+  //
+  // To prevent runaway memory allocation, consider using a more conservative value for `limit` than
+  // the default, particularly on untrusted data streams which may never see EOF.
 };
 
 class AsyncOutputStream {
@@ -130,6 +136,42 @@ public:
   // ephemeral addresses for a single connection.
 };
 
+class AsyncCapabilityStream: public AsyncIoStream {
+  // An AsyncIoStream that also allows sending and receiving new connections or other kinds of
+  // capabilities, in addition to simple data.
+  //
+  // For correct functioning, a protocol must be designed such that the receiver knows when to
+  // expect a capability transfer. The receiver must not read() when a capability is expected, and
+  // must not receiveStream() when data is expected -- if it does, an exception may be thrown or
+  // invalid data may be returned. This implies that data sent over an AsyncCapabilityStream must
+  // be framed such that the receiver knows exactly how many bytes to read before receiving a
+  // capability.
+  //
+  // On Unix, KJ provides an implementation based on Unix domain sockets and file descriptor
+  // passing via SCM_RIGHTS. Due to the nature of SCM_RIGHTS, if the application accidentally
+  // read()s when it should have called receiveStream(), it will observe a NUL byte in the data
+  // and the capability will be discarded. Of course, an application should not depend on this
+  // behavior; it should avoid read()ing through a capability.
+  //
+  // KJ does not provide any implementation of this type on Windows, as there's no obvious
+  // implementation there. Handle passing on Windows requires at least one of the processes
+  // involved to have permission to modify the other's handle table, which is effectively full
+  // control. Handle passing between mutually non-trusting processes would require a trusted
+  // broker process to facilitate. One could possibly implement this type in terms of such a
+  // broker, or in terms of direct handle passing if at least one process trusts the other.
+
+public:
+  Promise<Own<AsyncCapabilityStream>> receiveStream();
+  virtual Promise<Maybe<Own<AsyncCapabilityStream>>> tryReceiveStream() = 0;
+  virtual Promise<void> sendStream(Own<AsyncCapabilityStream> stream) = 0;
+  // Transfer a stream.
+
+  Promise<AutoCloseFd> receiveFd();
+  virtual Promise<Maybe<AutoCloseFd>> tryReceiveFd();
+  virtual Promise<void> sendFd(int fd);
+  // Transfer a raw file descriptor. Default implementation throws UNIMPLEMENTED.
+};
+
 struct OneWayPipe {
   // A data pipe with an input end and an output end.  (Typically backed by pipe() system call.)
 
@@ -137,11 +179,28 @@ struct OneWayPipe {
   Own<AsyncOutputStream> out;
 };
 
+OneWayPipe newOneWayPipe(kj::Maybe<uint64_t> expectedLength = nullptr);
+// Constructs a OneWayPipe that operates in-process. The pipe does not do any buffering -- it waits
+// until both a read() and a write() call are pending, then resolves both.
+//
+// If `expectedLength` is non-null, then the pipe will be expected to transmit exactly that many
+// bytes. The input end's `tryGetLength()` will return the number of bytes left.
+
 struct TwoWayPipe {
   // A data pipe that supports sending in both directions.  Each end's output sends data to the
   // other end's input.  (Typically backed by socketpair() system call.)
 
   Own<AsyncIoStream> ends[2];
+};
+
+TwoWayPipe newTwoWayPipe();
+// Constructs a TwoWayPipe that operates in-process. The pipe does not do any buffering -- it waits
+// until both a read() and a write() call are pending, then resolves both.
+
+struct CapabilityPipe {
+  // Like TwoWayPipe but allowing capability-passing.
+
+  Own<AsyncCapabilityStream> ends[2];
 };
 
 class ConnectionReceiver {
@@ -319,6 +378,67 @@ public:
 
   virtual Own<NetworkAddress> getSockaddr(const void* sockaddr, uint len) = 0;
   // Construct a network address from a legacy struct sockaddr.
+
+  virtual Own<Network> restrictPeers(
+      kj::ArrayPtr<const kj::StringPtr> allow,
+      kj::ArrayPtr<const kj::StringPtr> deny = nullptr) KJ_WARN_UNUSED_RESULT = 0;
+  // Constructs a new Network instance wrapping this one which restricts which peer addresses are
+  // permitted (both for outgoing and incoming connections).
+  //
+  // Communication will be allowed only with peers whose addresses match one of the patterns
+  // specified in the `allow` array. If a `deny` array is specified, then any address which matches
+  // a pattern in `deny` and *does not* match any more-specific pattern in `allow` will also be
+  // denied.
+  //
+  // The syntax of address patterns depends on the network, except that three special patterns are
+  // defined for all networks:
+  // - "private": Matches network addresses that are reserved by standards for private networks,
+  //   such as "10.0.0.0/8" or "192.168.0.0/16". This is a superset of "local".
+  // - "public": Opposite of "private".
+  // - "local": Matches network addresses that are defined by standards to only be accessible from
+  //   the local machine, such as "127.0.0.0/8" or Unix domain addresses.
+  // - "network": Opposite of "local".
+  //
+  // For the standard KJ network implementation, the following patterns are also recognized:
+  // - Network blocks specified in CIDR notation (ipv4 and ipv6), such as "192.0.2.0/24" or
+  //   "2001:db8::/32".
+  // - "unix" to match all Unix domain addresses. (In the future, we may support specifying a
+  //   glob.)
+  // - "unix-abstract" to match Linux's "abstract unix domain" addresses. (In the future, we may
+  //   support specifying a glob.)
+  //
+  // Network restrictions apply *after* DNS resolution (otherwise they'd be useless).
+  //
+  // It is legal to parseAddress() a restricted address. An exception won't be thrown until
+  // connect() is called.
+  //
+  // It's possible to listen() on a restricted address. However, connections will only be accepted
+  // from non-restricted addresses; others will be dropped. If a particular listen address has no
+  // valid peers (e.g. because it's a unix socket address and unix sockets are not allowed) then
+  // listen() may throw (or may simply never receive any connections).
+  //
+  // Examples:
+  //
+  //     auto restricted = network->restrictPeers({"public"});
+  //
+  // Allows connections only to/from public internet addresses. Use this when connecting to an
+  // address specified by a third party that is not trusted and is not themselves already on your
+  // private network.
+  //
+  //     auto restricted = network->restrictPeers({"private"});
+  //
+  // Allows connections only to/from the private network. Use this on the server side to reject
+  // connections from the public internet.
+  //
+  //     auto restricted = network->restrictPeers({"192.0.2.0/24"}, {"192.0.2.3/32"});
+  //
+  // Allows connections only to/from 192.0.2.*, except 192.0.2.3 which is blocked.
+  //
+  //     auto restricted = network->restrictPeers({"10.0.0.0/8", "10.1.2.3/32"}, {"10.1.2.0/24"});
+  //
+  // Allows connections to/from 10.*.*.*, with the exception of 10.1.2.* (which is denied), with an
+  // exception to the exception of 10.1.2.3 (which is allowed, because it is matched by an allow
+  // rule that is more specific than the deny rule).
 };
 
 // =======================================================================================
@@ -339,6 +459,13 @@ public:
   virtual TwoWayPipe newTwoWayPipe() = 0;
   // Creates two AsyncIoStreams representing the two ends of a two-way pipe (e.g. created with
   // socketpair(2) system call).  Data written to one end can be read from the other.
+
+  virtual CapabilityPipe newCapabilityPipe();
+  // Creates two AsyncCapabilityStreams representing the two ends of a two-way capability pipe.
+  //
+  // The default implementation throws an unimplemented exception. In particular this is not
+  // implemented by the default AsyncIoProvider on Windows, since Windows lacks any sane way to
+  // pass handles over a stream.
 
   virtual Network& getNetwork() = 0;
   // Creates a new `Network` instance representing the networks exposed by the operating system.
@@ -400,16 +527,11 @@ class LowLevelAsyncIoProvider {
   // Different implementations of this interface might work on top of different event handling
   // primitives, such as poll vs. epoll vs. kqueue vs. some higher-level event library.
   //
-  // On Windows, this interface can be used to import native HANDLEs into the async framework.
+  // On Windows, this interface can be used to import native SOCKETs into the async framework.
   // Different implementations of this interface might work on top of different event handling
   // primitives, such as I/O completion ports vs. completion routines.
-  //
-  // TODO(port):  Actually implement Windows support.
 
 public:
-  // ---------------------------------------------------------------------------
-  // Unix-specific stuff
-
   enum Flags {
     // Flags controlling how to wrap a file descriptor.
 
@@ -440,11 +562,13 @@ public:
 
 #if _WIN32
   typedef uintptr_t Fd;
+  typedef AutoCloseHandle OwnFd;
   // On Windows, the `fd` parameter to each of these methods must be a SOCKET, and must have the
   // flag WSA_FLAG_OVERLAPPED (which socket() uses by default, but WSASocket() wants you to specify
   // explicitly).
 #else
   typedef int Fd;
+  typedef AutoCloseFd OwnFd;
   // On Unix, any arbitrary file descriptor is supported.
 #endif
 
@@ -463,6 +587,15 @@ public:
   //
   // `flags` is a bitwise-OR of the values of the `Flags` enum.
 
+#if !_WIN32
+  virtual Own<AsyncCapabilityStream> wrapUnixSocketFd(Fd fd, uint flags = 0);
+  // Like wrapSocketFd() but also support capability passing via SCM_RIGHTS. The socket must be
+  // a Unix domain socket.
+  //
+  // The default implementation throws UNIMPLEMENTED, for backwards-compatibility with
+  // LowLevelAsyncIoProvider implementations written before this method was added.
+#endif
+
   virtual Promise<Own<AsyncIoStream>> wrapConnectingSocketFd(
       Fd fd, const struct sockaddr* addr, uint addrlen, uint flags = 0) = 0;
   // Create an AsyncIoStream wrapping a socket and initiate a connection to the given address.
@@ -470,13 +603,29 @@ public:
   //
   // `flags` is a bitwise-OR of the values of the `Flags` enum.
 
-  virtual Own<ConnectionReceiver> wrapListenSocketFd(Fd fd, uint flags = 0) = 0;
+  class NetworkFilter {
+  public:
+    virtual bool shouldAllow(const struct sockaddr* addr, uint addrlen) = 0;
+    // Returns true if incoming connections or datagrams from the given peer should be accepted.
+    // If false, they will be dropped. This is used to implement kj::Network::restrictPeers().
+
+    static NetworkFilter& getAllAllowed();
+  };
+
+  virtual Own<ConnectionReceiver> wrapListenSocketFd(
+      Fd fd, NetworkFilter& filter, uint flags = 0) = 0;
+  inline Own<ConnectionReceiver> wrapListenSocketFd(Fd fd, uint flags = 0) {
+    return wrapListenSocketFd(fd, NetworkFilter::getAllAllowed(), flags);
+  }
   // Create an AsyncIoStream wrapping a listen socket file descriptor.  This socket should already
   // have had `bind()` and `listen()` called on it, so it's ready for `accept()`.
   //
   // `flags` is a bitwise-OR of the values of the `Flags` enum.
 
-  virtual Own<DatagramPort> wrapDatagramSocketFd(Fd fd, uint flags = 0);
+  virtual Own<DatagramPort> wrapDatagramSocketFd(Fd fd, NetworkFilter& filter, uint flags = 0);
+  inline Own<DatagramPort> wrapDatagramSocketFd(Fd fd, uint flags = 0) {
+    return wrapDatagramSocketFd(fd, NetworkFilter::getAllAllowed(), flags);
+  }
 
   virtual Timer& getTimer() = 0;
   // Returns a `Timer` based on real time.  Time does not pass while event handlers are running --
@@ -485,6 +634,22 @@ public:
   //
   // This timer is not affected by changes to the system date.  It is unspecified whether the timer
   // continues to count while the system is suspended.
+
+  Own<AsyncInputStream> wrapInputFd(OwnFd&& fd, uint flags = 0);
+  Own<AsyncOutputStream> wrapOutputFd(OwnFd&& fd, uint flags = 0);
+  Own<AsyncIoStream> wrapSocketFd(OwnFd&& fd, uint flags = 0);
+#if !_WIN32
+  Own<AsyncCapabilityStream> wrapUnixSocketFd(OwnFd&& fd, uint flags = 0);
+#endif
+  Promise<Own<AsyncIoStream>> wrapConnectingSocketFd(
+      OwnFd&& fd, const struct sockaddr* addr, uint addrlen, uint flags = 0);
+  Own<ConnectionReceiver> wrapListenSocketFd(
+      OwnFd&& fd, NetworkFilter& filter, uint flags = 0);
+  Own<ConnectionReceiver> wrapListenSocketFd(OwnFd&& fd, uint flags = 0);
+  Own<DatagramPort> wrapDatagramSocketFd(OwnFd&& fd, NetworkFilter& filter, uint flags = 0);
+  Own<DatagramPort> wrapDatagramSocketFd(OwnFd&& fd, uint flags = 0);
+  // Convenience wrappers which transfer ownership via AutoCloseFd (Unix) or AutoCloseHandle
+  // (Windows). TAKE_OWNERSHIP will be implicitly added to `flags`.
 };
 
 Own<AsyncIoProvider> newAsyncIoProvider(LowLevelAsyncIoProvider& lowLevel);
@@ -533,6 +698,50 @@ AsyncIoContext setupAsyncIo();
 //   until after daemonization to create an AsyncIoContext.
 
 // =======================================================================================
+// Convenience adapters.
+
+class CapabilityStreamConnectionReceiver final: public ConnectionReceiver {
+  // Trivial wrapper which allows an AsyncCapabilityStream to act as a ConnectionReceiver. accept()
+  // calls receiveStream().
+
+public:
+  CapabilityStreamConnectionReceiver(AsyncCapabilityStream& inner)
+      : inner(inner) {}
+
+  Promise<Own<AsyncIoStream>> accept() override;
+  uint getPort() override;
+
+private:
+  AsyncCapabilityStream& inner;
+};
+
+class CapabilityStreamNetworkAddress final: public NetworkAddress {
+  // Trivial wrapper which allows an AsyncCapabilityStream to act as a NetworkAddress.
+  //
+  // connect() is implemented by calling provider.newCapabilityPipe(), sending one end over the
+  // original capability stream, and returning the other end.
+  //
+  // listen().accept() is implemented by receiving new streams over the original stream.
+  //
+  // Note that clone() dosen't work (due to ownership issues) and toString() returns a static
+  // string.
+
+public:
+  CapabilityStreamNetworkAddress(AsyncIoProvider& provider, AsyncCapabilityStream& inner)
+      : provider(provider), inner(inner) {}
+
+  Promise<Own<AsyncIoStream>> connect() override;
+  Own<ConnectionReceiver> listen() override;
+
+  Own<NetworkAddress> clone() override;
+  String toString() override;
+
+private:
+  AsyncIoProvider& provider;
+  AsyncCapabilityStream& inner;
+};
+
+// =======================================================================================
 // inline implementation details
 
 inline AncillaryMessage::AncillaryMessage(
@@ -557,5 +766,3 @@ inline ArrayPtr<const T> AncillaryMessage::asArray() {
 }
 
 }  // namespace kj
-
-#endif  // KJ_ASYNC_IO_H_

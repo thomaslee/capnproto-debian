@@ -33,8 +33,7 @@
 // will have updated the input cursor to point to the position just past the end of what was parsed.
 // On failure, the cursor position is unspecified.
 
-#ifndef KJ_PARSE_COMMON_H_
-#define KJ_PARSE_COMMON_H_
+#pragma once
 
 #if defined(__GNUC__) && !KJ_HEADER_WARNINGS
 #pragma GCC system_header
@@ -45,7 +44,7 @@
 #include "../array.h"
 #include "../tuple.h"
 #include "../vector.h"
-#if _MSC_VER
+#if _MSC_VER && !__clang__
 #include <type_traits>  // result_of_t
 #endif
 
@@ -104,7 +103,7 @@ template <typename T> struct OutputType_;
 template <typename T> struct OutputType_<Maybe<T>> { typedef T Type; };
 template <typename Parser, typename Input>
 using OutputType = typename OutputType_<
-#if _MSC_VER
+#if _MSC_VER && !__clang__
     std::result_of_t<Parser(Input)>
     // The instance<T&>() based version below results in:
     //   C2064: term does not evaluate to a function taking 1 arguments
@@ -162,7 +161,7 @@ private:
   };
   template <typename ParserImpl>
   struct WrapperImplInstance {
-#if _MSC_VER
+#if _MSC_VER && !__clang__
     // TODO(msvc): MSVC currently fails to initialize vtable pointers for constexpr values so
     //   we have to make this just const instead.
     static const WrapperImpl<ParserImpl> instance;
@@ -177,7 +176,7 @@ private:
 
 template <typename Input, typename Output>
 template <typename ParserImpl>
-#if _MSC_VER
+#if _MSC_VER && !__clang__
 const typename ParserRef<Input, Output>::template WrapperImpl<ParserImpl>
 ParserRef<Input, Output>::WrapperImplInstance<ParserImpl>::instance = WrapperImpl<ParserImpl>();
 #else
@@ -332,7 +331,7 @@ public:
 
   template <typename Input>
   auto operator()(Input& input) const
-#ifndef _MSC_VER
+#if !_MSC_VER || __clang__
       -> Maybe<decltype(tuple(
           instance<OutputType<FirstSubParser, Input>>(),
           instance<OutputType<SubParsers, Input>>()...))>
@@ -343,7 +342,7 @@ public:
 
   template <typename Input, typename... InitialParams>
   auto parseNext(Input& input, InitialParams&&... initialParams) const
-#ifndef _MSC_VER
+#if !_MSC_VER || __clang__
       -> Maybe<decltype(tuple(
           kj::fwd<InitialParams>(initialParams)...,
           instance<OutputType<FirstSubParser, Input>>(),
@@ -820,5 +819,3 @@ constexpr EndOfInput_ endOfInput = EndOfInput_();
 
 }  // namespace parse
 }  // namespace kj
-
-#endif  // KJ_PARSE_COMMON_H_

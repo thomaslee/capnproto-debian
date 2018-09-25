@@ -414,7 +414,7 @@ DynamicValue::Pipeline DynamicStruct::Pipeline::get(StructSchema::Field field) {
   KJ_UNREACHABLE;
 }
 
-bool DynamicStruct::Reader::has(StructSchema::Field field) const {
+bool DynamicStruct::Reader::has(StructSchema::Field field, HasMode mode) const {
   KJ_REQUIRE(field.getContainingStruct() == schema, "`field` is not a field of this struct.");
 
   auto proto = field.getProto();
@@ -441,20 +441,35 @@ bool DynamicStruct::Reader::has(StructSchema::Field field) const {
 
   switch (type.which()) {
     case schema::Type::VOID:
+      // Void is always equal to the default.
+      return mode == HasMode::NON_NULL;
+
     case schema::Type::BOOL:
+      return mode == HasMode::NON_NULL ||
+          reader.getDataField<bool>(assumeDataOffset(slot.getOffset()), 0) != 0;
+
     case schema::Type::INT8:
-    case schema::Type::INT16:
-    case schema::Type::INT32:
-    case schema::Type::INT64:
     case schema::Type::UINT8:
+      return mode == HasMode::NON_NULL ||
+          reader.getDataField<uint8_t>(assumeDataOffset(slot.getOffset()), 0) != 0;
+
+    case schema::Type::INT16:
     case schema::Type::UINT16:
-    case schema::Type::UINT32:
-    case schema::Type::UINT64:
-    case schema::Type::FLOAT32:
-    case schema::Type::FLOAT64:
     case schema::Type::ENUM:
-      // Primitive types are always present.
-      return true;
+      return mode == HasMode::NON_NULL ||
+          reader.getDataField<uint16_t>(assumeDataOffset(slot.getOffset()), 0) != 0;
+
+    case schema::Type::INT32:
+    case schema::Type::UINT32:
+    case schema::Type::FLOAT32:
+      return mode == HasMode::NON_NULL ||
+          reader.getDataField<uint32_t>(assumeDataOffset(slot.getOffset()), 0) != 0;
+
+    case schema::Type::INT64:
+    case schema::Type::UINT64:
+    case schema::Type::FLOAT64:
+      return mode == HasMode::NON_NULL ||
+          reader.getDataField<uint64_t>(assumeDataOffset(slot.getOffset()), 0) != 0;
 
     case schema::Type::TEXT:
     case schema::Type::DATA:
@@ -725,6 +740,7 @@ DynamicValue::Builder DynamicStruct::Builder::init(StructSchema::Field field, ui
               (uint)type.which());
           break;
       }
+      KJ_UNREACHABLE;
     }
 
     case schema::Field::GROUP:
@@ -985,11 +1001,11 @@ DynamicValue::Builder DynamicStruct::Builder::get(kj::StringPtr name) {
 DynamicValue::Pipeline DynamicStruct::Pipeline::get(kj::StringPtr name) {
   return get(schema.getFieldByName(name));
 }
-bool DynamicStruct::Reader::has(kj::StringPtr name) const {
-  return has(schema.getFieldByName(name));
+bool DynamicStruct::Reader::has(kj::StringPtr name, HasMode mode) const {
+  return has(schema.getFieldByName(name), mode);
 }
-bool DynamicStruct::Builder::has(kj::StringPtr name) {
-  return has(schema.getFieldByName(name));
+bool DynamicStruct::Builder::has(kj::StringPtr name, HasMode mode) {
+  return has(schema.getFieldByName(name), mode);
 }
 void DynamicStruct::Builder::set(kj::StringPtr name, const DynamicValue::Reader& value) {
   set(schema.getFieldByName(name), value);
@@ -1709,11 +1725,21 @@ int64_t unsignedToSigned<int64_t>(unsigned long long value) {
 
 template <typename T, typename U>
 T checkRoundTrip(U value) {
-  KJ_REQUIRE(T(value) == value, "Value out-of-range for requested type.", value) {
+#if __aarch64__
+  // Work around an apparently broken compiler optimization on Clang / arm64. It appears that
+  // for T = int8_t, U = double, and value = 128, the compiler incorrectly believes that the
+  // round-trip does not change the value, where in fact it should change to -128. Similar problems
+  // exist for various other types and inputs -- json-test seems to exercise several problem cases.
+  // The problem only exists when compiling with optimization. In any case, declaring the variable
+  // `volatile` kills the optimization.
+  volatile
+#endif
+  T result = value;
+  KJ_REQUIRE(U(result) == value, "Value out-of-range for requested type.", value) {
     // Use it anyway.
     break;
   }
-  return value;
+  return result;
 }
 
 }  // namespace

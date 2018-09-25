@@ -19,21 +19,34 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "exception.h"
 #include "string.h"
 #include "debug.h"
 #include "threadlocal.h"
 #include "miniposix.h"
+#include "function.h"
 #include <stdlib.h>
 #include <exception>
 #include <new>
 #include <signal.h>
+#include <stdint.h>
 #ifndef _WIN32
 #include <sys/mman.h>
 #endif
 #include "io.h"
 
-#if (__linux__ && __GLIBC__) || __APPLE__
+#if !KJ_NO_RTTI
+#include <typeinfo>
+#endif
+#if __GNUC__
+#include <cxxabi.h>
+#endif
+
+#if (__linux__ && __GLIBC__ && !__UCLIBC__) || __APPLE__
 #define KJ_HAS_BACKTRACE 1
 #include <execinfo.h>
 #endif
@@ -48,6 +61,10 @@
 #if (__linux__ || __APPLE__)
 #include <stdio.h>
 #include <pthread.h>
+#endif
+
+#if KJ_HAS_LIBDL
+#include "dlfcn.h"
 #endif
 
 namespace kj {
@@ -146,7 +163,9 @@ ArrayPtr<void* const> getStackTrace(ArrayPtr<void*> space, uint ignoreCount,
       break;
     }
 
-    space[count] = reinterpret_cast<void*>(frame.AddrPC.Offset);
+    // Subtract 1 from each address so that we identify the calling instructions, rather than the
+    // return addresses (which are typically the instruction after the call).
+    space[count] = reinterpret_cast<void*>(frame.AddrPC.Offset - 1);
   }
 
   return space.slice(kj::min(ignoreCount, count), count);
@@ -166,6 +185,16 @@ ArrayPtr<void* const> getStackTrace(ArrayPtr<void*> space, uint ignoreCount) {
   return getStackTrace(space, ignoreCount, GetCurrentThread(), context);
 #elif KJ_HAS_BACKTRACE
   size_t size = backtrace(space.begin(), space.size());
+  for (auto& addr: space.slice(0, size)) {
+    // The addresses produced by backtrace() are return addresses, which means they point to the
+    // instruction immediately after the call. Invoking addr2line on these can be confusing because
+    // it often points to the next line. If the next instruction is inlined from another function,
+    // the trace can be extra-confusing, since now it claims to be in a function that was not
+    // actually on the call stack. If we subtract 1 from each address, though, we get a much more
+    // reasonable trace. This may cause the addresses to be invalid instruction pointers if the
+    // instructions were multi-byte, but it appears addr2line is able to cope with this.
+    addr = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(addr) - 1);
+  }
   return space.slice(kj::min(ignoreCount + 1, size), size);
 #else
   return nullptr;
@@ -284,10 +313,69 @@ String stringifyStackTrace(ArrayPtr<void* const> trace) {
 #endif
 }
 
+String stringifyStackTraceAddresses(ArrayPtr<void* const> trace) {
+#if KJ_HAS_LIBDL
+  return strArray(KJ_MAP(addr, trace) {
+    Dl_info info;
+    // Shared libraries are mapped near the end of the address space while the executable is mapped
+    // near the beginning. We want to print addresses in the executable as raw addresses, not
+    // offsets, since that's what addr2line expects for executables. For shared libraries it
+    // expects offsets. In any case, most frames are likely to be in the main executable so it
+    // makes the output cleaner if we don't repeatedly write its name.
+    if (reinterpret_cast<uintptr_t>(addr) >= 0x400000000000ull && dladdr(addr, &info)) {
+      uintptr_t offset = reinterpret_cast<uintptr_t>(addr) -
+                         reinterpret_cast<uintptr_t>(info.dli_fbase);
+      return kj::str(info.dli_fname, '@', reinterpret_cast<void*>(offset));
+    } else {
+      return kj::str(addr);
+    }
+  }, " ");
+#else
+  // TODO(someday): Support other platforms.
+  return kj::strArray(trace, " ");
+#endif
+}
+
+StringPtr stringifyStackTraceAddresses(ArrayPtr<void* const> trace, ArrayPtr<char> scratch) {
+  // Version which writes into a pre-allocated buffer. This is safe for signal handlers to the
+  // extent that dladdr() is safe.
+  //
+  // TODO(cleanup): We should improve the KJ stringification framework so that there's a way to
+  //   write this string directly into a larger message buffer with strPreallocated().
+
+#if KJ_HAS_LIBDL
+  char* ptr = scratch.begin();
+  char* limit = scratch.end() - 1;
+
+  for (auto addr: trace) {
+    Dl_info info;
+    // Shared libraries are mapped near the end of the address space while the executable is mapped
+    // near the beginning. We want to print addresses in the executable as raw addresses, not
+    // offsets, since that's what addr2line expects for executables. For shared libraries it
+    // expects offsets. In any case, most frames are likely to be in the main executable so it
+    // makes the output cleaner if we don't repeatedly write its name.
+    if (reinterpret_cast<uintptr_t>(addr) >= 0x400000000000ull && dladdr(addr, &info)) {
+      uintptr_t offset = reinterpret_cast<uintptr_t>(addr) -
+                         reinterpret_cast<uintptr_t>(info.dli_fbase);
+      ptr = _::fillLimited(ptr, limit, kj::StringPtr(info.dli_fname), "@0x"_kj, hex(offset));
+    } else {
+      ptr = _::fillLimited(ptr, limit, toCharSequence(addr));
+    }
+
+    ptr = _::fillLimited(ptr, limit, " "_kj);
+  }
+  *ptr = '\0';
+  return StringPtr(scratch.begin(), ptr);
+#else
+  // TODO(someday): Support other platforms.
+  return kj::strPreallocated(scratch, kj::delimited(trace, " "));
+#endif
+}
+
 String getStackTrace() {
   void* space[32];
   auto trace = getStackTrace(space, 2);
-  return kj::str(kj::strArray(trace, " "), stringifyStackTrace(trace));
+  return kj::str(stringifyStackTraceAddresses(trace), stringifyStackTrace(trace));
 }
 
 #if _WIN32 && _M_X64
@@ -307,9 +395,10 @@ BOOL WINAPI breakHandler(DWORD type) {
           context.ContextFlags = CONTEXT_FULL;
           if (GetThreadContext(thread, &context)) {
             void* traceSpace[32];
-            auto trace = getStackTrace(traceSpace, 2, thread, context);
+            auto trace = getStackTrace(traceSpace, 0, thread, context);
             ResumeThread(thread);
-            auto message = kj::str("*** Received CTRL+C. stack: ", strArray(trace, " "),
+            auto message = kj::str("*** Received CTRL+C. stack: ",
+                                   stringifyStackTraceAddresses(trace),
                                    stringifyStackTrace(trace), '\n');
             FdOutputStream(STDERR_FILENO).write(message.begin(), message.size());
           } else {
@@ -327,11 +416,51 @@ BOOL WINAPI breakHandler(DWORD type) {
   return FALSE;  // still crash
 }
 
+kj::StringPtr exceptionDescription(DWORD code) {
+  switch (code) {
+    case EXCEPTION_ACCESS_VIOLATION: return "access violation";
+    case EXCEPTION_ARRAY_BOUNDS_EXCEEDED: return "array bounds exceeded";
+    case EXCEPTION_BREAKPOINT: return "breakpoint";
+    case EXCEPTION_DATATYPE_MISALIGNMENT: return "datatype misalignment";
+    case EXCEPTION_FLT_DENORMAL_OPERAND: return "denormal floating point operand";
+    case EXCEPTION_FLT_DIVIDE_BY_ZERO: return "floating point division by zero";
+    case EXCEPTION_FLT_INEXACT_RESULT: return "inexact floating point result";
+    case EXCEPTION_FLT_INVALID_OPERATION: return "invalid floating point operation";
+    case EXCEPTION_FLT_OVERFLOW: return "floating point overflow";
+    case EXCEPTION_FLT_STACK_CHECK: return "floating point stack overflow";
+    case EXCEPTION_FLT_UNDERFLOW: return "floating point underflow";
+    case EXCEPTION_ILLEGAL_INSTRUCTION: return "illegal instruction";
+    case EXCEPTION_IN_PAGE_ERROR: return "page error";
+    case EXCEPTION_INT_DIVIDE_BY_ZERO: return "integer divided by zero";
+    case EXCEPTION_INT_OVERFLOW: return "integer overflow";
+    case EXCEPTION_INVALID_DISPOSITION: return "invalid disposition";
+    case EXCEPTION_NONCONTINUABLE_EXCEPTION: return "noncontinuable exception";
+    case EXCEPTION_PRIV_INSTRUCTION: return "privileged instruction";
+    case EXCEPTION_SINGLE_STEP: return "single step";
+    case EXCEPTION_STACK_OVERFLOW: return "stack overflow";
+    default: return "(unknown exception code)";
+  }
+}
+
+LONG WINAPI sehHandler(EXCEPTION_POINTERS* info) {
+  void* traceSpace[32];
+  auto trace = getStackTrace(traceSpace, 0, GetCurrentThread(), *info->ContextRecord);
+  auto message = kj::str("*** Received structured exception #0x",
+                         hex(info->ExceptionRecord->ExceptionCode), ": ",
+                         exceptionDescription(info->ExceptionRecord->ExceptionCode),
+                         "; stack: ",
+                         stringifyStackTraceAddresses(trace),
+                         stringifyStackTrace(trace), '\n');
+  FdOutputStream(STDERR_FILENO).write(message.begin(), message.size());
+  return EXCEPTION_EXECUTE_HANDLER;  // still crash
+}
+
 }  // namespace
 
 void printStackTraceOnCrash() {
   mainThreadId = GetCurrentThreadId();
   KJ_WIN32(SetConsoleCtrlHandler(breakHandler, TRUE));
+  SetUnhandledExceptionFilter(&sehHandler);
 }
 
 #elif KJ_HAS_BACKTRACE
@@ -344,7 +473,7 @@ void crashHandler(int signo, siginfo_t* info, void* context) {
   auto trace = getStackTrace(traceSpace, 2);
 
   auto message = kj::str("*** Received signal #", signo, ": ", strsignal(signo),
-                         "\nstack: ", strArray(trace, " "),
+                         "\nstack: ", stringifyStackTraceAddresses(trace),
                          stringifyStackTrace(trace), '\n');
 
   FdOutputStream(STDERR_FILENO).write(message.begin(), message.size());
@@ -491,7 +620,8 @@ String KJ_STRINGIFY(const Exception& e) {
   return str(strArray(contextText, ""),
              e.getFile(), ":", e.getLine(), ": ", e.getType(),
              e.getDescription() == nullptr ? "" : ": ", e.getDescription(),
-             e.getStackTrace().size() > 0 ? "\nstack: " : "", strArray(e.getStackTrace(), " "),
+             e.getStackTrace().size() > 0 ? "\nstack: " : "",
+             stringifyStackTraceAddresses(e.getStackTrace()),
              stringifyStackTrace(e.getStackTrace()));
 }
 
@@ -649,6 +779,10 @@ ExceptionCallback::StackTraceMode ExceptionCallback::stackTraceMode() {
   return next.stackTraceMode();
 }
 
+Function<void(Function<void()>)> ExceptionCallback::getThreadInitializer() {
+  return next.getThreadInitializer();
+}
+
 class ExceptionCallback::RootExceptionCallback: public ExceptionCallback {
 public:
   RootExceptionCallback(): ExceptionCallback(*this) {}
@@ -685,7 +819,7 @@ public:
 
     StringPtr textPtr = text;
 
-    while (text != nullptr) {
+    while (textPtr != nullptr) {
       miniposix::ssize_t n = miniposix::write(STDERR_FILENO, textPtr.begin(), textPtr.size());
       if (n <= 0) {
         // stderr is broken.  Give up.
@@ -703,6 +837,14 @@ public:
 #endif
   }
 
+  Function<void(Function<void()>)> getThreadInitializer() override {
+    return [](Function<void()> func) {
+      // No initialization needed since RootExceptionCallback is automatically the root callback
+      // for new threads.
+      func();
+    };
+  }
+
 private:
   void logException(LogSeverity severity, Exception&& e) {
     // We intentionally go back to the top exception callback on the stack because we don't want to
@@ -712,7 +854,8 @@ private:
     // anyway.
     getExceptionCallback().logMessage(severity, e.getFile(), e.getLine(), 0, str(
         e.getType(), e.getDescription() == nullptr ? "" : ": ", e.getDescription(),
-        e.getStackTrace().size() > 0 ? "\nstack: " : "", strArray(e.getStackTrace(), " "),
+        e.getStackTrace().size() > 0 ? "\nstack: " : "",
+        stringifyStackTraceAddresses(e.getStackTrace()),
         stringifyStackTrace(e.getStackTrace()), "\n"));
   }
 };
@@ -738,7 +881,13 @@ void throwRecoverableException(kj::Exception&& exception, uint ignoreCount) {
 
 namespace _ {  // private
 
-#if __GNUC__
+#if __cplusplus >= 201703L
+
+uint uncaughtExceptionCount() {
+  return std::uncaught_exceptions();
+}
+
+#elif __GNUC__
 
 // Horrible -- but working -- hack:  We can dig into __cxa_get_globals() in order to extract the
 // count of uncaught exceptions.  This function is part of the C++ ABI implementation used on Linux,
@@ -762,17 +911,16 @@ struct FakeEhGlobals {
   uint uncaughtExceptions;
 };
 
-// Because of the 'extern "C"', the symbol name is not mangled and thus the namespace is effectively
-// ignored for linking.  Thus it doesn't matter that we are declaring __cxa_get_globals() in a
-// different namespace from the ABI's definition.
-extern "C" {
-FakeEhGlobals* __cxa_get_globals();
-}
+// LLVM's libstdc++ doesn't declare __cxa_get_globals in its cxxabi.h. GNU does. Because it is
+// extern "C", the compiler wills get upset if we re-declare it even in a different namespace.
+#if _LIBCPPABI_VERSION
+extern "C" void* __cxa_get_globals();
+#else
+using abi::__cxa_get_globals;
+#endif
 
 uint uncaughtExceptionCount() {
-  // TODO(perf):  Use __cxa_get_globals_fast()?  Requires that __cxa_get_globals() has been called
-  //   from somewhere.
-  return __cxa_get_globals()->uncaughtExceptions;
+  return reinterpret_cast<FakeEhGlobals*>(__cxa_get_globals())->uncaughtExceptions;
 }
 
 #elif _MSC_VER
@@ -822,6 +970,26 @@ void UnwindDetector::catchExceptionsAsSecondaryFaults(_::Runnable& runnable) con
   runCatchingExceptions(runnable);
 }
 
+#if __GNUC__ && !KJ_NO_RTTI
+static kj::String demangleTypeName(const char* name) {
+  if (name == nullptr) return kj::heapString("(nil)");
+
+  int status;
+  char* buf = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+  kj::String result = kj::heapString(buf == nullptr ? name : buf);
+  free(buf);
+  return kj::mv(result);
+}
+
+kj::String getCaughtExceptionType() {
+  return demangleTypeName(abi::__cxa_current_exception_type()->name());
+}
+#else
+kj::String getCaughtExceptionType() {
+  return kj::heapString("(unknown)");
+}
+#endif
+
 namespace _ {  // private
 
 class RecoverableExceptionCatcher: public ExceptionCallback {
@@ -864,8 +1032,12 @@ Maybe<Exception> runCatchingExceptions(Runnable& runnable) noexcept {
     return Exception(Exception::Type::FAILED,
                      "(unknown)", -1, str("std::exception: ", e.what()));
   } catch (...) {
-    return Exception(Exception::Type::FAILED,
-                     "(unknown)", -1, str("Unknown non-KJ exception."));
+#if __GNUC__ && !KJ_NO_RTTI
+    return Exception(Exception::Type::FAILED, "(unknown)", -1, str(
+        "unknown non-KJ exception of type: ", getCaughtExceptionType()));
+#else
+    return Exception(Exception::Type::FAILED, "(unknown)", -1, str("unknown non-KJ exception"));
+#endif
   }
 #endif
 }

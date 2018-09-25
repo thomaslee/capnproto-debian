@@ -28,19 +28,25 @@
 #include <kj/string-tree.h>
 #include <kj/tuple.h>
 #include <kj/vector.h>
+#include <kj/filesystem.h>
 #include "../schema-loader.h"
 #include "../dynamic.h"
-#include <kj/miniposix.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <map>
 #include <set>
 #include <kj/main.h>
 #include <algorithm>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
+
+#if _WIN32
+#define WIN32_LEAN_AND_MEAN  // ::eyeroll::
+#include <windows.h>
+#include <kj/windows-sanity.h>
+#undef VOID
+#undef CONST
+#else
+#include <sys/time.h>
+#endif
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -295,6 +301,43 @@ kj::String KJ_STRINGIFY(const CppTypeName& typeName) {
   }
 }
 
+CppTypeName whichKind(schema::Type::Which which) {
+  // Make a CppTypeName representing the capnp::Kind value for the given schema type. This makes
+  // CppTypeName conflate types and values, but this is all just a hack for MSVC's benefit. Its
+  // primary use is as a non-type template parameter to `capnp::List<T, K>` -- normally the Kind K
+  // is deduced via SFINAE, but MSVC just can't do it in certain cases, such as when a nested type
+  // of `capnp::List<T, K>` is the return type of a function, and the element type T is a template
+  // instantiation.
+
+  switch (which) {
+      case schema::Type::VOID: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+
+      case schema::Type::BOOL: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+      case schema::Type::INT8: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+      case schema::Type::INT16: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+      case schema::Type::INT32: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+      case schema::Type::INT64: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+      case schema::Type::UINT8: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+      case schema::Type::UINT16: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+      case schema::Type::UINT32: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+      case schema::Type::UINT64: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+      case schema::Type::FLOAT32: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+      case schema::Type::FLOAT64: return CppTypeName::makePrimitive(" ::capnp::Kind::PRIMITIVE");
+
+      case schema::Type::TEXT: return CppTypeName::makePrimitive(" ::capnp::Kind::BLOB");
+      case schema::Type::DATA: return CppTypeName::makePrimitive(" ::capnp::Kind::BLOB");
+
+      case schema::Type::ENUM: return CppTypeName::makePrimitive(" ::capnp::Kind::ENUM");
+      case schema::Type::STRUCT: return CppTypeName::makePrimitive(" ::capnp::Kind::STRUCT");
+      case schema::Type::INTERFACE: return CppTypeName::makePrimitive(" ::capnp::Kind::INTERFACE");
+
+      case schema::Type::LIST: return CppTypeName::makePrimitive(" ::capnp::Kind::LIST");
+      case schema::Type::ANY_POINTER: return CppTypeName::makePrimitive(" ::capnp::Kind::OTHER");
+  }
+
+  KJ_UNREACHABLE;
+}
+
 // =======================================================================================
 
 class CapnpcCppMain {
@@ -467,8 +510,10 @@ private:
 
       case schema::Type::LIST: {
         CppTypeName result = CppTypeName::makeNamespace("capnp");
-        auto params = kj::heapArrayBuilder<CppTypeName>(1);
-        params.add(typeName(type.asList().getElementType(), method));
+        auto params = kj::heapArrayBuilder<CppTypeName>(2);
+        auto list = type.asList();
+        params.add(typeName(list.getElementType(), method));
+        params.add(whichKind(list.whichElementType()));
         result.addMemberTemplate("List", params.finish());
         return result;
       }
@@ -494,7 +539,7 @@ private:
             case schema::Type::AnyPointer::Unconstrained::LIST:
               return CppTypeName::makePrimitive(" ::capnp::AnyList");
             case schema::Type::AnyPointer::Unconstrained::CAPABILITY:
-              hasInterfaces = true;  // Probably need to #inculde <capnp/capability.h>.
+              hasInterfaces = true;  // Probably need to #include <capnp/capability.h>.
               return CppTypeName::makePrimitive(" ::capnp::Capability");
           }
           KJ_UNREACHABLE;
@@ -682,12 +727,12 @@ private:
     kj::StringTree dependencies;
     size_t dependencyCount;
     // TODO(msvc):  `dependencyCount` is the number of individual dependency definitions in
-    // `dependencies`. It's a hack to allow makeGenericDefinitions to hard-code the size of the
-    // `_capnpPrivate::brandDependencies` array into the definition of
-    // `_capnpPrivate::specificBrand::dependencyCount`. This is necessary because MSVC cannot deduce
-    // the size of `brandDependencies` if it is nested under a class template. It's probably this
-    // demoralizingly deferred bug:
-    // https://connect.microsoft.com/VisualStudio/feedback/details/759407/can-not-get-size-of-static-array-defined-in-class-template
+    //   `dependencies`. It's a hack to allow makeGenericDefinitions to hard-code the size of the
+    //   `_capnpPrivate::brandDependencies` array into the definition of
+    //   `_capnpPrivate::specificBrand::dependencyCount`. This is necessary because MSVC cannot
+    //   deduce the size of `brandDependencies` if it is nested under a class template. It's
+    //   probably this demoralizingly deferred bug:
+    //   https://connect.microsoft.com/VisualStudio/feedback/details/759407/can-not-get-size-of-static-array-defined-in-class-template
   };
 
   BrandInitializerText makeBrandInitializers(
@@ -2469,16 +2514,16 @@ private:
     const char* linkage = scope.size() == 0 ? "extern " : "static ";
 
     switch (type.which()) {
-      case schema::Value::BOOL:
-      case schema::Value::INT8:
-      case schema::Value::INT16:
-      case schema::Value::INT32:
-      case schema::Value::INT64:
-      case schema::Value::UINT8:
-      case schema::Value::UINT16:
-      case schema::Value::UINT32:
-      case schema::Value::UINT64:
-      case schema::Value::ENUM:
+      case schema::Type::BOOL:
+      case schema::Type::INT8:
+      case schema::Type::INT16:
+      case schema::Type::INT32:
+      case schema::Type::INT64:
+      case schema::Type::UINT8:
+      case schema::Type::UINT16:
+      case schema::Type::UINT32:
+      case schema::Type::UINT64:
+      case schema::Type::ENUM:
         return ConstText {
           false,
           kj::strTree("static constexpr ", typeName_, ' ', upperCase, " = ",
@@ -2491,9 +2536,9 @@ private:
               "#endif\n")
         };
 
-      case schema::Value::VOID:
-      case schema::Value::FLOAT32:
-      case schema::Value::FLOAT64: {
+      case schema::Type::VOID:
+      case schema::Type::FLOAT32:
+      case schema::Type::FLOAT64: {
         // TODO(msvc): MSVC doesn't like float- or class-typed constexprs. As soon as this is fixed,
         //   treat VOID, FLOAT32, and FLOAT64 the same as the other primitives.
         kj::String value = literalValue(schema.getType(), constProto.getValue()).flatten();
@@ -2507,7 +2552,7 @@ private:
         };
       }
 
-      case schema::Value::TEXT: {
+      case schema::Type::TEXT: {
         kj::String constType = kj::strTree(
             "::capnp::_::ConstText<", schema.as<Text>().size(), ">").flatten();
         return ConstText {
@@ -2518,7 +2563,7 @@ private:
         };
       }
 
-      case schema::Value::DATA: {
+      case schema::Type::DATA: {
         kj::String constType = kj::strTree(
             "::capnp::_::ConstData<", schema.as<Data>().size(), ">").flatten();
         return ConstText {
@@ -2529,7 +2574,7 @@ private:
         };
       }
 
-      case schema::Value::STRUCT: {
+      case schema::Type::STRUCT: {
         kj::String constType = kj::strTree(
             "::capnp::_::ConstStruct<", typeName_, ">").flatten();
         return ConstText {
@@ -2540,7 +2585,7 @@ private:
         };
       }
 
-      case schema::Value::LIST: {
+      case schema::Type::LIST: {
         kj::String constType = kj::strTree(
             "::capnp::_::ConstList<", typeName(type.asList().getElementType(), nullptr), ">")
             .flatten();
@@ -2552,8 +2597,8 @@ private:
         };
       }
 
-      case schema::Value::ANY_POINTER:
-      case schema::Value::INTERFACE:
+      case schema::Type::ANY_POINTER:
+      case schema::Type::INTERFACE:
         return ConstText { false, kj::strTree(), kj::strTree() };
     }
 
@@ -2933,10 +2978,10 @@ private:
           "// Generated by Cap'n Proto compiler, DO NOT EDIT\n"
           "// source: ", baseName(displayName), "\n"
           "\n"
-          "#ifndef CAPNP_INCLUDED_", kj::hex(node.getId()), "_\n",
-          "#define CAPNP_INCLUDED_", kj::hex(node.getId()), "_\n"
+          "#pragma once\n"
           "\n"
-          "#include <capnp/generated-header-support.h>\n",
+          "#include <capnp/generated-header-support.h>\n"
+          "#include <kj/windows-sanity.h>\n",  // work-around macro conflict with VOID
           hasInterfaces ? kj::strTree(
             "#if !CAPNP_LITE\n"
             "#include <capnp/capability.h>\n"
@@ -2971,8 +3016,7 @@ private:
           KJ_MAP(n, nodeTexts) { return kj::mv(n.readerBuilderDefs); },
           separator, "\n",
           KJ_MAP(n, nodeTexts) { return kj::mv(n.inlineMethodDefs); },
-          KJ_MAP(n, namespaceParts) { return kj::strTree("}  // namespace\n"); }, "\n",
-          "#endif  // CAPNP_INCLUDED_", kj::hex(node.getId()), "_\n"),
+          KJ_MAP(n, namespaceParts) { return kj::strTree("}  // namespace\n"); }, "\n"),
 
       kj::strTree(
           "// Generated by Cap'n Proto compiler, DO NOT EDIT\n"
@@ -2995,42 +3039,33 @@ private:
 
   // -----------------------------------------------------------------
 
-  void makeDirectory(kj::StringPtr path) {
-    KJ_IF_MAYBE(slashpos, path.findLast('/')) {
-      // Make the parent dir.
-      makeDirectory(kj::str(path.slice(0, *slashpos)));
-    }
-
-    if (kj::miniposix::mkdir(path.cStr(), 0777) < 0) {
-      int error = errno;
-      if (error != EEXIST) {
-        KJ_FAIL_SYSCALL("mkdir(path)", error, path);
-      }
-    }
-  }
+  kj::Own<kj::Filesystem> fs = kj::newDiskFilesystem();
 
   void writeFile(kj::StringPtr filename, const kj::StringTree& text) {
-    if (!filename.startsWith("/")) {
-      KJ_IF_MAYBE(slashpos, filename.findLast('/')) {
-        // Make the parent dir.
-        makeDirectory(kj::str(filename.slice(0, *slashpos)));
-      }
-    }
+    // We don't use replaceFile() here because atomic replacements are actually detrimental for
+    // build tools:
+    // - It's the responsibility of the build pipeline to ensure that no one else is concurrently
+    //   reading the file when we write it, so atomicity brings no benefit.
+    // - Atomic replacements force disk syncs which could slow us down for no benefit at all.
+    // - Opening the existing file and overwriting it may allow the filesystem to reuse
+    //   already-allocated blocks, or maybe even notice that no actual changes occurred.
+    // - In a power outage scenario, the user would obviously restart the build from scratch
+    //   anyway.
+    //
+    // At one point, in a fit of over-engineering, we used writable mmap() here. That turned out
+    // to be a bad idea: writable mmap() is not implemented on some filesystems, especially shared
+    // folders in VirtualBox. Oh well.
 
-    int fd;
-    KJ_SYSCALL(fd = open(filename.cStr(), O_CREAT | O_WRONLY | O_TRUNC, 0666), filename);
-    kj::FdOutputStream out((kj::AutoCloseFd(fd)));
-
-    text.visit(
-        [&](kj::ArrayPtr<const char> text) {
-          out.write(text.begin(), text.size());
-        });
+    auto path = kj::Path::parse(filename);
+    auto file = fs->getCurrent().openFile(path,
+        kj::WriteMode::CREATE | kj::WriteMode::MODIFY | kj::WriteMode::CREATE_PARENT);
+    file->writeAll(text.flatten());
   }
 
   kj::MainBuilder::Validity run() {
     ReaderOptions options;
     options.traversalLimitInWords = 1 << 30;  // Don't limit.
-    StreamFdMessageReader reader(STDIN_FILENO, options);
+    StreamFdMessageReader reader(0, options);
     auto request = reader.getRoot<schema::CodeGeneratorRequest>();
 
     auto capnpVersion = request.getCapnpVersion();
@@ -3057,9 +3092,6 @@ private:
     for (auto node: request.getNodes()) {
       schemaLoader.load(node);
     }
-
-    kj::FdOutputStream rawOut(STDOUT_FILENO);
-    kj::BufferedOutputStreamWrapper out(rawOut);
 
     for (auto requestedFile: request.getRequestedFiles()) {
       auto schema = schemaLoader.get(requestedFile.getId());

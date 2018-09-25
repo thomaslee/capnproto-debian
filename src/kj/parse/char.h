@@ -22,8 +22,7 @@
 // This file contains parsers useful for character stream inputs, including parsers to parse
 // common kinds of tokens like identifiers, numbers, and quoted strings.
 
-#ifndef KJ_PARSE_CHAR_H_
-#define KJ_PARSE_CHAR_H_
+#pragma once
 
 #if defined(__GNUC__) && !KJ_HEADER_WARNINGS
 #pragma GCC system_header
@@ -109,6 +108,13 @@ public:
 
   constexpr inline bool contains(unsigned char c) const {
     return (bits[c / 64] & (1ll << (c % 64))) != 0;
+  }
+
+  inline bool containsAll(ArrayPtr<const char> text) const {
+    for (char c: text) {
+      if (!contains(c)) return false;
+    }
+    return true;
   }
 
   template <typename Input>
@@ -212,6 +218,7 @@ namespace _ { // private
 
 struct IdentifierToString {
   inline String operator()(char first, const Array<char>& rest) const {
+    if (rest.size() == 0) return heapString(&first, 1);
     String result = heapString(rest.size() + 1);
     result[0] = first;
     memcpy(result.begin() + 1, rest.begin(), rest.size());
@@ -357,5 +364,3 @@ constexpr auto doubleQuotedHexBinary = sequence(
 
 }  // namespace parse
 }  // namespace kj
-
-#endif  // KJ_PARSE_CHAR_H_

@@ -19,14 +19,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef KJ_ARRAY_H_
-#define KJ_ARRAY_H_
+#pragma once
 
 #if defined(__GNUC__) && !KJ_HEADER_WARNINGS
 #pragma GCC system_header
 #endif
 
-#include "common.h"
+#include "memory.h"
 #include <string.h>
 #include <initializer_list>
 
@@ -177,6 +176,11 @@ public:
   inline T& front() { return *ptr; }
   inline T& back() { return *(ptr + size_ - 1); }
 
+  template <typename U>
+  inline bool operator==(const U& other) const { return asPtr() == other; }
+  template <typename U>
+  inline bool operator!=(const U& other) const { return asPtr() != other; }
+
   inline ArrayPtr<T> slice(size_t start, size_t end) {
     KJ_IREQUIRE(start <= end && end <= size_, "Out-of-bounds Array::slice().");
     return ArrayPtr<T>(ptr + start, end - start);
@@ -230,6 +234,10 @@ public:
     return *this;
   }
 
+  template <typename... Attachments>
+  Array<T> attach(Attachments&&... attachments) KJ_WARN_UNUSED_RESULT;
+  // Like Own<T>::attach(), but attaches to an Array.
+
 private:
   T* ptr;
   size_t size_;
@@ -249,6 +257,8 @@ private:
 
   template <typename U>
   friend class Array;
+  template <typename U>
+  friend class ArrayBuilder;
 };
 
 static_assert(!canMemcpy<Array<char>>(), "canMemcpy<>() is broken");
@@ -320,6 +330,13 @@ public:
     other.ptr = nullptr;
     other.pos = nullptr;
     other.endPtr = nullptr;
+  }
+  ArrayBuilder(Array<T>&& other)
+      : ptr(other.ptr), pos(other.ptr + other.size_), endPtr(pos), disposer(other.disposer) {
+    // Create an already-full ArrayBuilder from an Array of the same type. This constructor
+    // primarily exists to enable Vector<T> to be constructed from Array<T>.
+    other.ptr = nullptr;
+    other.size_ = 0;
   }
   KJ_DISALLOW_COPY(ArrayBuilder);
   inline ~ArrayBuilder() noexcept(false) { dispose(); }
@@ -398,6 +415,16 @@ public:
       pos = target;
     } else {
       while (pos > target) {
+        kj::dtor(*--pos);
+      }
+    }
+  }
+
+  void clear() {
+    if (__has_trivial_destructor(T)) {
+      pos = ptr;
+    } else {
+      while (pos > ptr) {
         kj::dtor(*--pos);
       }
     }
@@ -662,7 +689,9 @@ struct CopyConstructArray_;
 template <typename T, bool move>
 struct CopyConstructArray_<T, T*, move, true> {
   static inline T* apply(T* __restrict__ pos, T* start, T* end) {
-    memcpy(pos, start, reinterpret_cast<byte*>(end) - reinterpret_cast<byte*>(start));
+    if (end != start) {
+      memcpy(pos, start, reinterpret_cast<byte*>(end) - reinterpret_cast<byte*>(start));
+    }
     return pos + (end - start);
   }
 };
@@ -670,7 +699,9 @@ struct CopyConstructArray_<T, T*, move, true> {
 template <typename T>
 struct CopyConstructArray_<T, const T*, false, true> {
   static inline T* apply(T* __restrict__ pos, const T* start, const T* end) {
-    memcpy(pos, start, reinterpret_cast<const byte*>(end) - reinterpret_cast<const byte*>(start));
+    if (end != start) {
+      memcpy(pos, start, reinterpret_cast<const byte*>(end) - reinterpret_cast<const byte*>(start));
+    }
     return pos + (end - start);
   }
 };
@@ -808,6 +839,57 @@ inline Array<T> heapArray(std::initializer_list<T> init) {
   return heapArray<T>(init.begin(), init.end());
 }
 
-}  // namespace kj
+#if __cplusplus > 201402L
+template <typename T, typename... Params>
+inline Array<Decay<T>> arr(T&& param1, Params&&... params) {
+  ArrayBuilder<Decay<T>> builder = heapArrayBuilder<Decay<T>>(sizeof...(params) + 1);
+  (builder.add(kj::fwd<T>(param1)), ... , builder.add(kj::fwd<Params>(params)));
+  return builder.finish();
+}
+#endif
 
-#endif  // KJ_ARRAY_H_
+namespace _ {  // private
+
+template <typename... T>
+struct ArrayDisposableOwnedBundle final: public ArrayDisposer, public OwnedBundle<T...> {
+  ArrayDisposableOwnedBundle(T&&... values): OwnedBundle<T...>(kj::fwd<T>(values)...) {}
+  void disposeImpl(void*, size_t, size_t, size_t, void (*)(void*)) const override { delete this; }
+};
+
+}  // namespace _ (private)
+
+template <typename T>
+template <typename... Attachments>
+Array<T> Array<T>::attach(Attachments&&... attachments) {
+  T* ptrCopy = ptr;
+
+  KJ_IREQUIRE(ptrCopy != nullptr, "cannot attach to null pointer");
+
+  // HACK: If someone accidentally calls .attach() on a null pointer in opt mode, try our best to
+  //   accomplish reasonable behavior: We turn the pointer non-null but still invalid, so that the
+  //   disposer will still be called when the pointer goes out of scope.
+  if (ptrCopy == nullptr) ptrCopy = reinterpret_cast<T*>(1);
+
+  auto bundle = new _::ArrayDisposableOwnedBundle<Array<T>, Attachments...>(
+      kj::mv(*this), kj::fwd<Attachments>(attachments)...);
+  return Array<T>(ptrCopy, size_, *bundle);
+}
+
+template <typename T>
+template <typename... Attachments>
+Array<T> ArrayPtr<T>::attach(Attachments&&... attachments) const {
+  T* ptrCopy = ptr;
+
+  KJ_IREQUIRE(ptrCopy != nullptr, "cannot attach to null pointer");
+
+  // HACK: If someone accidentally calls .attach() on a null pointer in opt mode, try our best to
+  //   accomplish reasonable behavior: We turn the pointer non-null but still invalid, so that the
+  //   disposer will still be called when the pointer goes out of scope.
+  if (ptrCopy == nullptr) ptrCopy = reinterpret_cast<T*>(1);
+
+  auto bundle = new _::ArrayDisposableOwnedBundle<Attachments...>(
+      kj::fwd<Attachments>(attachments)...);
+  return Array<T>(ptrCopy, size_, *bundle);
+}
+
+}  // namespace kj

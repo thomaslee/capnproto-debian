@@ -1929,6 +1929,45 @@ TEST(Encoding, DefaultListBuilder) {
   List<Text>::Builder(nullptr);
 }
 
+TEST(Encoding, ListSize) {
+  MallocMessageBuilder builder;
+  auto root = builder.initRoot<TestListDefaults>();
+  initTestMessage(root);
+
+  auto lists = root.asReader().getLists();
+
+  auto listSizes =
+      lists.getList0().totalSize() +
+      lists.getList1().totalSize() +
+      lists.getList8().totalSize() +
+      lists.getList16().totalSize() +
+      lists.getList32().totalSize() +
+      lists.getList64().totalSize() +
+      lists.getListP().totalSize() +
+      lists.getInt32ListList().totalSize() +
+      lists.getTextListList().totalSize() +
+      lists.getStructListList().totalSize();
+
+  auto structSize = lists.totalSize();
+
+  auto shallowSize = unbound(capnp::_::structSize<test::TestLists>().total() / WORDS);
+
+  EXPECT_EQ(structSize.wordCount - shallowSize, listSizes.wordCount);
+}
+
+KJ_TEST("list.setWithCaveats(i, list[i]) doesn't corrupt contents") {
+  MallocMessageBuilder builder;
+  auto root = builder.initRoot<TestAllTypes>();
+  auto list = root.initStructList(2);
+  initTestMessage(list[0]);
+  list.setWithCaveats(0, list[0]);
+  checkTestMessage(list[0]);
+  checkTestMessageAllZero(list[1]);
+  list.setWithCaveats(1, list[0]);
+  checkTestMessage(list[0]);
+  checkTestMessage(list[1]);
+}
+
 }  // namespace
 }  // namespace _ (private)
 }  // namespace capnp

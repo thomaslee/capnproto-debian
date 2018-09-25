@@ -24,16 +24,15 @@
 //
 // Non-inline declarations here are defined in async.c++.
 
-#ifndef KJ_ASYNC_H_
-#error "Do not include this directly; include kj/async.h."
-#include "async.h"  // help IDE parse this file
-#endif
-
-#ifndef KJ_ASYNC_INL_H_
-#define KJ_ASYNC_INL_H_
+#pragma once
 
 #if defined(__GNUC__) && !KJ_HEADER_WARNINGS
 #pragma GCC system_header
+#endif
+
+#ifndef KJ_ASYNC_H_INCLUDED
+#error "Do not include this directly; include kj/async.h."
+#include "async.h"  // help IDE parse this file
 #endif
 
 namespace kj {
@@ -136,8 +135,12 @@ class PromiseNode {
   // internal implementation details.
 
 public:
-  virtual void onReady(Event& event) noexcept = 0;
+  virtual void onReady(Event* event) noexcept = 0;
   // Arms the given event when ready.
+  //
+  // May be called multiple times. If called again before the event was armed, the old event will
+  // never be armed, only the new one. If called again after the event was armed, the new event
+  // will be armed immediately. Can be called with nullptr to un-register the existing event.
 
   virtual void setSelfPointer(Own<PromiseNode>* selfPtr) noexcept;
   // Tells the node that `selfPtr` is the pointer that owns this node, and will continue to own
@@ -159,12 +162,11 @@ protected:
     // Helper class for implementing onReady().
 
   public:
-    void init(Event& newEvent);
-    // Returns true if arm() was already called.
+    void init(Event* newEvent);
 
     void arm();
-    // Arms the event if init() has already been called and makes future calls to init() return
-    // true.
+    // Arms the event if init() has already been called and makes future calls to init()
+    // automatically arm the event.
 
   private:
     Event* event = nullptr;
@@ -178,7 +180,7 @@ public:
   ImmediatePromiseNodeBase();
   ~ImmediatePromiseNodeBase() noexcept(false);
 
-  void onReady(Event& event) noexcept override;
+  void onReady(Event* event) noexcept override;
 };
 
 template <typename T>
@@ -212,7 +214,7 @@ class AttachmentPromiseNodeBase: public PromiseNode {
 public:
   AttachmentPromiseNodeBase(Own<PromiseNode>&& dependency);
 
-  void onReady(Event& event) noexcept override;
+  void onReady(Event* event) noexcept override;
   void get(ExceptionOrValue& output) noexcept override;
   PromiseNode* getInnerForTrace() override;
 
@@ -246,6 +248,13 @@ private:
 };
 
 // -------------------------------------------------------------------
+
+#if __GNUC__ >= 8 && !__clang__
+// GCC 8's class-memaccess warning rightly does not like the memcpy()'s below, but there's no
+// "legal" way for us to extract the contetn of a PTMF so too bad.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
 
 class PtmfHelper {
   // This class is a private helper for GetFunctorStartAddress. The class represents the internal
@@ -308,6 +317,10 @@ class PtmfHelper {
 #undef BODY
 };
 
+#if __GNUC__ >= 8 && !__clang__
+#pragma GCC diagnostic pop
+#endif
+
 template <typename... ParamTypes>
 struct GetFunctorStartAddress {
   // Given a functor (any object defining operator()), return the start address of the function,
@@ -338,7 +351,7 @@ class TransformPromiseNodeBase: public PromiseNode {
 public:
   TransformPromiseNodeBase(Own<PromiseNode>&& dependency, void* continuationTracePtr);
 
-  void onReady(Event& event) noexcept override;
+  void onReady(Event* event) noexcept override;
   void get(ExceptionOrValue& output) noexcept override;
   PromiseNode* getInnerForTrace() override;
 
@@ -410,7 +423,7 @@ public:
   // Called by the hub to indicate that it is ready.
 
   // implements PromiseNode ------------------------------------------
-  void onReady(Event& event) noexcept override;
+  void onReady(Event* event) noexcept override;
   PromiseNode* getInnerForTrace() override;
 
 protected:
@@ -522,8 +535,8 @@ private:
   }
 
   template <size_t index>
-  Promise<JoinPromises<typename SplitBranch<T, index>::Element>> addSplit() {
-    return Promise<JoinPromises<typename SplitBranch<T, index>::Element>>(
+  ReducePromises<typename SplitBranch<T, index>::Element> addSplit() {
+    return ReducePromises<typename SplitBranch<T, index>::Element>(
         false, maybeChain(kj::heap<SplitBranch<T, index>>(addRef(*this)),
                           implicitCast<typename SplitBranch<T, index>::Element*>(nullptr)));
   }
@@ -545,7 +558,7 @@ public:
   explicit ChainPromiseNode(Own<PromiseNode> inner);
   ~ChainPromiseNode() noexcept(false);
 
-  void onReady(Event& event) noexcept override;
+  void onReady(Event* event) noexcept override;
   void setSelfPointer(Own<PromiseNode>* selfPtr) noexcept override;
   void get(ExceptionOrValue& output) noexcept override;
   PromiseNode* getInnerForTrace() override;
@@ -578,6 +591,16 @@ Own<PromiseNode>&& maybeChain(Own<PromiseNode>&& node, T*) {
   return kj::mv(node);
 }
 
+template <typename T, typename Result = decltype(T::reducePromise(instance<Promise<T>>()))>
+inline Result maybeReduce(Promise<T>&& promise, bool) {
+  return T::reducePromise(kj::mv(promise));
+}
+
+template <typename T>
+inline Promise<T> maybeReduce(Promise<T>&& promise, ...) {
+  return kj::mv(promise);
+}
+
 // -------------------------------------------------------------------
 
 class ExclusiveJoinPromiseNode final: public PromiseNode {
@@ -585,7 +608,7 @@ public:
   ExclusiveJoinPromiseNode(Own<PromiseNode> left, Own<PromiseNode> right);
   ~ExclusiveJoinPromiseNode() noexcept(false);
 
-  void onReady(Event& event) noexcept override;
+  void onReady(Event* event) noexcept override;
   void get(ExceptionOrValue& output) noexcept override;
   PromiseNode* getInnerForTrace() override;
 
@@ -619,7 +642,7 @@ public:
                            ExceptionOrValue* resultParts, size_t partSize);
   ~ArrayJoinPromiseNodeBase() noexcept(false);
 
-  void onReady(Event& event) noexcept override final;
+  void onReady(Event* event) noexcept override final;
   void get(ExceptionOrValue& output) noexcept override final;
   PromiseNode* getInnerForTrace() override final;
 
@@ -698,7 +721,7 @@ class EagerPromiseNodeBase: public PromiseNode, protected Event {
 public:
   EagerPromiseNodeBase(Own<PromiseNode>&& dependency, ExceptionOrValue& resultRef);
 
-  void onReady(Event& event) noexcept override;
+  void onReady(Event* event) noexcept override;
   PromiseNode* getInnerForTrace() override;
 
 private:
@@ -735,7 +758,7 @@ Own<PromiseNode> spark(Own<PromiseNode>&& node) {
 
 class AdapterPromiseNodeBase: public PromiseNode {
 public:
-  void onReady(Event& event) noexcept override;
+  void onReady(Event* event) noexcept override;
 
 protected:
   inline void setReady() {
@@ -807,8 +830,9 @@ PromiseForResult<Func, T> Promise<T>::then(Func&& func, ErrorFunc&& errorHandler
   Own<_::PromiseNode> intermediate =
       heap<_::TransformPromiseNode<ResultT, _::FixVoid<T>, Func, ErrorFunc>>(
           kj::mv(node), kj::fwd<Func>(func), kj::fwd<ErrorFunc>(errorHandler));
-  return PromiseForResult<Func, T>(false,
+  auto result = _::ChainPromises<_::ReturnType<Func, T>>(false,
       _::maybeChain(kj::mv(intermediate), implicitCast<ResultT*>(nullptr)));
+  return _::maybeReduce(kj::mv(result), false);
 }
 
 namespace _ {  // private
@@ -854,7 +878,7 @@ template <typename T>
 T Promise<T>::wait(WaitScope& waitScope) {
   _::ExceptionOr<_::FixVoid<T>> result;
 
-  waitImpl(kj::mv(node), result, waitScope);
+  _::waitImpl(kj::mv(node), result, waitScope);
 
   KJ_IF_MAYBE(value, result.value) {
     KJ_IF_MAYBE(exception, result.exception) {
@@ -875,7 +899,7 @@ inline void Promise<void>::wait(WaitScope& waitScope) {
 
   _::ExceptionOr<_::Void> result;
 
-  waitImpl(kj::mv(node), result, waitScope);
+  _::waitImpl(kj::mv(node), result, waitScope);
 
   if (result.value != nullptr) {
     KJ_IF_MAYBE(exception, result.exception) {
@@ -887,6 +911,11 @@ inline void Promise<void>::wait(WaitScope& waitScope) {
     // Result contained neither a value nor an exception?
     KJ_UNREACHABLE;
   }
+}
+
+template <typename T>
+bool Promise<T>::poll(WaitScope& waitScope) {
+  return _::pollImpl(*node, waitScope);
 }
 
 template <typename T>
@@ -1101,12 +1130,10 @@ PromiseFulfillerPair<T> newPromiseAndFulfiller() {
 
   Own<_::PromiseNode> intermediate(
       heap<_::AdapterPromiseNode<_::FixVoid<T>, _::PromiseAndFulfillerAdapter<T>>>(*wrapper));
-  Promise<_::JoinPromises<T>> promise(false,
+  _::ReducePromises<T> promise(false,
       _::maybeChain(kj::mv(intermediate), implicitCast<T*>(nullptr)));
 
   return PromiseFulfillerPair<T> { kj::mv(promise), kj::mv(wrapper) };
 }
 
 }  // namespace kj
-
-#endif  // KJ_ASYNC_INL_H_
