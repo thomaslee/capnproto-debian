@@ -1,0 +1,42 @@
+#!/bin/bash
+
+exec 2>&1
+
+set -e
+
+test_run_capnp_help() {
+  capnp help &>/dev/null
+}
+
+test_run_capnp_id() {
+  local ID="$(capnp id)"
+  assertNotEquals "" "$ID"
+}
+
+test_run_capnp_compile() {
+  local ID="$(capnp id)"
+  local SCHEMADIR="$(mktemp -d)"
+  local SCHEMAFILE=foo.capnp
+  local SCHEMA="${SCHEMADIR}/${SCHEMAFILE}"
+
+  echo "${ID};
+
+struct Person {
+  name @0 :Text;
+  email @1 :Text;
+}
+" >"$SCHEMA"
+  (
+    cd "$SCHEMADIR"
+    capnp compile -oc++ "$SCHEMAFILE"
+  )
+  if [ ! -f "$SCHEMADIR/foo.capnp.h" ]; then
+    fail "foo.capnp.h not found"
+  fi
+  if [ ! -f "$SCHEMADIR/foo.capnp.c++" ]; then
+    fail "foo.capnp.c++ not found"
+  fi
+}
+
+. shunit2
+
