@@ -3,9 +3,11 @@ capnproto (0.7.0-1) unstable; urgency=medium
   * Import Upstream version 0.7.0
   * Fix minor typo in src/kj/filesystem.c++
   * Updated to Standards-Version 4.2.1
+  * Bump debian/compat to 11
+  * Address some pedantic lintian issues
   * Add a quick functional test
 
- -- Tom Lee <debian@tomlee.co>  Tue, 25 Sep 2018 01:40:05 -0700
+ -- Tom Lee <debian@tomlee.co>  Sat, 29 Sep 2018 23:39:58 -0700
 
 capnproto (0.6.1-1) unstable; urgency=medium
 
