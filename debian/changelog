@@ -6,8 +6,9 @@ capnproto (0.7.0-1) unstable; urgency=medium
   * Bump debian/compat to 11
   * Address some pedantic lintian issues
   * Add a quick functional test
+  * Add Multi-Arch headers (Closes: #905351)
 
- -- Tom Lee <debian@tomlee.co>  Sat, 29 Sep 2018 23:39:58 -0700
+ -- Tom Lee <debian@tomlee.co>  Sat, 22 Dec 2018 15:58:08 -0700
 
 capnproto (0.6.1-1) unstable; urgency=medium
 
