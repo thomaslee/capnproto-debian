@@ -1,3 +1,10 @@
+capnproto (0.7.0-2) unstable; urgency=medium
+
+  * Add a .gitignore file to packaging
+  * Disable a few broken tests on kfreebsd archs
+
+ -- Tom Lee <debian@tomlee.co>  Sun, 30 Dec 2018 05:32:44 -0800
+
 capnproto (0.7.0-1) unstable; urgency=medium
 
   * Import Upstream version 0.7.0
