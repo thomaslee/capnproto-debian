@@ -1,0 +1,35 @@
+Description: Disable broken tests on kfreebsd archs.
+ Seems like a few tests for certain edge cases are broken on kfreebsd. This
+ patch simply disables those tests.
+Author: Tom Lee <debian@tomlee.co>
+Forwarded: no
+Last-Update: 2018-12-30
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/src/kj/filesystem-disk-test.c++
++++ b/src/kj/filesystem-disk-test.c++
+@@ -196,7 +196,7 @@
+ 
+ bool isWine() { return false; }
+ 
+-#if __APPLE__ || __CYGWIN__
++#if __APPLE__ || __CYGWIN__ || defined(__FreeBSD_kernel__)
+ #define HOLES_NOT_SUPPORTED 1
+ #endif
+ 
+@@ -799,6 +799,7 @@
+   KJ_EXPECT(dir->openFile(Path("foo"))->readAllText() == "bazqux");
+ }
+ 
++#if !defined(__FreeBSD_kernel__)
+ KJ_TEST("DiskDirectory replace file with directory") {
+   TempDir tempDir;
+   auto dir = tempDir.get();
+@@ -828,6 +829,7 @@
+   // Replaced with directory.
+   KJ_EXPECT(dir->openFile(Path({"foo", "bar"}))->readAllText() == "bazqux");
+ }
++#endif
+ 
+ #ifndef HOLES_NOT_SUPPORTED
+ KJ_TEST("DiskFile holes") {
