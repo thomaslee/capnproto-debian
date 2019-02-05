@@ -1,3 +1,10 @@
+capnproto (0.7.0-3) unstable; urgency=medium
+
+  * Add missing binaries (Closes: #919180)
+  * Rename a patch file from the earlier NMU
+
+ -- Tom Lee <debian@tomlee.co>  Tue, 05 Feb 2019 01:13:51 -0800
+
 capnproto (0.7.0-2.1) unstable; urgency=medium
 
   * Non-maintainer upload.
