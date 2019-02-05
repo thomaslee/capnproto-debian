@@ -1,0 +1,23 @@
+Description: Workaround generating invalid CapnProtoConfig which is not
+  multiarch cmake aware, and thus yields invalid bin and include paths.
+Author: Dimitri John Ledkov <xnox@ubuntu.com>
+Bug-Debian: https://bugs.debian.org/920230
+
+
+--- capnproto-0.7.0.orig/cmake/CapnProtoConfig.cmake.in
++++ capnproto-0.7.0/cmake/CapnProtoConfig.cmake.in
+@@ -38,11 +38,11 @@
+ 
+ set(CapnProto_VERSION @VERSION@)
+ 
+-set(CAPNP_EXECUTABLE $<TARGET_FILE:CapnProto::capnp_tool>
++set(CAPNP_EXECUTABLE /usr/bin/capnp
+     CACHE FILEPATH "Location of capnp executable")
+-set(CAPNPC_CXX_EXECUTABLE $<TARGET_FILE:CapnProto::capnpc_cpp>
++set(CAPNPC_CXX_EXECUTABLE /usr/bin/capnpc-c++
+     CACHE FILEPATH "Location of capnpc-c++ executable")
+-set(CAPNP_INCLUDE_DIRECTORY "@PACKAGE_CMAKE_INSTALL_FULL_INCLUDEDIR@")
++set(CAPNP_INCLUDE_DIRECTORY /usr/include)
+ 
+ # work around http://public.kitware.com/Bug/view.php?id=15258
+ if(NOT _IMPORT_PREFIX)

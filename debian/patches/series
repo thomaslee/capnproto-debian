@@ -1,2 +1,3 @@
 01_couldnt.patch
 02_broken_kfreebsd_tests.patch
+fixup-cmake.patch

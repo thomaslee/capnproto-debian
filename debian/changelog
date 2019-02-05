@@ -1,3 +1,14 @@
+capnproto (0.7.0-2.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+
+  [ Dimitri John Ledkov ]
+  * Workaround generating invalid CapnProtoConfig which is not multiarch
+    cmake aware, and thus yields invalid bin and include paths.
+    Closes: #920230
+
+ -- Andreas Tille <tille@debian.org>  Wed, 30 Jan 2019 08:51:06 +0100
+
 capnproto (0.7.0-2) unstable; urgency=medium
 
   * Add a .gitignore file to packaging
