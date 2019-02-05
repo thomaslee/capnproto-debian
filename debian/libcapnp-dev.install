@@ -10,6 +10,10 @@ usr/lib/*/libkj.a
 usr/lib/*/libkj.so
 usr/lib/*/libkj-async.a
 usr/lib/*/libkj-async.so
+usr/lib/*/libkj-http.a
+usr/lib/*/libkj-http.so
+usr/lib/*/libkj-test.a
+usr/lib/*/libkj-test.so
 usr/lib/*/pkgconfig
 usr/lib/*/cmake
 usr/include

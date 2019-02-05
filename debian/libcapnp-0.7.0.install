@@ -4,3 +4,5 @@ usr/lib/*/libcapnp-rpc-0.7.0.so
 usr/lib/*/libcapnpc-*.so
 usr/lib/*/libkj-0.7.0.so
 usr/lib/*/libkj-async-0.7.0.so
+usr/lib/*/libkj-http-0.7.0.so
+usr/lib/*/libkj-test-0.7.0.so
