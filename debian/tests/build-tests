@@ -1,0 +1,97 @@
+#!/bin/bash
+
+exec 2>&1
+
+set -e
+
+EXAMPLE_PROGRAM_1='
+#include <iostream>
+#include <kj/array.h>
+#include <kj/string.h>
+
+int
+main (int argc, char **argv)
+{
+  kj::StringPtr foo = "abcd";
+  kj::Array<char> bar = KJ_MAP(c, foo) -> char { return c + 1; };
+  std::cout << kj::str(bar).cStr() << std::endl;
+  return 0;
+}
+'
+
+EXAMPLE_PROGRAM_2='
+#include <iostream>
+#include <capnp/common.h>
+
+int
+main (int argc, char **argv)
+{
+  std::cout << CAPNP_VERSION_MAJOR << "."
+            << CAPNP_VERSION_MINOR << "."
+            << CAPNP_VERSION_MICRO << std::endl;
+  return 0;
+}
+'
+
+test_pkgconfig_compile() {
+  local WORKDIR="$(mktemp -d)"
+  trap "rm -rf '$WORKDIR'" RETURN
+
+  echo "$EXAMPLE_PROGRAM_1" >"$WORKDIR/pkgconfig-test.cc"
+
+  g++ -Wall -Werror \
+      -o "$WORKDIR/pkgconfig-test" \
+      $(pkg-config --cflags --libs kj) \
+      "$WORKDIR/pkgconfig-test.cc"
+
+  if [[ "$?" != 0 ]]; then
+    fail "compile failed"
+  fi
+
+  assertEquals "bcde" "$("$WORKDIR/pkgconfig-test")"
+}
+
+test_cmake_compile() {
+  local WORKDIR="$(mktemp -d)"
+  trap "rm -rf '$WORKDIR'" RETURN
+
+  echo "$EXAMPLE_PROGRAM_1" >"$WORKDIR/cmake-test.cc"
+  echo '
+CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
+
+project(cmake_test)
+
+find_package(CapnProto REQUIRED)
+
+include_directories(${CAPNP_INCLUDE_DIRS})
+add_definitions(${CAPNP_DEFINITIONS})
+add_executable(cmake-test cmake-test.cc)
+target_link_libraries(cmake-test ${CAPNP_LIBRARIES})
+' >"$WORKDIR/CMakeLists.txt"
+
+  if ! (cd "$WORKDIR" && cmake . && VERBOSE=1 make); then
+    fail "compile failed"
+  fi
+
+  assertEquals "bcde" "$("$WORKDIR/cmake-test")"
+}
+
+test_version() {
+  local WORKDIR="$(mktemp -d)"
+  trap "rm -rf '$WORKDIR'" RETURN
+
+  echo "$EXAMPLE_PROGRAM_2" >"$WORKDIR/version-test.cc"
+
+  g++ -Wall -Werror \
+      -o "$WORKDIR/version-test" \
+      $(pkg-config --cflags kj) \
+      "$WORKDIR/version-test.cc"
+
+  if [[ "$?" != 0 ]]; then
+    fail "compile failed"
+  fi
+  assertEquals "0.7.0" "$("$WORKDIR/version-test")"
+}
+
+. shunit2
+
