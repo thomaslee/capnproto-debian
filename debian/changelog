@@ -1,3 +1,14 @@
+capnproto (0.7.0-4) UNRELEASED; urgency=medium
+
+  [ Tom Lee ]
+  * Add a few simple compile + link integration tests
+
+  [ tony mancill ]
+  * Update Build-Depends to python3-all (Closes: #936272)
+  * Bump Standards-Version to 4.4.0
+
+ -- tony mancill <tmancill@debian.org>  Mon, 02 Sep 2019 12:48:26 -0700
+
 capnproto (0.7.0-3) unstable; urgency=medium
 
   * Add missing binaries (Closes: #919180)
