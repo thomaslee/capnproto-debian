@@ -1,4 +1,4 @@
-capnproto (0.7.0-4) UNRELEASED; urgency=medium
+capnproto (0.7.0-4) unstable; urgency=medium
 
   [ Tom Lee ]
   * Add a few simple compile + link integration tests
@@ -6,8 +6,9 @@ capnproto (0.7.0-4) UNRELEASED; urgency=medium
   [ tony mancill ]
   * Update Build-Depends to python3-all (Closes: #936272)
   * Bump Standards-Version to 4.4.0
+  * Add myself to Uploaders
 
- -- tony mancill <tmancill@debian.org>  Mon, 02 Sep 2019 12:48:26 -0700
+ -- tony mancill <tmancill@debian.org>  Wed, 04 Sep 2019 13:12:33 -0700
 
 capnproto (0.7.0-3) unstable; urgency=medium
 
