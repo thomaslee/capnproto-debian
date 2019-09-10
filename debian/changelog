@@ -1,9 +1,15 @@
-capnproto (0.7.0-4ubuntu2) eoan; urgency=medium
+capnproto (0.7.0-5) unstable; urgency=medium
 
-  * Fix test failure with asneeded gcc-9 default flag,
-    by moving order of link line 
+  [ Gianfranco Costamagna ]
+  * Fix autopkgtest failure with asneeded gcc-9 default flag,
+    by moving order of link line (Closes: #939821)
 
- -- Gianfranco Costamagna <locutusofborg@debian.org>  Mon, 09 Sep 2019 11:02:04 +0200
+  [ tony mancill ]
+  * Add cmake to debian/tests/control
+  * Use debhelper 12
+  * Add patch for typos in source
+
+ -- tony mancill <tmancill@debian.org>  Tue, 10 Sep 2019 20:29:14 -0700
 
 capnproto (0.7.0-4) unstable; urgency=medium
 
