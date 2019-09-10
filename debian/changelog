@@ -1,3 +1,10 @@
+capnproto (0.7.0-4ubuntu2) eoan; urgency=medium
+
+  * Fix test failure with asneeded gcc-9 default flag,
+    by moving order of link line 
+
+ -- Gianfranco Costamagna <locutusofborg@debian.org>  Mon, 09 Sep 2019 11:02:04 +0200
+
 capnproto (0.7.0-4) unstable; urgency=medium
 
   [ Tom Lee ]
