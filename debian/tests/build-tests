@@ -40,9 +40,10 @@ test_pkgconfig_compile() {
   echo "$EXAMPLE_PROGRAM_1" >"$WORKDIR/pkgconfig-test.cc"
 
   g++ -Wall -Werror \
+      $(pkg-config --cflags kj) \
       -o "$WORKDIR/pkgconfig-test" \
-      $(pkg-config --cflags --libs kj) \
-      "$WORKDIR/pkgconfig-test.cc"
+      "$WORKDIR/pkgconfig-test.cc" \
+      $(pkg-config --libs kj)
 
   if [[ "$?" != 0 ]]; then
     fail "compile failed"
@@ -83,8 +84,8 @@ test_version() {
   echo "$EXAMPLE_PROGRAM_2" >"$WORKDIR/version-test.cc"
 
   g++ -Wall -Werror \
-      -o "$WORKDIR/version-test" \
       $(pkg-config --cflags kj) \
+      -o "$WORKDIR/version-test" \
       "$WORKDIR/version-test.cc"
 
   if [[ "$?" != 0 ]]; then
