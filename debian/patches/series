@@ -2,3 +2,4 @@
 02_broken_kfreebsd_tests.patch
 03_fixup_cmake.patch
 04_fix_typos.patch
+05_ftbfs_on_s390x.patch
