@@ -1,0 +1,31 @@
+Description: initialize anonymous enums in isPlausiblyText() and isPlausiblyJson()
+Forwarded: not-needed
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=955544
+Source: https://patch-diff.githubusercontent.com/raw/capnproto/capnproto/pull/761.diff
+
+commit ce4dd5a1031ee741c676daaea89ae3d1b19f2bb2
+Author: David Renshaw <dwrenshaw@gmail.com>
+Date:   Fri Nov 16 21:23:58 2018 -0500
+
+diff --git a/src/capnp/compiler/capnp.c++ b/src/capnp/compiler/capnp.c++
+index e39db5561..8e8c459b2 100644
+--- a/src/capnp/compiler/capnp.c++
++++ b/src/capnp/compiler/capnp.c++
+@@ -1377,7 +1377,7 @@ private:
+   }
+ 
+   Plausibility isPlausiblyText(kj::ArrayPtr<const byte> prefix) {
+-    enum { PREAMBLE, COMMENT, BODY } state;
++    enum { PREAMBLE, COMMENT, BODY } state = PREAMBLE;
+ 
+     for (char c: prefix.asChars()) {
+       switch (state) {
+@@ -1427,7 +1427,7 @@ private:
+   }
+ 
+   Plausibility isPlausiblyJson(kj::ArrayPtr<const byte> prefix) {
+-    enum { PREAMBLE, COMMENT, BODY } state;
++    enum { PREAMBLE, COMMENT, BODY } state = PREAMBLE;
+ 
+     for (char c: prefix.asChars()) {
+       switch (state) {
