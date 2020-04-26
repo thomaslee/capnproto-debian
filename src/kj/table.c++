@@ -161,15 +161,29 @@ kj::Array<HashBucket> rehash(kj::ArrayPtr<const HashBucket> oldBuckets, size_t t
   auto newBuckets = kj::heapArray<HashBucket>(size);
   memset(newBuckets.begin(), 0, sizeof(HashBucket) * size);
 
+  uint entryCount = 0;
+  uint collisionCount = 0;
+
   for (auto& oldBucket: oldBuckets) {
     if (oldBucket.isOccupied()) {
+      ++entryCount;
       for (uint i = oldBucket.hash % newBuckets.size();; i = probeHash(newBuckets, i)) {
         auto& newBucket = newBuckets[i];
         if (newBucket.isEmpty()) {
           newBucket = oldBucket;
           break;
         }
+        ++collisionCount;
       }
+    }
+  }
+
+  if (collisionCount > 16 + entryCount * 4) {
+    static bool warned = false;
+    if (!warned) {
+      KJ_LOG(WARNING, "detected excessive collisions in hash table; is your hash function OK?",
+          entryCount, collisionCount, kj::getStackTrace());
+      warned = true;
     }
   }
 
@@ -288,16 +302,7 @@ void BTreeImpl::growTree(uint minCapacity) {
   // aligned_alloc() function. Unfortunately, many platforms don't implement it. Luckily, there
   // are usually alternatives.
 
-#if __APPLE__ || __BIONIC__
-  // OSX and Android lack aligned_alloc(), but have posix_memalign(). Fine.
-  void* allocPtr;
-  int error = posix_memalign(&allocPtr,
-      sizeof(BTreeImpl::NodeUnion), newCapacity * sizeof(BTreeImpl::NodeUnion));
-  if (error != 0) {
-    KJ_FAIL_SYSCALL("posix_memalign", error);
-  }
-  NodeUnion* newTree = reinterpret_cast<NodeUnion*>(allocPtr);
-#elif _WIN32
+#if _WIN32
   // Windows lacks aligned_alloc() but has its own _aligned_malloc() (which requires freeing using
   // _aligned_free()).
   // WATCH OUT: The argument order for _aligned_malloc() is opposite of aligned_alloc()!
@@ -305,11 +310,21 @@ void BTreeImpl::growTree(uint minCapacity) {
       _aligned_malloc(newCapacity * sizeof(BTreeImpl::NodeUnion), sizeof(BTreeImpl::NodeUnion)));
   KJ_ASSERT(newTree != nullptr, "memory allocation failed", newCapacity);
 #else
-  // Let's use the C11 standard.
-  NodeUnion* newTree = reinterpret_cast<NodeUnion*>(
-      aligned_alloc(sizeof(BTreeImpl::NodeUnion), newCapacity * sizeof(BTreeImpl::NodeUnion)));
-  KJ_ASSERT(newTree != nullptr, "memory allocation failed", newCapacity);
+  // macOS, OpenBSD, and Android lack aligned_alloc(), but have posix_memalign(). Fine.
+  void* allocPtr;
+  int error = posix_memalign(&allocPtr,
+      sizeof(BTreeImpl::NodeUnion), newCapacity * sizeof(BTreeImpl::NodeUnion));
+  if (error != 0) {
+    KJ_FAIL_SYSCALL("posix_memalign", error);
+  }
+  NodeUnion* newTree = reinterpret_cast<NodeUnion*>(allocPtr);
 #endif
+
+  // Note: C11 introduces aligned_alloc() as a standard, but it's still missing on many platforms,
+  //   so we don't use it. But if you wanted to use it, you'd do this:
+//  NodeUnion* newTree = reinterpret_cast<NodeUnion*>(
+//      aligned_alloc(sizeof(BTreeImpl::NodeUnion), newCapacity * sizeof(BTreeImpl::NodeUnion)));
+//  KJ_ASSERT(newTree != nullptr, "memory allocation failed", newCapacity);
 
   acopy(newTree, tree, treeCapacity);
   azero(newTree + treeCapacity, newCapacity - treeCapacity);
@@ -808,6 +823,19 @@ void BTreeImpl::Parent::eraseAfter(uint i) {
 const InsertionOrderIndex::Link InsertionOrderIndex::EMPTY_LINK = { 0, 0 };
 
 InsertionOrderIndex::InsertionOrderIndex(): capacity(0), links(const_cast<Link*>(&EMPTY_LINK)) {}
+InsertionOrderIndex::InsertionOrderIndex(InsertionOrderIndex&& other)
+    : capacity(other.capacity), links(other.links) {
+  other.capacity = 0;
+  other.links = const_cast<Link*>(&EMPTY_LINK);
+}
+InsertionOrderIndex& InsertionOrderIndex::operator=(InsertionOrderIndex&& other) {
+  KJ_DASSERT(&other != this);
+  capacity = other.capacity;
+  links = other.links;
+  other.capacity = 0;
+  other.links = const_cast<Link*>(&EMPTY_LINK);
+  return *this;
+}
 InsertionOrderIndex::~InsertionOrderIndex() noexcept(false) {
   if (links != &EMPTY_LINK) delete[] links;
 }
