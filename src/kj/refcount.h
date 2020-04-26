@@ -23,10 +23,6 @@
 
 #include "memory.h"
 
-#if defined(__GNUC__) && !KJ_HEADER_WARNINGS
-#pragma GCC system_header
-#endif
-
 #if _MSC_VER
 #if _MSC_VER < 1910
 #include <intrin.h>
@@ -34,6 +30,8 @@
 #include <intrin0.h>
 #endif
 #endif
+
+KJ_BEGIN_HEADER
 
 namespace kj {
 
@@ -173,13 +171,15 @@ inline kj::Own<T> atomicRefcounted(Params&&... params) {
 
 template <typename T>
 kj::Own<T> atomicAddRef(T& object) {
-  KJ_IREQUIRE(object.AtomicRefcounted::refcount > 0, "Object not allocated with kj::refcounted().");
+  KJ_IREQUIRE(object.AtomicRefcounted::refcount > 0,
+      "Object not allocated with kj::atomicRefcounted().");
   return AtomicRefcounted::addRefInternal(&object);
 }
 
 template <typename T>
 kj::Own<const T> atomicAddRef(const T& object) {
-  KJ_IREQUIRE(object.AtomicRefcounted::refcount > 0, "Object not allocated with kj::refcounted().");
+  KJ_IREQUIRE(object.AtomicRefcounted::refcount > 0,
+      "Object not allocated with kj::atomicRefcounted().");
   return AtomicRefcounted::addRefInternal(&object);
 }
 
@@ -223,3 +223,5 @@ kj::Own<const T> AtomicRefcounted::addRefInternal(const T* object) {
 }
 
 }  // namespace kj
+
+KJ_END_HEADER

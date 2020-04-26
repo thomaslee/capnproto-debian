@@ -23,10 +23,6 @@
 
 #pragma once
 
-#if defined(__GNUC__) && !defined(CAPNP_HEADER_WARNINGS)
-#pragma GCC system_header
-#endif
-
 #include "raw-schema.h"
 #include "layout.h"
 #include "list.h"
@@ -36,6 +32,8 @@
 #include <kj/string.h>
 #include <kj/string-tree.h>
 #include <kj/hash.h>
+
+CAPNP_BEGIN_HEADER
 
 namespace capnp {
 
@@ -352,7 +350,7 @@ inline constexpr uint sizeInWords() {
     }
 
 #if _MSC_VER
-// TODO(msvc): MSVC dosen't expect constexprs to have definitions.
+// TODO(msvc): MSVC doesn't expect constexprs to have definitions.
 #define CAPNP_DEFINE_ENUM(type, id)
 #else
 #define CAPNP_DEFINE_ENUM(type, id) \
@@ -403,3 +401,13 @@ inline constexpr uint sizeInWords() {
       static constexpr ::capnp::_::RawSchema const* schema = &::capnp::schemas::s_##id;
 
 #endif  // CAPNP_LITE, else
+
+namespace capnp {
+namespace schemas {
+CAPNP_DECLARE_SCHEMA(995f9a3377c0b16e);
+// HACK: Forward-declare the RawSchema for StreamResult, from stream.capnp. This allows capnp
+//   files which declare streaming methods to avoid including stream.capnp.h.
+}
+}
+
+CAPNP_END_HEADER

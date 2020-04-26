@@ -589,7 +589,16 @@ kj::Maybe<Compiler::Node::Content&> Compiler::Node::getContent(Content::State mi
       if (minimumState <= Content::BOOTSTRAP) break;
 
       // Create the final schema.
-      auto nodeSet = content.translator->finish();
+      NodeTranslator::NodeSet nodeSet;
+      if (content.bootstrapSchema == nullptr) {
+        // Must have failed in an earlier stage.
+        KJ_ASSERT(module->getErrorReporter().hadErrors());
+        nodeSet = content.translator->getBootstrapNode();
+      } else {
+        nodeSet = content.translator->finish(
+            module->getCompiler().getWorkspace().bootstrapLoader.getUnbound(id));
+      }
+
       content.finalSchema = nodeSet.node;
       content.auxSchemas = kj::mv(nodeSet.auxNodes);
       content.sourceInfo = kj::mv(nodeSet.sourceInfo);
@@ -1048,6 +1057,25 @@ static void findImports(Expression::Reader exp, std::set<kj::StringPtr>& output)
   }
 }
 
+static void findImports(Declaration::ParamList::Reader paramList, std::set<kj::StringPtr>& output) {
+  switch (paramList.which()) {
+    case Declaration::ParamList::NAMED_LIST:
+      for (auto param: paramList.getNamedList()) {
+        findImports(param.getType(), output);
+        for (auto ann: param.getAnnotations()) {
+          findImports(ann.getName(), output);
+        }
+      }
+      break;
+    case Declaration::ParamList::TYPE:
+      findImports(paramList.getType(), output);
+      break;
+    case Declaration::ParamList::STREAM:
+      output.insert("/capnp/stream.capnp");
+      break;
+  }
+}
+
 static void findImports(Declaration::Reader decl, std::set<kj::StringPtr>& output) {
   switch (decl.which()) {
     case Declaration::USING:
@@ -1067,30 +1095,9 @@ static void findImports(Declaration::Reader decl, std::set<kj::StringPtr>& outpu
     case Declaration::METHOD: {
       auto method = decl.getMethod();
 
-      auto params = method.getParams();
-      if (params.isNamedList()) {
-        for (auto param: params.getNamedList()) {
-          findImports(param.getType(), output);
-          for (auto ann: param.getAnnotations()) {
-            findImports(ann.getName(), output);
-          }
-        }
-      } else {
-        findImports(params.getType(), output);
-      }
-
+      findImports(method.getParams(), output);
       if (method.getResults().isExplicit()) {
-        auto results = method.getResults().getExplicit();
-        if (results.isNamedList()) {
-          for (auto param: results.getNamedList()) {
-            findImports(param.getType(), output);
-            for (auto ann: param.getAnnotations()) {
-              findImports(ann.getName(), output);
-            }
-          }
-        } else {
-          findImports(results.getType(), output);
-        }
+        findImports(method.getResults().getExplicit(), output);
       }
       break;
     }
