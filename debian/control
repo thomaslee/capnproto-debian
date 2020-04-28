@@ -8,7 +8,7 @@ Build-Depends: debhelper-compat (= 12), gcc (>= 4.7), python3-all,
  libssl-dev, zlib1g-dev
 Standards-Version: 4.5.0
 Homepage: https://capnproto.org/
-Vcs-Git: https://github.com/thomaslee/capnproto-debian
+Vcs-Git: https://github.com/thomaslee/capnproto-debian.git
 Vcs-Browser: https://github.com/thomaslee/capnproto-debian
 Rules-Requires-Root: no
 
