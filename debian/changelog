@@ -3,6 +3,7 @@ capnproto (0.8.0-1) UNRELEASED; urgency=medium
   * Imported Upstream version 0.8.0
   * Update packaging for 0.8.0
   * Ignore .la files
+  * Drop unnecessary dependency on dh-autoreconf
 
  -- Tom Lee <debian@tomlee.co>  Sat, 25 Apr 2020 17:33:56 -0700
 
