@@ -25,9 +25,30 @@
 
 #pragma once
 
-#if defined(__GNUC__) && !KJ_HEADER_WARNINGS
-#pragma GCC system_header
+#ifdef __GNUC__
+#define KJ_BEGIN_SYSTEM_HEADER _Pragma("GCC system_header")
+#elif defined(_MSC_VER)
+#define KJ_BEGIN_SYSTEM_HEADER __pragma(warning(push, 0))
+#define KJ_END_SYSTEM_HEADER __pragma(warning(pop))
 #endif
+
+#ifndef KJ_BEGIN_SYSTEM_HEADER
+#define KJ_BEGIN_SYSTEM_HEADER
+#endif
+
+#ifndef KJ_END_SYSTEM_HEADER
+#define KJ_END_SYSTEM_HEADER
+#endif
+
+#if !defined(KJ_HEADER_WARNINGS) || !KJ_HEADER_WARNINGS
+#define KJ_BEGIN_HEADER KJ_BEGIN_SYSTEM_HEADER
+#define KJ_END_HEADER KJ_END_SYSTEM_HEADER
+#else
+#define KJ_BEGIN_HEADER
+#define KJ_END_HEADER
+#endif
+
+KJ_BEGIN_HEADER
 
 #ifndef KJ_NO_COMPILER_CHECK
 // Technically, __cplusplus should be 201402L for C++14, but GCC 4.9 -- which is supported -- still
@@ -42,16 +63,16 @@
 
 #ifdef __GNUC__
   #if __clang__
-    #if __clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ < 4)
-      #warning "This library requires at least Clang 3.4."
+    #if __clang_major__ < 5
+      #warning "This library requires at least Clang 5.0."
     #elif __cplusplus >= 201402L && !__has_include(<initializer_list>)
       #warning "Your compiler supports C++14 but your C++ standard library does not.  If your "\
                "system has libc++ installed (as should be the case on e.g. Mac OSX), try adding "\
                "-stdlib=libc++ to your CXXFLAGS."
     #endif
   #else
-    #if __GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 9)
-      #warning "This library requires at least GCC 4.9."
+    #if __GNUC__ < 5
+      #warning "This library requires at least GCC 5.0."
     #endif
   #endif
 #elif defined(_MSC_VER)
@@ -503,6 +524,35 @@ constexpr bool canMemcpy() {
   static_assert(kj::canMemcpy<T>(), "this code expects this type to be memcpy()-able");
 #endif
 
+template <typename T>
+class Badge {
+  // A pattern for marking individual methods such that they can only be called from a specific
+  // caller class: Make the method public but give it a parameter of type `Badge<Caller>`. Only
+  // `Caller` can construct one, so only `Caller` can call the method.
+  //
+  //     // We only allow calls from the class `Bar`.
+  //     void foo(Badge<Bar>)
+  //
+  // The call site looks like:
+  //
+  //     foo({});
+  //
+  // This pattern also works well for declaring private constructors, but still being able to use
+  // them with `kj::heap()`, etc.
+  //
+  // Idea from: https://awesomekling.github.io/Serenity-C++-patterns-The-Badge/
+  //
+  // Note that some forms of this idea make the copy constructor private as well, in order to
+  // prohibit `Badge<NotMe>(*(Badge<NotMe>*)nullptr)`. However, that would prevent badges from
+  // being passed through forwarding functions like `kj::heap()`, which would ruin one of the main
+  // use cases for this pattern in KJ. In any case, dereferencing a null pointer is UB; there are
+  // plenty of other ways to get access to private members if you're willing to go UB. For one-off
+  // debugging purposes, you might as well use `#define private public` at the top of the file.
+private:
+  Badge() {}
+  friend T;
+};
+
 // =======================================================================================
 // Equivalents to std::move() and std::forward(), since these are very commonly needed and the
 // std header <utility> pulls in lots of other stuff.
@@ -650,7 +700,7 @@ inline constexpr float inf() { return (float)(1e300 * 1e300); }
 #pragma warning(pop)
 
 float nan();
-// Unfortunatley, inf() * 0.0f produces a NaN with the sign bit set, whereas our preferred
+// Unfortunately, inf() * 0.0f produces a NaN with the sign bit set, whereas our preferred
 // canonical NaN should not have the sign bit set. std::numeric_limits<float>::quiet_NaN()
 // returns the correct NaN, but we don't want to #include that here. So, we give up and make
 // this out-of-line on MSVC.
@@ -870,7 +920,7 @@ class NullableValue {
   // boolean flag indicating nullness.
 
 public:
-  inline NullableValue(NullableValue&& other) noexcept(noexcept(T(instance<T&&>())))
+  inline NullableValue(NullableValue&& other)
       : isSet(other.isSet) {
     if (isSet) {
       ctor(value, kj::mv(other.value));
@@ -922,8 +972,8 @@ public:
     return value;
   }
 
-  inline NullableValue() noexcept: isSet(false) {}
-  inline NullableValue(T&& t) noexcept(noexcept(T(instance<T&&>())))
+  inline NullableValue(): isSet(false) {}
+  inline NullableValue(T&& t)
       : isSet(true) {
     ctor(value, kj::mv(t));
   }
@@ -935,12 +985,8 @@ public:
       : isSet(true) {
     ctor(value, t);
   }
-  inline NullableValue(const T* t)
-      : isSet(t != nullptr) {
-    if (isSet) ctor(value, *t);
-  }
   template <typename U>
-  inline NullableValue(NullableValue<U>&& other) noexcept(noexcept(T(instance<U&&>())))
+  inline NullableValue(NullableValue<U>&& other)
       : isSet(other.isSet) {
     if (isSet) {
       ctor(value, kj::mv(other.value));
@@ -1007,8 +1053,51 @@ public:
     return *this;
   }
 
+  inline NullableValue& operator=(T&& other) { emplace(kj::mv(other)); return *this; }
+  inline NullableValue& operator=(T& other) { emplace(other); return *this; }
+  inline NullableValue& operator=(const T& other) { emplace(other); return *this; }
+  template <typename U>
+  inline NullableValue& operator=(NullableValue<U>&& other) {
+    if (other.isSet) {
+      emplace(kj::mv(other.value));
+    } else {
+      *this = nullptr;
+    }
+    return *this;
+  }
+  template <typename U>
+  inline NullableValue& operator=(const NullableValue<U>& other) {
+    if (other.isSet) {
+      emplace(other.value);
+    } else {
+      *this = nullptr;
+    }
+    return *this;
+  }
+  template <typename U>
+  inline NullableValue& operator=(const NullableValue<U&>& other) {
+    if (other.isSet) {
+      emplace(other.value);
+    } else {
+      *this = nullptr;
+    }
+    return *this;
+  }
+  inline NullableValue& operator=(decltype(nullptr)) {
+    if (isSet) {
+      isSet = false;
+      dtor(value);
+    }
+    return *this;
+  }
+
   inline bool operator==(decltype(nullptr)) const { return !isSet; }
   inline bool operator!=(decltype(nullptr)) const { return isSet; }
+
+  NullableValue(const T* t) = delete;
+  NullableValue& operator=(const T* other) = delete;
+  // We used to permit assigning a Maybe<T> directly from a T*, and the assignment would check for
+  // nullness. This turned out never to be useful, and sometimes to be dangerous.
 
 private:
   bool isSet;
@@ -1060,18 +1149,23 @@ class Maybe {
 
 public:
   Maybe(): ptr(nullptr) {}
-  Maybe(T&& t) noexcept(noexcept(T(instance<T&&>()))): ptr(kj::mv(t)) {}
+  Maybe(T&& t): ptr(kj::mv(t)) {}
   Maybe(T& t): ptr(t) {}
   Maybe(const T& t): ptr(t) {}
-  Maybe(const T* t) noexcept: ptr(t) {}
-  Maybe(Maybe&& other) noexcept(noexcept(T(instance<T&&>()))): ptr(kj::mv(other.ptr)) {}
+  Maybe(Maybe&& other): ptr(kj::mv(other.ptr)) {}
   Maybe(const Maybe& other): ptr(other.ptr) {}
   Maybe(Maybe& other): ptr(other.ptr) {}
 
   template <typename U>
-  Maybe(Maybe<U>&& other) noexcept(noexcept(T(instance<U&&>()))) {
+  Maybe(Maybe<U>&& other) {
     KJ_IF_MAYBE(val, kj::mv(other)) {
       ptr.emplace(kj::mv(*val));
+    }
+  }
+  template <typename U>
+  Maybe(Maybe<U&>&& other) {
+    KJ_IF_MAYBE(val, other) {
+      ptr.emplace(*val);
     }
   }
   template <typename U>
@@ -1081,7 +1175,7 @@ public:
     }
   }
 
-  Maybe(decltype(nullptr)) noexcept: ptr(nullptr) {}
+  Maybe(decltype(nullptr)): ptr(nullptr) {}
 
   template <typename... Params>
   inline T& emplace(Params&&... params) {
@@ -1092,12 +1186,42 @@ public:
     return ptr.emplace(kj::fwd<Params>(params)...);
   }
 
+  inline Maybe& operator=(T&& other) { ptr = kj::mv(other); return *this; }
+  inline Maybe& operator=(T& other) { ptr = other; return *this; }
+  inline Maybe& operator=(const T& other) { ptr = other; return *this; }
+
   inline Maybe& operator=(Maybe&& other) { ptr = kj::mv(other.ptr); return *this; }
   inline Maybe& operator=(Maybe& other) { ptr = other.ptr; return *this; }
   inline Maybe& operator=(const Maybe& other) { ptr = other.ptr; return *this; }
 
+  template <typename U>
+  Maybe& operator=(Maybe<U>&& other) {
+    KJ_IF_MAYBE(val, kj::mv(other)) {
+      ptr.emplace(kj::mv(*val));
+    } else {
+      ptr = nullptr;
+    }
+    return *this;
+  }
+  template <typename U>
+  Maybe& operator=(const Maybe<U>& other) {
+    KJ_IF_MAYBE(val, other) {
+      ptr.emplace(*val);
+    } else {
+      ptr = nullptr;
+    }
+    return *this;
+  }
+
+  inline Maybe& operator=(decltype(nullptr)) { ptr = nullptr; return *this; }
+
   inline bool operator==(decltype(nullptr)) const { return ptr == nullptr; }
   inline bool operator!=(decltype(nullptr)) const { return ptr != nullptr; }
+
+  Maybe(const T* t) = delete;
+  Maybe& operator=(const T* other) = delete;
+  // We used to permit assigning a Maybe<T> directly from a T*, and the assignment would check for
+  // nullness. This turned out never to be useful, and sometimes to be dangerous.
 
   T& orDefault(T& defaultValue) & {
     if (ptr == nullptr) {
@@ -1180,22 +1304,22 @@ private:
 template <typename T>
 class Maybe<T&>: public DisallowConstCopyIfNotConst<T> {
 public:
-  Maybe() noexcept: ptr(nullptr) {}
-  Maybe(T& t) noexcept: ptr(&t) {}
-  Maybe(T* t) noexcept: ptr(t) {}
+  constexpr Maybe(): ptr(nullptr) {}
+  constexpr Maybe(T& t): ptr(&t) {}
+  constexpr Maybe(T* t): ptr(t) {}
 
   template <typename U>
-  inline Maybe(Maybe<U&>& other) noexcept: ptr(other.ptr) {}
+  inline constexpr Maybe(Maybe<U&>& other): ptr(other.ptr) {}
   template <typename U>
-  inline Maybe(const Maybe<U&>& other) noexcept: ptr(const_cast<const U*>(other.ptr)) {}
-  inline Maybe(decltype(nullptr)) noexcept: ptr(nullptr) {}
+  inline constexpr Maybe(const Maybe<U&>& other): ptr(const_cast<const U*>(other.ptr)) {}
+  inline constexpr Maybe(decltype(nullptr)): ptr(nullptr) {}
 
-  inline Maybe& operator=(T& other) noexcept { ptr = &other; return *this; }
-  inline Maybe& operator=(T* other) noexcept { ptr = other; return *this; }
+  inline Maybe& operator=(T& other) { ptr = &other; return *this; }
+  inline Maybe& operator=(T* other) { ptr = other; return *this; }
   template <typename U>
-  inline Maybe& operator=(Maybe<U&>& other) noexcept { ptr = other.ptr; return *this; }
+  inline Maybe& operator=(Maybe<U&>& other) { ptr = other.ptr; return *this; }
   template <typename U>
-  inline Maybe& operator=(const Maybe<const U&>& other) noexcept { ptr = other.ptr; return *this; }
+  inline Maybe& operator=(const Maybe<const U&>& other) { ptr = other.ptr; return *this; }
 
   inline bool operator==(decltype(nullptr)) const { return ptr == nullptr; }
   inline bool operator!=(decltype(nullptr)) const { return ptr != nullptr; }
@@ -1263,8 +1387,34 @@ public:
   inline constexpr ArrayPtr(decltype(nullptr)): ptr(nullptr), size_(0) {}
   inline constexpr ArrayPtr(T* ptr, size_t size): ptr(ptr), size_(size) {}
   inline constexpr ArrayPtr(T* begin, T* end): ptr(begin), size_(end - begin) {}
+
+#if __GNUC__ && !__clang__ && __GNUC__ >= 9
+// GCC 9 added a warning when we take an initializer_list as a constructor parameter and save a
+// pointer to its content in a class member. GCC apparently imagines we're going to do something
+// dumb like this:
+//     ArrayPtr<const int> ptr = { 1, 2, 3 };
+//     foo(ptr[1]); // undefined behavior!
+// Any KJ programmer should be able to recognize that this is UB, because an ArrayPtr does not own
+// its content. That's not what this constructor is for, tohugh. This constructor is meant to allow
+// code like this:
+//     int foo(ArrayPtr<const int> p);
+//     // ... later ...
+//     foo({1, 2, 3});
+// In this case, the initializer_list's backing array, like any temporary, lives until the end of
+// the statement `foo({1, 2, 3});`. Therefore, it lives at least until the call to foo() has
+// returned, which is exactly what we care about. This usage is fine! GCC is wrong to warn.
+//
+// Amusingly, Clang's implementation has a similar type that they call ArrayRef which apparently
+// triggers this same GCC warning. My guess is that Clang will not introduce a similar warning
+// given that it triggers on their own, legitimate code.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winit-list-lifetime"
+#endif
   inline KJ_CONSTEXPR() ArrayPtr(::std::initializer_list<RemoveConstOrDisable<T>> init)
       : ptr(init.begin()), size_(init.size()) {}
+#if __GNUC__ && !__clang__ && __GNUC__ >= 9
+#pragma GCC diagnostic pop
+#endif
 
   template <size_t size>
   inline constexpr ArrayPtr(T (&native)[size]): ptr(native), size_(size) {
@@ -1474,3 +1624,5 @@ _::Deferred<Func> defer(Func&& func) {
 // Run the given code when the function exits, whether by return or exception.
 
 }  // namespace kj
+
+KJ_END_HEADER

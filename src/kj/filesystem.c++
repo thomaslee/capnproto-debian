@@ -622,7 +622,7 @@ Own<const Directory> Directory::openSubdir(PathPtr path, WriteMode mode) const {
 void Directory::symlink(PathPtr linkpath, StringPtr content, WriteMode mode) const {
   if (!trySymlink(linkpath, content, mode)) {
     if (has(mode, WriteMode::CREATE)) {
-      KJ_FAIL_REQUIRE("path already exsits", linkpath) { break; }
+      KJ_FAIL_REQUIRE("path already exists", linkpath) { break; }
     } else {
       // Shouldn't happen.
       KJ_FAIL_ASSERT("symlink() returned null despite no preconditions", linkpath) { break; }
@@ -1511,7 +1511,7 @@ private:
               entry.set(kj::mv(copy));
             } else {
               if (mode == TransferMode::MOVE) {
-                KJ_ASSERT(fromDirectory.tryRemove(fromPath), "could't move node", fromPath) {
+                KJ_ASSERT(fromDirectory.tryRemove(fromPath), "couldn't move node", fromPath) {
                   return false;
                 }
               }
@@ -1543,7 +1543,7 @@ private:
               entry.set(kj::mv(copy));
             } else {
               if (mode == TransferMode::MOVE) {
-                KJ_ASSERT(fromDirectory.tryRemove(fromPath), "could't move node", fromPath) {
+                KJ_ASSERT(fromDirectory.tryRemove(fromPath), "couldn't move node", fromPath) {
                   return false;
                 }
               }
@@ -1560,7 +1560,7 @@ private:
             // Since symlinks are immutable, we can implement LINK the same as COPY.
             entry.init(SymlinkNode { lastModified.orDefault(clock.now()), kj::mv(*content) });
             if (mode == TransferMode::MOVE) {
-              KJ_ASSERT(fromDirectory.tryRemove(fromPath), "could't move node", fromPath) {
+              KJ_ASSERT(fromDirectory.tryRemove(fromPath), "couldn't move node", fromPath) {
                 return false;
               }
             }

@@ -29,6 +29,7 @@
 #include <kj/vector.h>
 #include <algorithm>
 #include <kj/map.h>
+#include <capnp/stream.capnp.h>
 
 #if _MSC_VER
 #include <atomic>
@@ -1507,14 +1508,8 @@ const _::RawBrandedSchema* SchemaLoader::Impl::makeBranded(
 
 const _::RawBrandedSchema* SchemaLoader::Impl::makeBranded(
     const _::RawSchema* schema, kj::ArrayPtr<const _::RawBrandedSchema::Scope> bindings) {
-  // Note that even if `bindings` is empty, we never want to return defaultBrand here because
-  // defaultBrand has special status. Normally, the lack of bindings means all parameters are
-  // "unspecified", which means their bindings are unknown and should be treated as AnyPointer.
-  // But defaultBrand represents a special case where all parameters are still parameters -- they
-  // haven't been bound in the first place. defaultBrand is used to represent the unbranded generic
-  // type, while a no-binding brand is equivalent to binding all parameters to AnyPointer.
-
   if (bindings.size() == 0) {
+    // `defaultBrand` is the version where all type parameters are bound to `AnyPointer`.
     return &schema->defaultBrand;
   }
 
@@ -1728,9 +1723,17 @@ void SchemaLoader::Impl::makeDep(_::RawBrandedSchema::Binding& result,
     uint64_t typeId, schema::Type::Which whichType, schema::Node::Which expectedKind,
     schema::Brand::Reader brand, kj::StringPtr scopeName,
     kj::Maybe<kj::ArrayPtr<const _::RawBrandedSchema::Scope>> brandBindings) {
-  const _::RawSchema* schema = loadEmpty(typeId,
-      kj::str("(unknown type; seen as dependency of ", scopeName, ")"),
-      expectedKind, true);
+  const _::RawSchema* schema;
+  if (typeId == capnp::typeId<StreamResult>()) {
+    // StreamResult is a very special type that is used to mark when a method is declared as
+    // streaming ("foo @0 () -> stream;"). We like to auto-load it if we see it as someone's
+    // dependency.
+    schema = loadNative(&_::rawSchema<StreamResult>());
+  } else {
+    schema = loadEmpty(typeId,
+        kj::str("(unknown type; seen as dependency of ", scopeName, ")"),
+        expectedKind, true);
+  }
   result.which = static_cast<uint8_t>(whichType);
   result.schema = makeBranded(schema, brand, brandBindings);
 }
@@ -1986,7 +1989,10 @@ kj::Maybe<Schema> SchemaLoader::tryGet(
   if (getResult.schema != nullptr && getResult.schema->lazyInitializer == nullptr) {
     if (brand.getScopes().size() > 0) {
       auto brandedSchema = impl.lockExclusive()->get()->makeBranded(
-          getResult.schema, brand, kj::arrayPtr(scope.raw->scopes, scope.raw->scopeCount));
+          getResult.schema, brand,
+          scope.raw->isUnbound()
+              ? kj::Maybe<kj::ArrayPtr<const _::RawBrandedSchema::Scope>>(nullptr)
+              : kj::arrayPtr(scope.raw->scopes, scope.raw->scopeCount));
       brandedSchema->ensureInitialized();
       return Schema(brandedSchema);
     } else {
