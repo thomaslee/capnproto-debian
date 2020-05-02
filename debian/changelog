@@ -1,4 +1,4 @@
-capnproto (0.8.0-1) UNRELEASED; urgency=medium
+capnproto (0.8.0-1) experimental; urgency=medium
 
   * Imported Upstream version 0.8.0
   * Update packaging for 0.8.0
