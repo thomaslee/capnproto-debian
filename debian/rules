@@ -13,7 +13,7 @@ include /usr/share/dpkg/buildflags.mk
 export DH_OPTIONS
 
 %:
-	dh $@ --with autoreconf
+	dh $@
 
 override_dh_auto_build:
 	xsltproc --nonet \
