@@ -4,8 +4,8 @@ Author: Dimitri John Ledkov <xnox@ubuntu.com>
 Bug-Debian: https://bugs.debian.org/920230
 
 
---- capnproto-0.7.0.orig/cmake/CapnProtoConfig.cmake.in
-+++ capnproto-0.7.0/cmake/CapnProtoConfig.cmake.in
+--- a/cmake/CapnProtoConfig.cmake.in
++++ b/cmake/CapnProtoConfig.cmake.in
 @@ -38,11 +38,11 @@
  
  set(CapnProto_VERSION @VERSION@)

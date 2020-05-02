@@ -17,7 +17,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  #define HOLES_NOT_SUPPORTED 1
  #endif
  
-@@ -799,6 +799,7 @@
+@@ -812,6 +812,7 @@
    KJ_EXPECT(dir->openFile(Path("foo"))->readAllText() == "bazqux");
  }
  
@@ -25,11 +25,11 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  KJ_TEST("DiskDirectory replace file with directory") {
    TempDir tempDir;
    auto dir = tempDir.get();
-@@ -828,6 +829,7 @@
+@@ -841,6 +842,7 @@
    // Replaced with directory.
    KJ_EXPECT(dir->openFile(Path({"foo", "bar"}))->readAllText() == "bazqux");
  }
 +#endif
  
- #ifndef HOLES_NOT_SUPPORTED
- KJ_TEST("DiskFile holes") {
+ #if !defined(HOLES_NOT_SUPPORTED) && (CAPNP_DEBUG_TYPES || CAPNP_EXPENSIVE_TESTS)
+ // Not all filesystems support sparse files, and if they do, they don't necessarily support
