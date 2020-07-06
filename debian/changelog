@@ -1,3 +1,11 @@
+capnproto (0.7.0-7) unstable; urgency=medium
+
+  * Disable failing test when interface is IPv6-only (Closes: #963855)
+    Thank you to Dominic Hargreaves for the bug report and instructions
+    for how to reproduce the bug.
+
+ -- tony mancill <tmancill@debian.org>  Mon, 06 Jul 2020 11:52:29 -0700
+
 capnproto (0.7.0-6) unstable; urgency=medium
 
   * Apply patch for FTBFS on s390x (Closes: #955544)
