@@ -3,3 +3,4 @@
 03_fixup_cmake.patch
 04_fix_typos.patch
 05_ftbfs_on_s390x.patch
+06_tests_fail_with_ipv6.patch
