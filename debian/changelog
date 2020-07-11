@@ -1,3 +1,10 @@
+capnproto (0.7.0-8) UNRELEASED; urgency=medium
+
+  * Add debian/gbp.conf for DEP14 layout
+  * 
+
+ -- tony mancill <tmancill@debian.org>  Fri, 10 Jul 2020 20:47:12 -0700
+
 capnproto (0.7.0-7) unstable; urgency=medium
 
   * Disable failing test when interface is IPv6-only (Closes: #963855)
