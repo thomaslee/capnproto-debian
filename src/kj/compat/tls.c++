@@ -180,10 +180,14 @@ public:
     return writeInternal(pieces[0], pieces.slice(1, pieces.size()));
   }
 
+  Promise<void> whenWriteDisconnected() override {
+    return inner.whenWriteDisconnected();
+  }
+
   void shutdownWrite() override {
     KJ_REQUIRE(shutdownTask == nullptr, "already called shutdownWrite()");
 
-    // TODO(0.8): shutdownWrite() is problematic because it doesn't return a promise. It was
+    // TODO(0.9): shutdownWrite() is problematic because it doesn't return a promise. It was
     //   designed to assume that it would only be called after all writes are finished and that
     //   there was no reason to block at that point, but SSL sessions don't fit this since they
     //   actually have to send a shutdown message.

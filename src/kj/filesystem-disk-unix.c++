@@ -346,6 +346,7 @@ public:
   }
 
   Array<const byte> mmap(uint64_t offset, uint64_t size) const {
+    if (size == 0) return nullptr;  // zero-length mmap() returns EINVAL, so avoid it
     auto range = getMmapRange(offset, size);
     const void* mapping = ::mmap(NULL, range.size, PROT_READ, MAP_SHARED, fd, range.offset);
     if (mapping == MAP_FAILED) {
@@ -356,6 +357,7 @@ public:
   }
 
   Array<byte> mmapPrivate(uint64_t offset, uint64_t size) const {
+    if (size == 0) return nullptr;  // zero-length mmap() returns EINVAL, so avoid it
     auto range = getMmapRange(offset, size);
     void* mapping = ::mmap(NULL, range.size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, range.offset);
     if (mapping == MAP_FAILED) {
@@ -396,8 +398,8 @@ public:
 
     static const byte ZEROS[4096] = { 0 };
 
-#if __APPLE__ || __CYGWIN__
-    // Mac & Cygwin doesn't have pwritev().
+#if __APPLE__ || __CYGWIN__ || (defined(__ANDROID__) && __ANDROID_API__ < 24)
+    // Mac & Cygwin & Android API levels 23 and lower doesn't have pwritev().
     while (size > sizeof(ZEROS)) {
       write(offset, ZEROS);
       size -= sizeof(ZEROS);
@@ -454,6 +456,7 @@ public:
     void changed(ArrayPtr<byte> slice) const override {
       KJ_REQUIRE(slice.begin() >= bytes.begin() && slice.end() <= bytes.end(),
                  "byte range is not part of this mapping");
+      if (slice.size() == 0) return;
 
       // msync() requires page-alignment, apparently, so use getMmapRange() to accomplish that.
       auto range = getMmapRange(reinterpret_cast<uintptr_t>(slice.begin()), slice.size());
@@ -463,6 +466,7 @@ public:
     void sync(ArrayPtr<byte> slice) const override {
       KJ_REQUIRE(slice.begin() >= bytes.begin() && slice.end() <= bytes.end(),
                  "byte range is not part of this mapping");
+      if (slice.size() == 0) return;
 
       // msync() requires page-alignment, apparently, so use getMmapRange() to accomplish that.
       auto range = getMmapRange(reinterpret_cast<uintptr_t>(slice.begin()), slice.size());
@@ -474,6 +478,10 @@ public:
   };
 
   Own<const WritableFileMapping> mmapWritable(uint64_t offset, uint64_t size) const {
+    if (size == 0) {
+      // zero-length mmap() returns EINVAL, so avoid it
+      return heap<WritableFileMappingImpl>(nullptr);
+    }
     auto range = getMmapRange(offset, size);
     void* mapping = ::mmap(NULL, range.size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, range.offset);
     if (mapping == MAP_FAILED) {
@@ -502,6 +510,7 @@ public:
           default:
             KJ_FAIL_SYSCALL("sendfile", error) { return fromPos - fromOffset; }
         }
+        if (n == 0) break;
       }
       return fromPos - fromOffset;
     }

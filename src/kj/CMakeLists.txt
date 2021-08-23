@@ -202,6 +202,7 @@ if(BUILD_TESTING)
     debug-test.c++
     io-test.c++
     mutex-test.c++
+    time-test.c++
     threadlocal-test.c++
     test-test.c++
     std/iostream-test.c++
@@ -214,8 +215,11 @@ if(BUILD_TESTING)
   if(NOT CAPNP_LITE)
     add_executable(kj-heavy-tests
       async-test.c++
+      async-xthread-test.c++
       async-unix-test.c++
+      async-unix-xthread-test.c++
       async-win32-test.c++
+      async-win32-xthread-test.c++
       async-io-test.c++
       refcount-test.c++
       string-tree-test.c++
@@ -225,7 +229,6 @@ if(BUILD_TESTING)
       tuple-test.c++
       one-of-test.c++
       function-test.c++
-      threadlocal-pthread-test.c++
       filesystem-test.c++
       filesystem-disk-test.c++
       parse/common-test.c++

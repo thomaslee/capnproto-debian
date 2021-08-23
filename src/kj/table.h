@@ -21,10 +21,6 @@
 
 #pragma once
 
-#if defined(__GNUC__) && !KJ_HEADER_WARNINGS
-#pragma GCC system_header
-#endif
-
 #include "common.h"
 #include "tuple.h"
 #include "vector.h"
@@ -38,6 +34,8 @@
 #include <intrin0.h>
 #endif
 #endif
+
+KJ_BEGIN_HEADER
 
 namespace kj {
 
@@ -640,11 +638,15 @@ public:
       return table.rows[*existing];
     } else {
       bool success = false;
+      KJ_DEFER({
+        if (!success) {
+          get<index>(table.indexes).erase(table.rows.asPtr(), pos, params...);
+        }
+      });
       auto& newRow = table.rows.add(createFunc());
       KJ_DEFER({
         if (!success) {
           table.rows.removeLast();
-          get<index>(table.indexes).erase(table.rows.asPtr(), pos, params...);
         }
       });
       if (Table<Row, Indexes...>::template Impl<>::insert(table, pos, newRow, index) == nullptr) {
@@ -1538,6 +1540,10 @@ class InsertionOrderIndex {
   struct Link;
 public:
   InsertionOrderIndex();
+  InsertionOrderIndex(const InsertionOrderIndex&) = delete;
+  InsertionOrderIndex& operator=(const InsertionOrderIndex&) = delete;
+  InsertionOrderIndex(InsertionOrderIndex&& other);
+  InsertionOrderIndex& operator=(InsertionOrderIndex&& other);
   ~InsertionOrderIndex() noexcept(false);
 
   class Iterator {
@@ -1623,3 +1629,5 @@ private:
 };
 
 } // namespace kj
+
+KJ_END_HEADER
