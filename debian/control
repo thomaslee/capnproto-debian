@@ -14,7 +14,7 @@ Build-Depends: cmake,
  python3-all,
  xsltproc,
  zlib1g-dev
-Standards-Version: 4.5.0
+Standards-Version: 4.6.0
 Homepage: https://capnproto.org/
 Vcs-Git: https://github.com/thomaslee/capnproto-debian.git
 Vcs-Browser: https://github.com/thomaslee/capnproto-debian
