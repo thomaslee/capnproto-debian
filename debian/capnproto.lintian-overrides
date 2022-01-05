@@ -1,2 +1,2 @@
-capnproto binary: hardening-no-fortify-functions usr/bin/capnp
+capnproto binary: hardening-no-fortify-functions
 capnproto binary: spelling-error-in-binary usr/bin/capnpc-c++ geting getting
