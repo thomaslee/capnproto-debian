@@ -1,2 +1,2 @@
-Tests: cli-tests, build-tests
+Tests: cli-tests, build-tests, serde-tests
 Depends: @, shunit2, bash, g++, pkg-config, cmake
