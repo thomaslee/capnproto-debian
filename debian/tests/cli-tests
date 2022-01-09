@@ -18,7 +18,7 @@ test_run_capnp_compile() {
   local SCHEMADIR="$(mktemp -d)"
   local SCHEMAFILE=foo.capnp
   local SCHEMA="${SCHEMADIR}/${SCHEMAFILE}"
-  trap RETURN EXIT "rm -rf '${SCHEMADIR}'"
+  trap "rm -rf '${SCHEMADIR}'" RETURN EXIT
 
   echo "${ID};
 

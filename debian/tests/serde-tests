@@ -1,0 +1,96 @@
+#!/bin/bash
+
+exec 2>&1
+
+set -e
+
+EXAMPLE_PROGRAM_1='
+#include <capnp/message.h>
+#include <capnp/serialize-packed.h>
+#include <iostream>
+#include <cstring>
+#include <unistd.h>
+#include <fcntl.h>
+
+#include "person.capnp.h"
+
+static void
+write_person(const char *filename)
+{
+  ::capnp::MallocMessageBuilder msg;
+  int fd = open(filename, O_CREAT | O_WRONLY, S_IWUSR | S_IRUSR);
+  KJ_ASSERT(fd >= 0);
+  KJ_DEFER(close(fd));
+
+  Person::Builder person = msg.initRoot<Person>();
+  person.setName("Tom Lee");
+  person.setEmail("debian@tomlee.co");
+
+  capnp::writePackedMessageToFd(fd, msg);
+}
+
+static void
+read_person(const char *filename)
+{
+  int fd = open(filename, O_RDONLY);
+  KJ_ASSERT(fd >= 0);
+  KJ_DEFER(close(fd));
+
+  ::capnp::PackedFdMessageReader msg(fd);
+
+  Person::Reader person = msg.getRoot<Person>();
+
+  std::cout << person.getName().cStr() << "|" << person.getEmail().cStr() << std::endl;
+}
+
+int
+main (int argc, char **argv)
+{
+  KJ_ASSERT(argc == 2);
+  write_person(argv[1]);
+  read_person(argv[1]);
+  return 0;
+}
+'
+
+test_trivial_serde() {
+  local ID="$(capnp id)"
+  local WORKDIR="$(mktemp -d)"
+  local SCHEMAFILE=person.capnp
+  local SCHEMA="${WORKDIR}/${SCHEMAFILE}"
+  trap "rm -rf '${WORKDIR}'" RETURN EXIT
+
+  echo "${ID};
+
+struct Person {
+  name @0 :Text;
+  email @1 :Text;
+}
+" >"$SCHEMA"
+  (
+    cd "$WORKDIR"
+    capnp compile -oc++ "$SCHEMAFILE"
+  )
+  if [ ! -f "$WORKDIR/person.capnp.h" ]; then
+    fail "person.capnp.h not found"
+  fi
+  if [ ! -f "$WORKDIR/person.capnp.c++" ]; then
+    fail "person.capnp.c++ not found"
+  fi
+
+  echo "$EXAMPLE_PROGRAM_1" >"$WORKDIR/trivial-serde-test.cc"
+
+  (
+    cd "$WORKDIR"
+    g++ -Wall -Werror \
+        $(pkg-config --cflags capnp) \
+        -o "trivial-serde-test" \
+        "person.capnp.c++" \
+        "trivial-serde-test.cc" \
+        $(pkg-config --libs capnp)
+  )
+
+  assertEquals "Tom Lee|debian@tomlee.co" "$("$WORKDIR/trivial-serde-test" "$WORKDIR/serialized-person.bin")"
+}
+
+. shunit2
