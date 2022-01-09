@@ -1,0 +1,16 @@
+on:
+  push:
+    branches:
+      - debian/master
+  pull_request: {}
+
+jobs:
+  sid:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: jtdor/build-deb-action@v1.0.0
+        with:
+          docker-image: debian:unstable-slim
+          buildpackage-opts: --build=binary --no-sign
+
