@@ -13,17 +13,29 @@ jobs:
       - name: build and test
         run: |
           set -ex
+          echo "$USER"
           git fetch --all
           git branch pristine-tar origin/pristine-tar
           git branch upstream/latest origin/upstream/latest
-          CONTAINER_ID="$(docker run --rm --privileged --detach -e DEBIAN_FRONTEND=noninteractive -v "$GITHUB_WORKSPACE:/github/workspace" --workdir=/github/workspace debian:unstable-slim tail -f /dev/null)"
-          DEBARCH="$(docker exec "$CONTAINER_ID" dpkg --print-architecture)"
-          docker exec "$CONTAINER_ID" apt-get update
-          docker exec "$CONTAINER_ID" apt-get install -y git-buildpackage build-essential
-          docker exec "$CONTAINER_ID" apt-get build-dep -y .
-          docker exec "$CONTAINER_ID" gbp buildpackage --git-pristine-tar --git-no-sign-tags --git-upstream-tree=BRANCH --git-ignore-branch \
-            --git-postbuild='lintian -I $GBP_CHANGES_FILE'
-          # FIXME autopkgtest-schroot requires ephemeral schroot sessions. Set a "union-type" or use a tarball schroot
-          # autopkgtest $GBP_CHANGES_FILE -- schroot unstable-${DEBARCH}-sbuild; [ $? -eq 0 -o $? -eq 8 ]'
-          docker kill "$CONTAINER_ID"
+          sudo apt-get update
+          sudo apt-get install -y git-buildpackage sbuild build-essential devscripts sudo
+          export DEBARCH="$(dpkg --print-architecture)"
+          sudo cp /usr/share/doc/sbuild/examples/example.sbuildrc "/root/.sbuildrc"
+          [ ! -f "$HOME/.sbuildrc" ] || ln -nsf "/root/.sbuildrc" "$HOME/.sbuildrc"
+          sudo sbuild-createchroot --include=eatmydata,ccache unstable /srv/chroot/unstable-${DEBARCH}-sbuild http://ftp.us.debian.org/debian
+          sudo cat >"/root/.gbp.conf" <<-EOF
+[DEFAULT]
+cleaner = git reset --hard HEAD && git clean -xdf
+builder = sbuild
+pristine-tar = True
+postbuild = lintian -I $GBP_CHANGES_FILE && echo "Lintian OK" && autopkgtest $GBP_CHANGES_FILE -- schroot unstable-${DEBARCH}-sbuild; [ $? -eq 0 -o $? -eq 8 ]
+[buildpackage]
+sign-tags = False
+upstream-tree = BRANCH
+ignore-branch = True
+[dch]
+spawn-editor = never
+          EOF
+          [ ! -f "$HOME/.gbp.conf" ] || ln -nsf "/root/.gbp.conf" "$HOME/.gbp.conf"
+          gbp buildpackage
 
