@@ -13,17 +13,15 @@ jobs:
       - name: build and test
         run: |
           set -ex
-          echo "$USER"
           git fetch --all
           git branch pristine-tar origin/pristine-tar
           git branch upstream/latest origin/upstream/latest
           sudo apt-get update
           sudo apt-get install -y git-buildpackage sbuild build-essential devscripts sudo
           export DEBARCH="$(dpkg --print-architecture)"
-          sudo cp /usr/share/doc/sbuild/examples/example.sbuildrc "/root/.sbuildrc"
-          [ ! -f "$HOME/.sbuildrc" ] || ln -nsf "/root/.sbuildrc" "$HOME/.sbuildrc"
+          cp /usr/share/doc/sbuild/examples/example.sbuildrc "$HOME/.sbuildrc"
           sudo sbuild-createchroot --include=eatmydata,ccache unstable /srv/chroot/unstable-${DEBARCH}-sbuild http://ftp.us.debian.org/debian
-          sudo cat >"/root/.gbp.conf" <<-EOF
+          cat >"$HOME/.gbp.conf" <<-EOF
           [DEFAULT]
           cleaner = git reset --hard HEAD && git clean -xdf
           builder = sbuild
@@ -36,6 +34,5 @@ jobs:
           [dch]
           spawn-editor = never
           EOF
-          [ ! -f "$HOME/.gbp.conf" ] || ln -nsf "/root/.gbp.conf" "$HOME/.gbp.conf"
           gbp buildpackage
 
