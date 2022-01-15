@@ -24,17 +24,17 @@ jobs:
           [ ! -f "$HOME/.sbuildrc" ] || ln -nsf "/root/.sbuildrc" "$HOME/.sbuildrc"
           sudo sbuild-createchroot --include=eatmydata,ccache unstable /srv/chroot/unstable-${DEBARCH}-sbuild http://ftp.us.debian.org/debian
           sudo cat >"/root/.gbp.conf" <<-EOF
-[DEFAULT]
-cleaner = git reset --hard HEAD && git clean -xdf
-builder = sbuild
-pristine-tar = True
-postbuild = lintian -I $GBP_CHANGES_FILE && echo "Lintian OK" && autopkgtest $GBP_CHANGES_FILE -- schroot unstable-${DEBARCH}-sbuild; [ $? -eq 0 -o $? -eq 8 ]
-[buildpackage]
-sign-tags = False
-upstream-tree = BRANCH
-ignore-branch = True
-[dch]
-spawn-editor = never
+          [DEFAULT]
+          cleaner = git reset --hard HEAD && git clean -xdf
+          builder = sbuild
+          pristine-tar = True
+          postbuild = lintian -I $GBP_CHANGES_FILE && echo "Lintian OK" && autopkgtest $GBP_CHANGES_FILE -- schroot unstable-${DEBARCH}-sbuild; [ $? -eq 0 -o $? -eq 8 ]
+          [buildpackage]
+          sign-tags = False
+          upstream-tree = BRANCH
+          ignore-branch = True
+          [dch]
+          spawn-editor = never
           EOF
           [ ! -f "$HOME/.gbp.conf" ] || ln -nsf "/root/.gbp.conf" "$HOME/.gbp.conf"
           gbp buildpackage
