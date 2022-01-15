@@ -21,6 +21,7 @@ jobs:
           export DEBARCH="$(dpkg --print-architecture)"
           cp /usr/share/doc/sbuild/examples/example.sbuildrc "$HOME/.sbuildrc"
           sudo sbuild-createchroot --include=eatmydata,ccache unstable /srv/chroot/unstable-${DEBARCH}-sbuild http://ftp.us.debian.org/debian
+          sudo sbuild-adduser "$USER"
           cat >"$HOME/.gbp.conf" <<-EOF
           [DEFAULT]
           cleaner = git reset --hard HEAD && git clean -xdf
@@ -34,5 +35,6 @@ jobs:
           [dch]
           spawn-editor = never
           EOF
+          newgrp sbuild
           gbp buildpackage
 
