@@ -21,7 +21,6 @@ jobs:
           export DEBARCH="$(dpkg --print-architecture)"
           cp /usr/share/doc/sbuild/examples/example.sbuildrc "$HOME/.sbuildrc"
           sudo sbuild-createchroot --include=eatmydata,ccache unstable /srv/chroot/unstable-${DEBARCH}-sbuild http://ftp.us.debian.org/debian
-          sudo sbuild-adduser "$USER"
-          sudo gbp buildpackage --git-builder=sbuild --git-pristine-tar --git-no-sign-tags --git-upstream-tree=BRANCH --git-ignore-branch \
+          gbp buildpackage --git-pristine-tar --git-no-sign-tags --git-upstream-tree=BRANCH --git-ignore-branch \
             --git-postbuild='lintian -I $GBP_CHANGES_FILE && autopkgtest $GBP_CHANGES_FILE -- schroot unstable-${DEBARCH}-sbuild; [ $? -eq 0 -o $? -eq 8 ]'
 
