@@ -35,6 +35,5 @@ jobs:
           [dch]
           spawn-editor = never
           EOF
-      - name: build and test
-        run: sudo gbp buildpackage
+          sudo gbp buildpackage
 
