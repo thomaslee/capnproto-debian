@@ -17,7 +17,7 @@ jobs:
           git branch pristine-tar origin/pristine-tar
           git branch upstream/latest origin/upstream/latest
           sudo apt-get update
-          sudo apt-get install -y git-buildpackage sbuild build-essential devscripts sudo
+          sudo apt-get install -y git-buildpackage sbuild build-essential devscripts sudo debhelper
           export DEBARCH="$(dpkg --print-architecture)"
           cp /usr/share/doc/sbuild/examples/example.sbuildrc "$HOME/.sbuildrc"
           sudo sbuild-createchroot --include=eatmydata,ccache unstable /srv/chroot/unstable-${DEBARCH}-sbuild http://ftp.us.debian.org/debian
