@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       # FIXME massive hack, just trying to see if this works
-      - name: build and test
+      - name: prepare
         run: |
           set -ex
           git fetch --all
@@ -35,6 +35,6 @@ jobs:
           [dch]
           spawn-editor = never
           EOF
-          newgrp sbuild
+      - name: build and test
           gbp buildpackage
 
