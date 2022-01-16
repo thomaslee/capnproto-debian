@@ -22,18 +22,6 @@ jobs:
           cp /usr/share/doc/sbuild/examples/example.sbuildrc "$HOME/.sbuildrc"
           sudo sbuild-createchroot --include=eatmydata,ccache unstable /srv/chroot/unstable-${DEBARCH}-sbuild http://ftp.us.debian.org/debian
           sudo sbuild-adduser "$USER"
-          cat >"$HOME/.gbp.conf" <<-EOF
-          [DEFAULT]
-          cleaner = git reset --hard HEAD && git clean -xdf
-          builder = sbuild
-          pristine-tar = True
-          postbuild = lintian -I $GBP_CHANGES_FILE && echo "Lintian OK" && autopkgtest $GBP_CHANGES_FILE -- schroot unstable-${DEBARCH}-sbuild; [ $? -eq 0 -o $? -eq 8 ]
-          [buildpackage]
-          sign-tags = False
-          upstream-tree = BRANCH
-          ignore-branch = True
-          [dch]
-          spawn-editor = never
-          EOF
-          sudo gbp buildpackage
+          sudo gbp buildpackage --git-builder=sbuild --git-pristine-tar --git-no-sign-tags --git-upstream-tree=BRANCH --git-ignore-branch \
+            --git-postbuild='lintian -I $GBP_CHANGES_FILE && autopkgtest $GBP_CHANGES_FILE -- schroot unstable-${DEBARCH}-sbuild; [ $? -eq 0 -o $? -eq 8 ]'
 
