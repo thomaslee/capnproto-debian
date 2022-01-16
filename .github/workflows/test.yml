@@ -36,5 +36,5 @@ jobs:
           spawn-editor = never
           EOF
       - name: build and test
-        run: gbp buildpackage
+        run: sudo gbp buildpackage
 
