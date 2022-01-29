@@ -4,7 +4,7 @@ Forwarded: no
 
 --- a/src/kj/filesystem-disk-unix.c++
 +++ b/src/kj/filesystem-disk-unix.c++
-@@ -1103,7 +1103,7 @@
+@@ -1111,7 +1111,7 @@
            // Presumably because the target path doesn't exist.
            if (has(mode, WriteMode::CREATE)) {
              KJ_FAIL_ASSERT("rename(tmp, path) claimed path exists but "
