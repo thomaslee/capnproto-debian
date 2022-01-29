@@ -168,8 +168,14 @@ public:
     return unit1PerUnit2 / other.unit1PerUnit2;
   }
 
-  inline bool operator==(UnitRatio other) const { return unit1PerUnit2 == other.unit1PerUnit2; }
-  inline bool operator!=(UnitRatio other) const { return unit1PerUnit2 != other.unit1PerUnit2; }
+  template <typename OtherNumber>
+  inline constexpr bool operator==(const UnitRatio<OtherNumber, Unit1, Unit2>& other) const {
+    return unit1PerUnit2 == other.unit1PerUnit2;
+  }
+  template <typename OtherNumber>
+  inline constexpr bool operator!=(const UnitRatio<OtherNumber, Unit1, Unit2>& other) const {
+    return unit1PerUnit2 != other.unit1PerUnit2;
+  }
 
 private:
   Number unit1PerUnit2;
@@ -1044,14 +1050,14 @@ inline constexpr T unboundAs(U value) {
 
 template <uint64_t requestedMax, uint64_t maxN, typename T>
 inline constexpr T unboundMax(Bounded<maxN, T> value) {
-  // Explicitly ungaurd expecting a value that is at most `maxN`.
+  // Explicitly unguard expecting a value that is at most `maxN`.
   static_assert(maxN <= requestedMax, "possible overflow detected");
   return value.unwrap();
 }
 
 template <uint64_t requestedMax, uint value>
 inline constexpr uint unboundMax(BoundedConst<value>) {
-  // Explicitly ungaurd expecting a value that is at most `maxN`.
+  // Explicitly unguard expecting a value that is at most `maxN`.
   static_assert(value <= requestedMax, "overflow detected");
   return value;
 }
@@ -1059,7 +1065,7 @@ inline constexpr uint unboundMax(BoundedConst<value>) {
 template <uint bits, typename T>
 inline constexpr auto unboundMaxBits(T value) ->
     decltype(unboundMax<maxValueForBits<bits>()>(value)) {
-  // Explicitly ungaurd expecting a value that fits into `bits` bits.
+  // Explicitly unguard expecting a value that fits into `bits` bits.
   return unboundMax<maxValueForBits<bits>()>(value);
 }
 
