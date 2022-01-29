@@ -2,6 +2,7 @@ libcapnp 0.9.1 libcapnp-0.9.1
 libcapnp-json 0.9.1 libcapnp-0.9.1
 libcapnp-rpc 0.9.1 libcapnp-0.9.1
 libcapnpc 0.9.1 libcapnp-0.9.1
+libcapnp-websocket 0.9.1 libcapnp-websocket-0.9.1
 libkj 0.9.1 libcapnp-0.9.1
 libkj-async 0.9.1 libcapnp-0.9.1
 libkj-http 0.9.1 libcapnp-0.9.1
