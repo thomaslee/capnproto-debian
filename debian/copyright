@@ -3,11 +3,11 @@ Upstream-Name: capnproto
 Source: http://capnproto.org/
 
 Files: *
-Copyright: 2013-2017 Sandstorm Development Group, Inc. and contributors
+Copyright: 2013-2022 Sandstorm Development Group, Inc. and contributors
 License: MIT
 
 Files: debian/*
-Copyright: 2013-2017 Tom Lee <debian@tomlee.co>
+Copyright: 2013-2022 Tom Lee <debian@tomlee.co>
 License: MIT
 
 License: MIT
