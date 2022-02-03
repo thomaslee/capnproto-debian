@@ -1,4 +1,4 @@
-capnproto (0.9.1-1) UNRELEASED; urgency=medium
+capnproto (0.9.1-1) experimental; urgency=medium
 
   * Add serde-tests autopkgtest
   * Add files for CI automation (GitHub Actions)
