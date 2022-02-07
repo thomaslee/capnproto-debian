@@ -1,3 +1,6 @@
+Description: link against libatomic
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1005066
+
 --- a/configure.ac
 +++ b/configure.ac
 @@ -16,6 +16,11 @@
