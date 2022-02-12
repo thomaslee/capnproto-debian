@@ -8,53 +8,53 @@ License: MIT
 
 Files:
   src/capnp/afl-testcase.c++
-  src/kj/compat/gzip.c++
-  src/kj/compat/gzip.h
-  src/kj/compat/gzip-test.c++
-  src/kj/compat/url.c++
-  src/kj/compat/url.h
-  src/kj/compat/url-test.c++
-  src/kj/encoding.h
-  src/kj/encoding-test.c++
   src/capnp/compat/json-test.capnp
   src/capnp/stream.capnp
+  src/capnp/testdata/errors2.capnp.nobuild
+  src/kj/async-queue-test.c++
+  src/kj/async-queue.h
   src/kj/async-unix-xthread-test.c++
   src/kj/async-win32-xthread-test.c++
   src/kj/async-xthread-test.c++
-  src/kj/time-test.c++
-  src/capnp/testdata/errors2.capnp.nobuild
-  src/kj/async-queue.h
-  src/kj/async-queue-test.c++
+  src/kj/compat/gzip-test.c++
+  src/kj/compat/gzip.c++
+  src/kj/compat/gzip.h
+  src/kj/compat/url-test.c++
+  src/kj/compat/url.c++
+  src/kj/compat/url.h
+  src/kj/encoding-test.c++
+  src/kj/encoding.h
+  src/kj/list-test.c++
   src/kj/list.c++
   src/kj/list.h
-  src/kj/list-test.c++
   src/kj/source-location.c++
   src/kj/source-location.h
+  src/kj/time-test.c++
 Copyright: 2017-2022 Cloudflare, Inc. and contributors
 License: MIT
 
 Files:
   src/kj/hash.c++
   src/kj/hash.h
-  src/kj/map.h
   src/kj/map-test.c++
+  src/kj/map.h
+  src/kj/table-test.c++
   src/kj/table.c++
   src/kj/table.h
-  src/kj/table-test.c++
 Copyright: 2018 Kenton Varda and contributors
 License: MIT
 
 Files:
+  src/capnp/serialize-text-test.c++
   src/capnp/serialize-text.c++
   src/capnp/serialize-text.h
-  src/capnp/serialize-text-test.c++
 Copyright: 2015 Philip Quinn
 License: MIT
 
 Files:
+  src/capnp/compat/websocket-rpc-test.c++
   src/capnp/compat/websocket-rpc.c++
   src/capnp/compat/websocket-rpc.h
-  src/capnp/compat/websocket-rpc-test.c++
 Copyright: 2021 Ian Denhardt and contributors
 License: MIT
 
