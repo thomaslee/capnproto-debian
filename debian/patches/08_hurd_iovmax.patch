@@ -1,0 +1,23 @@
+Description: use sysconf/_XOPEN_IOV_MAX on hurd-i386
+
+--- a/src/kj/miniposix.h
++++ b/src/kj/miniposix.h
+@@ -132,6 +132,18 @@
+ static constexpr inline size_t iovMax() {
+   return UIO_MAX_IOV;
+ }
++#elif defined(_SC_IOV_MAX) && defined(_XOPEN_IOV_MAX)
++static inline size_t iovMax() {
++  long result = sysconf(_SC_IOV_MAX);
++  if (result == -1) {
++    return _XOPEN_IOV_MAX;
++  }
++  return (size_t) result;
++}
++#elif defined(_XOPEN_IOV_MAX)
++static constexpr inline size_t iovMax() {
++  return _XOPEN_IOV_MAX;
++}
+ #else
+ #error "Please determine the appropriate constant for IOV_MAX on your system."
+ #endif
