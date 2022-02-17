@@ -2,6 +2,7 @@ capnproto (0.8.0-3) UNRELEASED; urgency=medium
 
   * Add serde-tests autopkgtest
   * Add files for CI automation (GitHub Actions)
+  * Update debian/copyright (Closes: #1005011)
 
  -- Tom Lee <debian@tomlee.co>  Mon, 10 Jan 2022 12:08:47 -0800
 
