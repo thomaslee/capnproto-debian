@@ -3,9 +3,9 @@ usr/lib/*/libcapnpc.la
 usr/lib/*/libkj-async.la
 usr/lib/*/libcapnp-rpc.la
 usr/lib/*/libcapnp-json.la
+usr/lib/*/libcapnp-websocket.la
 usr/lib/*/libcapnp.la
 usr/lib/*/libkj-test.la
 usr/lib/*/libkj-gzip.la
 usr/lib/*/libkj-http.la
 usr/lib/*/libkj.la
-

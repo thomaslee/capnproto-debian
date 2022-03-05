@@ -35,7 +35,7 @@ main (int argc, char **argv)
 
 test_pkgconfig_compile() {
   local WORKDIR="$(mktemp -d)"
-  trap "rm -rf '$WORKDIR'" RETURN
+  trap "rm -rf '$WORKDIR'" RETURN EXIT
 
   echo "$EXAMPLE_PROGRAM_1" >"$WORKDIR/pkgconfig-test.cc"
 
@@ -54,7 +54,7 @@ test_pkgconfig_compile() {
 
 test_cmake_compile() {
   local WORKDIR="$(mktemp -d)"
-  trap "rm -rf '$WORKDIR'" RETURN
+  trap "rm -rf '$WORKDIR'" RETURN EXIT
 
   echo "$EXAMPLE_PROGRAM_1" >"$WORKDIR/cmake-test.cc"
   echo '
@@ -79,7 +79,7 @@ target_link_libraries(cmake-test ${CAPNP_LIBRARIES})
 
 test_version() {
   local WORKDIR="$(mktemp -d)"
-  trap "rm -rf '$WORKDIR'" RETURN
+  trap "rm -rf '$WORKDIR'" RETURN EXIT
 
   echo "$EXAMPLE_PROGRAM_2" >"$WORKDIR/version-test.cc"
 
@@ -91,7 +91,7 @@ test_version() {
   if [[ "$?" != 0 ]]; then
     fail "compile failed"
   fi
-  assertEquals "0.8.0" "$("$WORKDIR/version-test")"
+  assertEquals "0.9.1" "$("$WORKDIR/version-test")"
 }
 
 . shunit2
