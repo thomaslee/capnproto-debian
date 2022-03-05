@@ -11,6 +11,8 @@ Files:
   src/capnp/compat/json-test.capnp
   src/capnp/stream.capnp
   src/capnp/testdata/errors2.capnp.nobuild
+  src/kj/async-queue-test.c++
+  src/kj/async-queue.h
   src/kj/async-unix-xthread-test.c++
   src/kj/async-win32-xthread-test.c++
   src/kj/async-xthread-test.c++
@@ -22,8 +24,13 @@ Files:
   src/kj/compat/url.h
   src/kj/encoding-test.c++
   src/kj/encoding.h
+  src/kj/list-test.c++
+  src/kj/list.c++
+  src/kj/list.h
+  src/kj/source-location.c++
+  src/kj/source-location.h
   src/kj/time-test.c++
-Copyright: 2017-2020, Cloudflare, Inc. and contributors
+Copyright: 2017-2022 Cloudflare, Inc. and contributors
 License: MIT
 
 Files:
@@ -42,6 +49,13 @@ Files:
   src/capnp/serialize-text.c++
   src/capnp/serialize-text.h
 Copyright: 2015 Philip Quinn
+License: MIT
+
+Files:
+  src/capnp/compat/websocket-rpc-test.c++
+  src/capnp/compat/websocket-rpc.c++
+  src/capnp/compat/websocket-rpc.h
+Copyright: 2021 Ian Denhardt and contributors
 License: MIT
 
 Files: src/kj/async-io-win32.c++
@@ -95,6 +109,11 @@ Copyright:
 License: MIT
 
 Files:
+  debian/*
+Copyright: 2013-2022 Tom Lee <debian@tomlee.co>
+License: MIT
+
+Files:
   aclocal.m4
   m4/ltoptions.m4
   m4/ltsugar.m4
@@ -123,10 +142,6 @@ Copyright: 1992-1996, 1998-2012, Free Software Foundation, Inc.
 License: FSFUL
  This configure script is free software; the Free Software Foundation
  gives unlimited permission to copy, distribute and modify it.
-
-Files: debian/*
-Copyright: 2013-2022 Tom Lee <debian@tomlee.co>
-License: MIT
 
 Files:
   build-aux/compile

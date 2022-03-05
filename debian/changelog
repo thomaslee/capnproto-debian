@@ -6,6 +6,25 @@ capnproto (0.8.0-3) unstable; urgency=medium
 
  -- Tom Lee <debian@tomlee.co>  Thu, 17 Feb 2022 08:41:58 -0800
 
+capnproto (0.9.1-2) experimental; urgency=medium
+
+  * Add libatomic check for armel (Closes: #1005066)
+  * Add tests for atomics via kj::AtomicRefcounted
+  * Trap EXIT in build-tests
+  * Update debian/copyright (Closes: #1005011)
+
+ -- Tom Lee <debian@tomlee.co>  Fri, 11 Feb 2022 23:13:08 -0800
+
+capnproto (0.9.1-1) experimental; urgency=medium
+
+  * Add serde-tests autopkgtest
+  * Add files for CI automation (GitHub Actions)
+  * Imported Upstream version 0.9.1
+  * Update packaging for 0.9.1
+  * libcapnp-dev now has a hard dependency on libssl-dev
+
+ -- Tom Lee <debian@tomlee.co>  Mon, 10 Jan 2022 12:08:47 -0800
+
 capnproto (0.8.0-2) unstable; urgency=medium
 
   * Upload to unstable (Closes: #1002975)

@@ -2,3 +2,4 @@
 02_fixup_cmake.patch
 03_fix_typos.patch
 06_tests_fail_with_ipv6.patch
+07_libatomic.patch

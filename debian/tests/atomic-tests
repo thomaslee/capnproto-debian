@@ -1,0 +1,82 @@
+#!/bin/bash
+
+exec 2>&1
+
+set -e
+
+ATOMIC_PROGRAM_1='
+#include <iostream>
+#include <kj/refcount.h>
+
+class IntRef : public kj::AtomicRefcounted {
+public:
+  IntRef(int value) : kj::AtomicRefcounted(), value_(value) {}
+  virtual ~IntRef() {}
+
+  kj::Own<IntRef> addRef() {
+    return kj::atomicAddRef(*this);
+  }
+
+  int value() { return value_; }
+  int value() const { return value_; }
+
+private:
+  int value_;
+};
+
+int
+main (int argc, char **argv) {
+  auto arc1 = kj::atomicRefcounted<IntRef>(123);
+  auto arc2 = arc1->addRef();
+  std::cout << arc2->value() << std::endl;
+  return 0;
+}
+'
+
+test_pkgconfig_compile() {
+  local WORKDIR="$(mktemp -d)"
+  trap "rm -rf '$WORKDIR'" RETURN EXIT
+
+  echo "$ATOMIC_PROGRAM_1" >"$WORKDIR/pkgconfig-test.cc"
+
+  g++ -Wall -Werror \
+    $(pkg-config --cflags kj) \
+    -o "$WORKDIR/pkgconfig-test" \
+    "$WORKDIR/pkgconfig-test.cc" \
+    $(pkg-config --libs kj)
+
+  if [[ "$?" != 0 ]]; then
+    fail "compile failed"
+  fi
+
+  assertEquals "123" "$("$WORKDIR/pkgconfig-test")"
+}
+
+test_cmake_compile() {
+  local WORKDIR="$(mktemp -d)"
+  trap "rm -rf '$WORKDIR'" RETURN EXIT
+
+  echo "$ATOMIC_PROGRAM_1" >"$WORKDIR/cmake-test.cc"
+
+  echo '
+CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
+
+project(cmake_test)
+
+find_package(CapnProto REQUIRED)
+
+include_directories(${CAPNP_INCLUDE_DIRS})
+add_definitions(${CAPNP_DEFINITIONS})
+add_executable(cmake-test cmake-test.cc)
+target_link_libraries(cmake-test ${CAPNP_LIBRARIES})
+' >"$WORKDIR/CMakeLists.txt"
+
+  if ! (cd "$WORKDIR" && cmake . && VERBOSE=1 make); then
+    fail "compile failed"
+  fi
+
+  assertEquals "123" "$("$WORKDIR/cmake-test")"
+}
+
+. shunit2
+
