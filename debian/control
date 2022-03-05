@@ -11,7 +11,8 @@ Build-Depends: cmake,
  netbase,
  python3-all,
  xsltproc,
- zlib1g-dev
+ zlib1g-dev,
+ ca-certificates
 Standards-Version: 4.6.0
 Homepage: https://capnproto.org/
 Vcs-Git: https://github.com/thomaslee/capnproto-debian.git -b debian/master

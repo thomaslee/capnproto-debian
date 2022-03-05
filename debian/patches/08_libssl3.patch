@@ -1,0 +1,48 @@
+Description: support openssl 3.0
+Author: Tom Lee <debian@tomlee.co>
+Bug-Debian: https://bugs.debian.org/1006299
+Last-Update: 2022-03-05
+
+--- a/src/kj/compat/tls.c++
++++ b/src/kj/compat/tls.c++
+@@ -363,6 +363,14 @@
+         return 1;
+       case BIO_CTRL_PUSH:
+       case BIO_CTRL_POP:
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L
++      case BIO_CTRL_INFO:
++      case BIO_CTRL_EOF:
++#ifndef OPENSSL_NO_KTLS
++      case BIO_CTRL_GET_KTLS_SEND:
++      case BIO_CTRL_GET_KTLS_RECV:
++#endif
++#endif
+         // Informational?
+         return 0;
+       default:
+--- a/src/kj/compat/tls-test.c++
++++ b/src/kj/compat/tls-test.c++
+@@ -683,14 +683,21 @@
+ }
+ 
+ KJ_TEST("TLS certificate validation") {
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L
++  static const char *hostname_mismatch = "hostname mismatch";
++  static const char *self_signed_cert  = "self-signed certificate";
++#else
++  static const char *hostname_mismatch = "Hostname mismatch";
++  static const char *self_signed_cert  = "self signed certificate";
++#endif
+   expectInvalidCert("wrong.com", TlsCertificate(kj::str(VALID_CERT, INTERMEDIATE_CERT)),
+-                    "Hostname mismatch");
++                    hostname_mismatch);
+   expectInvalidCert("example.com", TlsCertificate(VALID_CERT),
+                     "unable to get local issuer certificate");
+   expectInvalidCert("example.com", TlsCertificate(kj::str(EXPIRED_CERT, INTERMEDIATE_CERT)),
+                     "certificate has expired");
+   expectInvalidCert("example.com", TlsCertificate(SELF_SIGNED_CERT),
+-                    "self signed certificate");
++                    self_signed_cert);
+ }
+ 
+ // BoringSSL seems to print error messages differently.
