@@ -5,21 +5,23 @@ Last-Update: 2022-03-05
 
 --- a/src/kj/compat/tls.c++
 +++ b/src/kj/compat/tls.c++
-@@ -363,6 +363,14 @@
+@@ -361,6 +361,16 @@
+     switch (cmd) {
+       case BIO_CTRL_FLUSH:
          return 1;
-       case BIO_CTRL_PUSH:
-       case BIO_CTRL_POP:
-+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 +      case BIO_CTRL_INFO:
 +      case BIO_CTRL_EOF:
-+#ifndef OPENSSL_NO_KTLS
++        // Queries for info and EOF
++        return 0;
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(OPENSSL_NO_KTLS)
 +      case BIO_CTRL_GET_KTLS_SEND:
 +      case BIO_CTRL_GET_KTLS_RECV:
++        // Queries to determine if our BIO supports KTLS
++        return 0;
 +#endif
-+#endif
+       case BIO_CTRL_PUSH:
+       case BIO_CTRL_POP:
          // Informational?
-         return 0;
-       default:
 --- a/src/kj/compat/tls-test.c++
 +++ b/src/kj/compat/tls-test.c++
 @@ -682,17 +682,26 @@
