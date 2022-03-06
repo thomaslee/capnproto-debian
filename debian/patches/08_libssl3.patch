@@ -22,27 +22,41 @@ Last-Update: 2022-03-05
        default:
 --- a/src/kj/compat/tls-test.c++
 +++ b/src/kj/compat/tls-test.c++
-@@ -683,14 +683,21 @@
+@@ -682,17 +682,26 @@
+   KJ_EXPECT_THROW_MESSAGE(message, clientPromise.wait(test.io.waitScope));
  }
  
- KJ_TEST("TLS certificate validation") {
-+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-+  static const char *hostname_mismatch = "hostname mismatch";
-+  static const char *self_signed_cert  = "self-signed certificate";
++// OpenSSL 3.0 changed error messages
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(OPENSSL_IS_BORINGSSL)
++#define SSL_MESSAGE(v11, v30) v30
 +#else
-+  static const char *hostname_mismatch = "Hostname mismatch";
-+  static const char *self_signed_cert  = "self signed certificate";
++#define SSL_MESSAGE(v11, v30) v11
 +#endif
++
+ KJ_TEST("TLS certificate validation") {
    expectInvalidCert("wrong.com", TlsCertificate(kj::str(VALID_CERT, INTERMEDIATE_CERT)),
 -                    "Hostname mismatch");
-+                    hostname_mismatch);
++                    SSL_MESSAGE("Hostname mismatch", "hostname mismatch"));
    expectInvalidCert("example.com", TlsCertificate(VALID_CERT),
                      "unable to get local issuer certificate");
    expectInvalidCert("example.com", TlsCertificate(kj::str(EXPIRED_CERT, INTERMEDIATE_CERT)),
                      "certificate has expired");
    expectInvalidCert("example.com", TlsCertificate(SELF_SIGNED_CERT),
 -                    "self signed certificate");
-+                    self_signed_cert);
++                    SSL_MESSAGE("self signed certificate", "self-signed certificate"));
  }
  
++#undef SSL_MESSAGE
++
  // BoringSSL seems to print error messages differently.
+ #ifdef OPENSSL_IS_BORINGSSL
+ #define SSL_MESSAGE(interesting, boring) boring
+@@ -826,6 +835,8 @@
+   }
+ }
+ 
++#undef SSL_MESSAGE
++
+ class MockConnectionReceiver final: public ConnectionReceiver {
+   // This connection receiver allows mocked async connection establishment without the network.
+ 
