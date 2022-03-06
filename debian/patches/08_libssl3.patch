@@ -1,7 +1,8 @@
 Description: support openssl 3.0
 Author: Tom Lee <debian@tomlee.co>
 Bug-Debian: https://bugs.debian.org/1006299
-Last-Update: 2022-03-05
+Forwarded: https://github.com/capnproto/capnproto/pull/1434
+Last-Update: 2022-03-06
 
 --- a/src/kj/compat/tls.c++
 +++ b/src/kj/compat/tls.c++
