@@ -1,4 +1,4 @@
-capnproto (0.9.1-4) UNRELEASED; urgency=medium
+capnproto (0.9.1-4) unstable; urgency=medium
 
   * Fix OpenSSL 3.0 FTBFS (Closes: #1006299)
 
