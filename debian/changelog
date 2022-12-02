@@ -1,7 +1,13 @@
-capnproto (0.9.2-1) UNRELEASED; urgency=medium
+capnproto (0.9.2-1) experimental; urgency=medium
 
+  [ Tom Lee ]
+  * Upload to experimental
   * Imported Upstream version 0.9.2 for CVE-2022-46149
   * Update packaging for 0.9.2
+
+  [ tony mancill ]
+  * Tweak lintian overrides
+  * Bump Standards-Version to 4.6.1
 
  -- Tom Lee <debian@tomlee.co>  Wed, 30 Nov 2022 21:26:40 -0800
 
