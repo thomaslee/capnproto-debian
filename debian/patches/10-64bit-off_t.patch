@@ -1,0 +1,38 @@
+Description: enable Large File Support on 32-bit systems
+ Note that this patch was backported to apply against 0.9.2
+ And can be removed once Debian updates to upstream 1.0.1 or later
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1051704
+Forwarded: not-needed
+Origin: https://github.com/capnproto/capnproto/commit/7c8802fb9bec8818f289a44b0ec22419a845b249.patch
+
+---
+--- a/src/kj/async-io-unix.c++
++++ b/src/kj/async-io-unix.c++
+@@ -26,6 +26,12 @@
+ #define _GNU_SOURCE
+ #endif
+ 
++#ifndef _FILE_OFFSET_BITS
++#define _FILE_OFFSET_BITS 64
++// Request 64-bit off_t for sendfile(). (The code will still work if we get 32-bit off_t as long
++// as actual files are under 4GB.)
++#endif
++
+ #include "async-io.h"
+ #include "async-io-internal.h"
+ #include "async-unix.h"
+--- a/src/kj/filesystem-disk-unix.c++
++++ b/src/kj/filesystem-disk-unix.c++
+@@ -25,6 +25,12 @@
+ #define _GNU_SOURCE
+ #endif
+ 
++#ifndef _FILE_OFFSET_BITS
++#define _FILE_OFFSET_BITS 64
++// Request 64-bit off_t. (The code will still work if we get 32-bit off_t as long as actual files
++// are under 4GB.)
++#endif
++
+ #include "filesystem.h"
+ #include "debug.h"
+ #include <sys/types.h>

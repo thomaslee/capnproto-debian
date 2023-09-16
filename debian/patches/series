@@ -5,3 +5,4 @@
 07_libatomic.patch
 08_libssl3.patch
 09-gcc13.patch
+10-64bit-off_t.patch
