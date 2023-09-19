@@ -1,4 +1,4 @@
-capnproto (0.9.2-4) UNRELEASED; urgency=medium
+capnproto (0.9.2-4) unstable; urgency=medium
 
   * Add patch for LFS support on 32-bit systems (Closes: #1051704)
 
