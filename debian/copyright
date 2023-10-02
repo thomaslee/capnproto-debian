@@ -30,7 +30,7 @@ Files:
   src/kj/source-location.c++
   src/kj/source-location.h
   src/kj/time-test.c++
-Copyright: 2017-2022 Cloudflare, Inc. and contributors
+Copyright: 2017-2023 Cloudflare, Inc. and contributors
 License: MIT
 
 Files:
