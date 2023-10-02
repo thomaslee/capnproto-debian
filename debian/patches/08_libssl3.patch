@@ -6,22 +6,13 @@ Last-Update: 2022-03-06
 
 --- a/src/kj/compat/tls.c++
 +++ b/src/kj/compat/tls.c++
-@@ -419,6 +419,18 @@
+@@ -419,6 +419,9 @@
          return reinterpret_cast<TlsConnection*>(BIO_get_data(b))->readBuffer.isAtEnd();
        case BIO_CTRL_FLUSH:
          return 1;
 +      case BIO_CTRL_INFO:
-+      case BIO_CTRL_EOF:
-+        // Queries for info and EOF
++        // Queries for info
 +        return 0;
-+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && \
-+        !defined(OPENSSL_IS_BORINGSSL) && \
-+        !defined(OPENSSL_NO_KTLS)
-+      case BIO_CTRL_GET_KTLS_SEND:
-+      case BIO_CTRL_GET_KTLS_RECV:
-+        // Queries to determine if our BIO supports KTLS
-+        return 0;
-+#endif
        case BIO_CTRL_PUSH:
        case BIO_CTRL_POP:
          // Informational?
