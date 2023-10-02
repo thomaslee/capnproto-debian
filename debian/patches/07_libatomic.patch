@@ -15,11 +15,10 @@ Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1005066
  AC_ARG_WITH([external-capnp],
    [AS_HELP_STRING([--with-external-capnp],
      [use the system capnp binary (or the one specified with $CAPNP) instead of compiling a new
-@@ -195,8 +200,19 @@
+@@ -260,10 +265,21 @@
+   CXXFLAGS="$CXXFLAGS -DKJ_USE_FIBERS=0"
  ])
- AM_CONDITIONAL([BUILD_KJ_TLS], [test "$with_openssl" != no])
  
--# CapnProtoConfig.cmake.in needs this variable.
 +AS_IF([test "$with_libatomic" = check], [
 +  AC_SEARCH_LIBS([__atomic_load_8], [atomic], [with_libatomic=yes], [with_libatomic=no])
 +], [
@@ -30,16 +29,18 @@ Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1005066
 +  ])
 +])
 +
-+# CapnProtoConfig.cmake.in needs these variables.
- AC_SUBST(WITH_OPENSSL, $with_openssl)
+ # CapnProtoConfig.cmake.in needs these variables,
+ # we force them to NO because we don't need the CMake dependency for them,
+ # the dependencies are provided by the .pc files.
+ AC_SUBST(WITH_OPENSSL, NO)
 +AC_SUBST(WITH_LIBATOMIC, $with_libatomic)
+ AC_SUBST(_WITH_LIBUCONTEXT, NO)
  
  AM_CONDITIONAL([HAS_FUZZING_ENGINE], [test "x$LIB_FUZZING_ENGINE" != "x"])
- 
 --- a/cmake/CapnProtoConfig.cmake.in
 +++ b/cmake/CapnProtoConfig.cmake.in
-@@ -62,6 +62,16 @@
-   endif()
+@@ -99,6 +99,16 @@
+   pkg_check_modules(libucontext IMPORTED_TARGET ${forwarded_config_flags} libucontext)
  endif()
  
 +if (@WITH_LIBATOMIC@)  # WITH_LIBATOMIC

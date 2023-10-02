@@ -6,8 +6,8 @@ Last-Update: 2022-03-06
 
 --- a/src/kj/compat/tls.c++
 +++ b/src/kj/compat/tls.c++
-@@ -361,6 +361,18 @@
-     switch (cmd) {
+@@ -419,6 +419,18 @@
+         return reinterpret_cast<TlsConnection*>(BIO_get_data(b))->readBuffer.isAtEnd();
        case BIO_CTRL_FLUSH:
          return 1;
 +      case BIO_CTRL_INFO:
@@ -27,8 +27,8 @@ Last-Update: 2022-03-06
          // Informational?
 --- a/src/kj/compat/tls-test.c++
 +++ b/src/kj/compat/tls-test.c++
-@@ -682,17 +682,26 @@
-   KJ_EXPECT_THROW_MESSAGE(message, clientPromise.wait(test.io.waitScope));
+@@ -753,6 +753,13 @@
+   }).wait(test.io.waitScope);
  }
  
 +// OpenSSL 3.0 changed error messages
@@ -39,24 +39,9 @@ Last-Update: 2022-03-06
 +#endif
 +
  KJ_TEST("TLS certificate validation") {
-   expectInvalidCert("wrong.com", TlsCertificate(kj::str(VALID_CERT, INTERMEDIATE_CERT)),
--                    "Hostname mismatch");
-+                    SSL_MESSAGE("Hostname mismatch", "hostname mismatch"));
-   expectInvalidCert("example.com", TlsCertificate(VALID_CERT),
-                     "unable to get local issuer certificate");
-   expectInvalidCert("example.com", TlsCertificate(kj::str(EXPIRED_CERT, INTERMEDIATE_CERT)),
-                     "certificate has expired");
-   expectInvalidCert("example.com", TlsCertificate(SELF_SIGNED_CERT),
--                    "self signed certificate");
-+                    SSL_MESSAGE("self signed certificate", "self-signed certificate"));
- }
- 
-+#undef SSL_MESSAGE
-+
- // BoringSSL seems to print error messages differently.
- #ifdef OPENSSL_IS_BORINGSSL
- #define SSL_MESSAGE(interesting, boring) boring
-@@ -826,6 +835,8 @@
+   // Where we've given two possible error texts below, it's because OpenSSL v1 produces the former
+   // text while v3 produces the latter. Note that as of this writing, our Windows CI build claims
+@@ -922,6 +929,8 @@
    }
  }
  

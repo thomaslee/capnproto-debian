@@ -3,7 +3,7 @@ Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=963855
 
 --- a/src/kj/async-io-test.c++
 +++ b/src/kj/async-io-test.c++
-@@ -403,7 +403,7 @@
+@@ -413,7 +413,7 @@
    //
    // For some reason, Android and some various Linux distros do not support service names.
    if (systemSupportsAddress("1.2.3.4", "http")) {

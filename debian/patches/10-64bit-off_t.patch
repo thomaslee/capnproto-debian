@@ -8,8 +8,8 @@ Origin: https://github.com/capnproto/capnproto/commit/7c8802fb9bec8818f289a44b0e
 ---
 --- a/src/kj/async-io-unix.c++
 +++ b/src/kj/async-io-unix.c++
-@@ -26,6 +26,12 @@
- #define _GNU_SOURCE
+@@ -32,6 +32,12 @@
+ // as actual files are under 4GB.)
  #endif
  
 +#ifndef _FILE_OFFSET_BITS
@@ -23,8 +23,8 @@ Origin: https://github.com/capnproto/capnproto/commit/7c8802fb9bec8818f289a44b0e
  #include "async-unix.h"
 --- a/src/kj/filesystem-disk-unix.c++
 +++ b/src/kj/filesystem-disk-unix.c++
-@@ -25,6 +25,12 @@
- #define _GNU_SOURCE
+@@ -31,6 +31,12 @@
+ // are under 4GB.)
  #endif
  
 +#ifndef _FILE_OFFSET_BITS
