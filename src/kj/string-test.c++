@@ -24,6 +24,7 @@
 #include <string>
 #include "vector.h"
 #include <locale.h>
+#include <stdint.h>
 
 namespace kj {
 namespace _ {  // private
@@ -164,6 +165,91 @@ TEST(String, parseAs) {
   EXPECT_EQ(heapString("1").parseAs<int>(), 1);
 }
 
+TEST(String, tryParseAs) {
+  KJ_EXPECT(StringPtr("0").tryParseAs<double>() == 0.0);
+  KJ_EXPECT(StringPtr("0").tryParseAs<double>() == 0.0);
+  KJ_EXPECT(StringPtr("0.0").tryParseAs<double>() == 0.0);
+  KJ_EXPECT(StringPtr("1").tryParseAs<double>() == 1.0);
+  KJ_EXPECT(StringPtr("1.0").tryParseAs<double>() == 1.0);
+  KJ_EXPECT(StringPtr("1e100").tryParseAs<double>() == 1e100);
+  KJ_EXPECT(StringPtr("inf").tryParseAs<double>() == inf());
+  KJ_EXPECT(StringPtr("infinity").tryParseAs<double>() == inf());
+  KJ_EXPECT(StringPtr("INF").tryParseAs<double>() == inf());
+  KJ_EXPECT(StringPtr("INFINITY").tryParseAs<double>() == inf());
+  KJ_EXPECT(StringPtr("1e100000").tryParseAs<double>() == inf());
+  KJ_EXPECT(StringPtr("-inf").tryParseAs<double>() == -inf());
+  KJ_EXPECT(StringPtr("-infinity").tryParseAs<double>() == -inf());
+  KJ_EXPECT(StringPtr("-INF").tryParseAs<double>() == -inf());
+  KJ_EXPECT(StringPtr("-INFINITY").tryParseAs<double>() == -inf());
+  KJ_EXPECT(StringPtr("-1e100000").tryParseAs<double>() == -inf());
+  KJ_EXPECT(isNaN(StringPtr("nan").tryParseAs<double>().orDefault(0.0)) == true);
+  KJ_EXPECT(isNaN(StringPtr("NAN").tryParseAs<double>().orDefault(0.0)) == true);
+  KJ_EXPECT(isNaN(StringPtr("NaN").tryParseAs<double>().orDefault(0.0)) == true);
+  KJ_EXPECT(StringPtr("").tryParseAs<double>() == nullptr);
+  KJ_EXPECT(StringPtr("a").tryParseAs<double>() == nullptr);
+  KJ_EXPECT(StringPtr("1a").tryParseAs<double>() == nullptr);
+  KJ_EXPECT(StringPtr("+-1").tryParseAs<double>() == nullptr);
+
+  KJ_EXPECT(StringPtr("1").tryParseAs<float>() == 1.0);
+
+  KJ_EXPECT(StringPtr("1").tryParseAs<int64_t>() == 1);
+  KJ_EXPECT(StringPtr("9223372036854775807").tryParseAs<int64_t>() == 9223372036854775807LL);
+  KJ_EXPECT(StringPtr("-9223372036854775808").tryParseAs<int64_t>() == -9223372036854775808ULL);
+  KJ_EXPECT(StringPtr("9223372036854775808").tryParseAs<int64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("-9223372036854775809").tryParseAs<int64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("").tryParseAs<int64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("a").tryParseAs<int64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("1a").tryParseAs<int64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("+-1").tryParseAs<int64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("010").tryParseAs<int64_t>() == 10);
+  KJ_EXPECT(StringPtr("0010").tryParseAs<int64_t>() == 10);
+  KJ_EXPECT(StringPtr("0x10").tryParseAs<int64_t>() == 16);
+  KJ_EXPECT(StringPtr("0X10").tryParseAs<int64_t>() == 16);
+  KJ_EXPECT(StringPtr("-010").tryParseAs<int64_t>() == -10);
+  KJ_EXPECT(StringPtr("-0x10").tryParseAs<int64_t>() == -16);
+  KJ_EXPECT(StringPtr("-0X10").tryParseAs<int64_t>() == -16);
+
+  KJ_EXPECT(StringPtr("1").tryParseAs<uint64_t>() == 1);
+  KJ_EXPECT(StringPtr("0").tryParseAs<uint64_t>() == 0);
+  KJ_EXPECT(StringPtr("18446744073709551615").tryParseAs<uint64_t>() == 18446744073709551615ULL);
+  KJ_EXPECT(StringPtr("-1").tryParseAs<uint64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("18446744073709551616").tryParseAs<uint64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("").tryParseAs<uint64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("a").tryParseAs<uint64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("1a").tryParseAs<uint64_t>() == nullptr);
+  KJ_EXPECT(StringPtr("+-1").tryParseAs<uint64_t>() == nullptr);
+
+  KJ_EXPECT(StringPtr("1").tryParseAs<int32_t>() == 1);
+  KJ_EXPECT(StringPtr("2147483647").tryParseAs<int32_t>() == 2147483647);
+  KJ_EXPECT(StringPtr("-2147483648").tryParseAs<int32_t>() == -2147483648);
+  KJ_EXPECT(StringPtr("2147483648").tryParseAs<int32_t>() == nullptr);
+  KJ_EXPECT(StringPtr("-2147483649").tryParseAs<int32_t>() == nullptr);
+
+  KJ_EXPECT(StringPtr("1").tryParseAs<uint32_t>() == 1);
+  KJ_EXPECT(StringPtr("0").tryParseAs<uint32_t>() == 0U);
+  KJ_EXPECT(StringPtr("4294967295").tryParseAs<uint32_t>() == 4294967295U);
+  KJ_EXPECT(StringPtr("-1").tryParseAs<uint32_t>() == nullptr);
+  KJ_EXPECT(StringPtr("4294967296").tryParseAs<uint32_t>() == nullptr);
+
+  KJ_EXPECT(StringPtr("1").tryParseAs<int16_t>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<uint16_t>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<int8_t>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<uint8_t>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<char>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<signed char>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<unsigned char>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<short>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<unsigned short>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<int>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<unsigned>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<long>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<unsigned long>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<long long>() == 1);
+  KJ_EXPECT(StringPtr("1").tryParseAs<unsigned long long>() == 1);
+
+  KJ_EXPECT(heapString("1").tryParseAs<int>() == 1);
+}
+
 #if KJ_COMPILER_SUPPORTS_STL_STRING_INTEROP
 TEST(String, StlInterop) {
   std::string foo = "foo";
@@ -282,7 +368,8 @@ KJ_TEST("float stringification and parsing is not locale-dependent") {
   KJ_EXPECT("1.5"_kj.parseAs<double>() == 1.5);
 
   if (setlocale(LC_NUMERIC, "es_ES") == nullptr &&
-      setlocale(LC_NUMERIC, "es_ES.utf8") == nullptr) {
+      setlocale(LC_NUMERIC, "es_ES.utf8") == nullptr &&
+      setlocale(LC_NUMERIC, "es_ES.UTF-8") == nullptr) {
     // Some systems may not have the desired locale available.
     KJ_LOG(WARNING, "Couldn't set locale to es_ES. Skipping this test.");
   } else {
@@ -292,6 +379,12 @@ KJ_TEST("float stringification and parsing is not locale-dependent") {
     KJ_EXPECT("1.5"_kj.parseAs<double>() == 1.5);
   }
 }
+
+KJ_TEST("ConstString") {
+  kj::ConstString theString = "it's a const string!"_kjc;
+  KJ_EXPECT(theString == "it's a const string!");
+}
+
 }  // namespace
 }  // namespace _ (private)
 }  // namespace kj

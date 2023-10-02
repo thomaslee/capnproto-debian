@@ -1,4 +1,4 @@
-// Copyright (c) 2013-2014 Sandstorm Development Group, Inc. and contributors
+// Copyright (c) 2013-2017 Sandstorm Development Group, Inc. and contributors
 // Licensed under the MIT License:
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -21,27 +21,24 @@
 
 #pragma once
 
-// This exposes IndexingIterator as something compatible with std::iterator so that things like
-// std::copy work with List::begin/List::end.
+// Request Vista-level APIs.
+#ifndef WINVER
+#define WINVER 0x0600
+#elif WINVER < 0x0600
+#error "WINVER defined but older than Vista"
+#endif
 
-// Make sure that if this header is before list.h by the user it includes it to make
-// IndexingIterator visible to avoid brittle header problems.
-#include "../list.h"
-#include <iterator>
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0600
+#elif _WIN32_WINNT < 0x0600
+#error "_WIN32_WINNT defined but older than Vista"
+#endif
 
-CAPNP_BEGIN_HEADER
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN  // ::eyeroll::
+#endif
 
-namespace std {
-
-template <typename Container, typename Element>
-struct iterator_traits<capnp::_::IndexingIterator<Container, Element>> {
-  using iterator_category = std::random_access_iterator_tag;
-  using value_type = Element;
-  using difference_type	= int;
-  using pointer = Element*;
-  using reference = Element&;
-};
-
-}  // namespace std
-
-CAPNP_END_HEADER
+#define NOSERVICE 1
+#define NOMCX 1
+#define NOIME 1
+#define NOMINMAX 1
