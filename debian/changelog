@@ -1,3 +1,12 @@
+capnproto (1.0.1-1) UNRELEASED; urgency=medium
+
+  * New upstream version 1.0.1
+  * Update debian/gbp.conf for experimental
+  * Refresh patches for upstream release 1.0.1
+  * Freshen debian/copyright
+
+ -- tony mancill <tmancill@debian.org>  Sun, 01 Oct 2023 20:45:00 -0700
+
 capnproto (0.9.2-4) unstable; urgency=medium
 
   * Add patch for LFS support on 32-bit systems (Closes: #1051704)
