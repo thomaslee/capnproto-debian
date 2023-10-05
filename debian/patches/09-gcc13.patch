@@ -1,4 +1,4 @@
-Description: Fix FTBFS of 0.9.2 with GCC-13
+Description: Fix FTBFS with GCC-13
 Author: tony mancill <tmancill@debian.org>
 Bug-Debian: https://bugs.debian.org/1037598
 Forwarded: no

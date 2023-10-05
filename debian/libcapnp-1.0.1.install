@@ -1,0 +1,11 @@
+usr/lib/*/libcapnp-1.0.1.so
+usr/lib/*/libcapnp-json-1.0.1.so
+usr/lib/*/libcapnp-rpc-1.0.1.so
+usr/lib/*/libcapnp-websocket-1.0.1.so
+usr/lib/*/libcapnpc-*.so
+usr/lib/*/libkj-1.0.1.so
+usr/lib/*/libkj-async-1.0.1.so
+usr/lib/*/libkj-http-1.0.1.so
+usr/lib/*/libkj-test-1.0.1.so
+usr/lib/*/libkj-gzip-1.0.1.so
+usr/lib/*/libkj-tls-1.0.1.so

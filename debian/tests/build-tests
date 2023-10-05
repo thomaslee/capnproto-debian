@@ -91,7 +91,7 @@ test_version() {
   if [[ "$?" != 0 ]]; then
     fail "compile failed"
   fi
-  assertEquals "0.9.2" "$("$WORKDIR/version-test")"
+  assertEquals "1.0.1" "$("$WORKDIR/version-test")"
 }
 
 . shunit2
