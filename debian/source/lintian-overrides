@@ -1,1 +1,1 @@
-capnproto source: debian-watch-does-not-check-gpg-signature
+capnproto source: debian-watch-does-not-check-openpgp-signature
