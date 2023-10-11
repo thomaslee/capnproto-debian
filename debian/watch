@@ -1,4 +1,3 @@
-version=3
-
+version=4
 https://capnproto.org/install.html https?://capnproto.org/capnproto-c\+\+-(.+)\.tar\.gz
 
