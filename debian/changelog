@@ -1,3 +1,10 @@
+capnproto (1.0.1-2) unstable; urgency=medium
+
+  * Upload version 1.0.1 to unstable
+    Transition bug #1053765
+
+ -- tony mancill <tmancill@debian.org>  Tue, 10 Oct 2023 20:49:02 -0700
+
 capnproto (1.0.1-1) experimental; urgency=medium
 
   * New upstream version 1.0.1 (Closes: #1041973)
