@@ -7,3 +7,4 @@
 09-gcc13.patch
 10-64bit-off_t.patch
 11_CVE-2023-48230.patch
+12-FTBFS-on-32-bit-arm-after-t64.patch
