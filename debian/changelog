@@ -1,3 +1,13 @@
+capnproto (1.1.0-1) experimental; urgency=medium
+
+  * New upstream release 1.1.0
+  * Upload to experimental
+  * Freshen patches for new upstream release and add missing DEP-3 headers
+  * Freshen years in debian/copyright and remove superfluous file patterns
+  * Bump Standards-Version to 4.7.0
+
+ -- tony mancill <tmancill@debian.org>  Mon, 30 Dec 2024 10:39:33 -0800
+
 capnproto (1.0.1-4) unstable; urgency=medium
 
   * Add patch for FTBFS on 32-bit ARM after the time_t 64 transition.
