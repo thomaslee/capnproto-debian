@@ -1,5 +1,6 @@
 Description: disable failing test when non-loopback interface is IPv6-only
 Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=963855
+Author: tony mancill <tmancill@debian.org>
 
 --- a/src/kj/async-io-test.c++
 +++ b/src/kj/async-io-test.c++

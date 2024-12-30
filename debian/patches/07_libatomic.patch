@@ -1,5 +1,6 @@
 Description: link against libatomic
 Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1005066
+Author: Tom Lee <debian@tomlee.co>
 
 --- a/configure.ac
 +++ b/configure.ac
