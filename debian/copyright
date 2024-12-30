@@ -30,7 +30,7 @@ Files:
   src/kj/source-location.c++
   src/kj/source-location.h
   src/kj/time-test.c++
-Copyright: 2017-2023 Cloudflare, Inc. and contributors
+Copyright: 2017-2024 Cloudflare, Inc. and contributors
 License: MIT
 
 Files:
@@ -109,8 +109,8 @@ Copyright:
 License: MIT
 
 Files: debian/*
-Copyright: 2013-2023 Tom Lee <debian@tomlee.co>
-           2019-2023 tony mancill <tmancill@debian.org>
+Copyright: 2013-2024 Tom Lee <debian@tomlee.co>
+           2019-2024 tony mancill <tmancill@debian.org>
 License: MIT
 
 Files:
