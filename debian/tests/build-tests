@@ -58,7 +58,7 @@ test_cmake_compile() {
 
   echo "$EXAMPLE_PROGRAM_1" >"$WORKDIR/cmake-test.cc"
   echo '
-CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
 
 project(cmake_test)
 

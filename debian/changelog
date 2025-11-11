@@ -1,3 +1,11 @@
+capnproto (1.1.0-2.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Bump CMAKE_MINIMUM_REQUIRED version to 3.5 to fix autopkgtests with CMake
+    4. (Closes: #1118577)
+
+ -- James McCoy <jamessan@debian.org>  Tue, 11 Nov 2025 07:19:43 -0500
+
 capnproto (1.1.0-2) unstable; urgency=medium
 
   * Upload version 1.1.0 to unstable
