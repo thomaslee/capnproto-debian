@@ -16,7 +16,7 @@ Author: Tom Lee <debian@tomlee.co>
  AC_ARG_WITH([external-capnp],
    [AS_HELP_STRING([--with-external-capnp],
      [use the system capnp binary (or the one specified with $CAPNP) instead of compiling a new
-@@ -260,10 +265,21 @@
+@@ -293,10 +298,21 @@
    CXXFLAGS="$CXXFLAGS -DKJ_USE_FIBERS=0"
  ])
  

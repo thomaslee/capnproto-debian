@@ -1,8 +1,8 @@
 01_broken_kfreebsd_tests.patch
 02_fixup_cmake.patch
-03_fix_typos.patch
+#03_fix_typos.patch
 06_tests_fail_with_ipv6.patch
-07_libatomic.patch
+#07_libatomic.patch
 08_libssl3.patch
 09-gcc13.patch
 10-64bit-off_t.patch
