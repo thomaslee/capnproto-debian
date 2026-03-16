@@ -30,8 +30,14 @@ Files:
   src/kj/source-location.c++
   src/kj/source-location.h
   src/kj/time-test.c++
-Copyright: 2017-2024 Cloudflare, Inc. and contributors
+Copyright: 2017-2026 Cloudflare, Inc. and contributors
 License: MIT
+
+Files: Makefile.in
+       aclocal.m4
+       m4/*
+Copyright: 1994-2024, Free Software Foundation, Inc
+License: FSFULLR
 
 Files:
   src/kj/hash.c++
@@ -109,35 +115,19 @@ Copyright:
 License: MIT
 
 Files: debian/*
-Copyright: 2013-2024 Tom Lee <debian@tomlee.co>
-           2019-2024 tony mancill <tmancill@debian.org>
+Copyright: 2013-2026, Tom Lee <debian@tomlee.co>
+           2019-2026, tony mancill <tmancill@debian.org>
 License: MIT
 
-Files:
-  aclocal.m4
-  Makefile.in
-Copyright: 1996-2015 Free Software Foundation, Inc.
-License: FSFULLR
- This file is free software; the Free Software Foundation
- gives unlimited permission to copy and/or distribute it,
- with or without modifications, as long as this notice is preserved.
-
 Files: m4/ax_cxx_compile_stdcxx_14.m4
-Copyright:
-  2008, Benjamin Kosnik <bkoz@redhat.com>
-  2012, Zack Weinberg <zackw@panix.com>
-  2013, Kenton Varda <temporal@gmail.com>
+Copyright: 2008, Benjamin Kosnik <bkoz@redhat.com>
+           2013, Kenton Varda <temporal@gmail.com>
+           2012, Zack Weinberg <zackw@panix.com>
 License: FSFAP
- Copying and distribution of this file, with or without modification, are
- permitted in any medium without royalty provided the copyright notice
- and this notice are preserved. This file is offered as-is, without any
- warranty.
 
 Files: configure
-Copyright: 1992-1996, 1998-2012, Free Software Foundation, Inc.
+Copyright: 1992-2024, Free Software Foundation, Inc.
 License: FSFUL
- This configure script is free software; the Free Software Foundation
- gives unlimited permission to copy, distribute and modify it.
 
 Files:
   build-aux/compile
@@ -173,15 +163,6 @@ Files:
   build-aux/ltmain.sh
 Copyright: 1996-2015, Free Software Foundation, Inc.
 License: GPL-2+ with Libtool exception
- GNU Libtool is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; either version 2 of the License, or
- (at your option) any later version.
- .
- As a special exception to the GNU General Public License,
- if you distribute this file as part of a program or library that
- is built using GNU Libtool, you may include this file under the
- same distribution terms that you use for the rest of that program.
 
 Files: build-aux/install-sh
 Copyright: 1994, X Consortium
@@ -233,3 +214,29 @@ License: BSD-3-clause
  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License: FSFAP
+ Copying and distribution of this file, with or without modification, are
+ permitted in any medium without royalty provided the copyright notice
+ and this notice are preserved. This file is offered as-is, without any
+ warranty.
+
+License: FSFUL
+ This configure script is free software; the Free Software Foundation
+ gives unlimited permission to copy, distribute and modify it.
+
+License: FSFULLR
+ This file is free software; the Free Software Foundation
+ gives unlimited permission to copy and/or distribute it,
+ with or without modifications, as long as this notice is preserved.
+
+License: GPL-2+ with Libtool exception
+ GNU Libtool is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ As a special exception to the GNU General Public License,
+ if you distribute this file as part of a program or library that
+ is built using GNU Libtool, you may include this file under the
+ same distribution terms that you use for the rest of that program.
