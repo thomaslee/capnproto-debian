@@ -1,6 +1,5 @@
 Source: capnproto
 Section: devel
-Priority: optional
 Maintainer: Tom Lee <debian@tomlee.co>
 Uploaders: tony mancill <tmancill@debian.org>
 Build-Depends: cmake,
@@ -13,11 +12,10 @@ Build-Depends: cmake,
  xsltproc,
  zlib1g-dev,
  ca-certificates
-Standards-Version: 4.7.0
+Standards-Version: 4.7.3
 Homepage: https://capnproto.org/
 Vcs-Git: https://github.com/thomaslee/capnproto-debian.git -b debian/master
 Vcs-Browser: https://github.com/thomaslee/capnproto-debian
-Rules-Requires-Root: no
 
 Package: libcapnp-1.4.0
 Architecture: any
