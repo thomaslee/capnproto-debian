@@ -1,7 +1,7 @@
 Description: Compile against openssl 4.0
 Author: tony mancill <tmancill@debian.org>
 Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1137594
-Forwarded: no
+Forwarded: https://github.com/capnproto/capnproto/pull/2673
 
 --- a/src/kj/compat/tls.c++
 +++ b/src/kj/compat/tls.c++
