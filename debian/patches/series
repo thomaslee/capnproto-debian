@@ -7,3 +7,4 @@
 09-gcc13.patch
 10-64bit-off_t.patch
 12-FTBFS-on-32-bit-arm-after-t64.patch
+13-FTBFS-with-openssl4.patch
