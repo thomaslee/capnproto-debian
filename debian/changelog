@@ -1,3 +1,15 @@
+capnproto (1.5.0-1) experimental; urgency=medium
+
+  * New upstream version 1.5.0
+  * Drop 13-FTBFS-with-openssl4.patch applied upstream
+  * Bump Standards-Version to 4.7.4
+  * Update debian/* for upstream 1.5.0
+  * Build with C++20 for coroutines support (Closes: #1146817)
+  * Fix capnp tool path in bundled CMake targets (Closes: #1145818)
+  * Add test for capnp tool path in CMake targets; see Debian bug #1145818
+
+ -- tony mancill <tmancill@debian.org>  Mon, 07 Sep 2026 19:29:50 -0700
+
 capnproto (1.4.0-3) unstable; urgency=medium
 
   * Patch for FTBFS against openssl 4.0 (Closes: #1137594)
