@@ -2,11 +2,15 @@ cmake_minimum_required(VERSION 3.10)
 include_guard(GLOBAL)
 
 project("Cap'n Proto" CXX)
-set(VERSION 1.4.0)
+set(VERSION 1.5.0)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-include(CTest)
+# PROJECT_IS_TOP_LEVEL was added in CMake 3.21
+if (NOT DEFINED PROJECT_IS_TOP_LEVEL OR PROJECT_IS_TOP_LEVEL)
+  include(CTest)
+endif()
+
 include(CheckIncludeFileCXX)
 include(GNUInstallDirs)
 if(MSVC)
