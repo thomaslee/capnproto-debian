@@ -3,7 +3,7 @@
 #
 # Force a release build & works around a g++ compiler bug by happy coincidence
 #
-export DEB_CXXFLAGS_MAINT_APPEND = -DNDEBUG
+export DEB_CXXFLAGS_MAINT_APPEND = -DNDEBUG -std=c++20
 export DEB_LDFLAGS_MAINT_APPEND = -lpthread
 
 export DEB_BUILD_MAINT_OPTIONS=hardening=+all
