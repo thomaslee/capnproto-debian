@@ -1,0 +1,46 @@
+Description: fix wrong path for capnp/capnpc-* imported executable targets
+ CapnProtoTargets.cmake computes _IMPORT_PREFIX assuming libdir is
+ PREFIX/lib, but Debian's multiarch libdir has an extra triplet
+ component, so CapnProto::capnp_tool, CapnProto::capnpc_cpp and
+ CapnProto::capnpc_capnp end up pointing at /usr/lib/bin/capnp instead
+ of /usr/bin/capnp. Hardcode the path, as already done for
+ CAPNP_EXECUTABLE in 02_fixup_cmake.patch.
+Author: tony mancill <tmancill@debian.org>
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1145818
+Forwarded: no
+Last-Update: 2026-09-07
+
+--- a/cmake/CapnProtoTargets.cmake
++++ b/cmake/CapnProtoTargets.cmake
+@@ -197,25 +197,24 @@
+ # ========================================================================================
+ # Imported executable targets
+ 
+-get_filename_component(_IMPORT_PREFIX "${CMAKE_CURRENT_LIST_FILE}" PATH)
+-get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
+-get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
+-get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
++# Debian (Bug#1145818): _IMPORT_PREFIX assumes libdir is PREFIX/lib, which
++# breaks on multiarch.  Hardcode instead, as CapnProtoConfig.cmake.in does
++# for CAPNP_EXECUTABLE.
+ 
+ # Add executable targets for the capnp compiler and plugins. This list must be kept manually in sync
+ # with the rest of the project.
+ 
+ add_executable(CapnProto::capnp_tool IMPORTED)
+ set_target_properties(CapnProto::capnp_tool PROPERTIES
+-  IMPORTED_LOCATION "${_IMPORT_PREFIX}/bin/capnp${CMAKE_EXECUTABLE_SUFFIX}"
++  IMPORTED_LOCATION "/usr/bin/capnp${CMAKE_EXECUTABLE_SUFFIX}"
+ )
+ 
+ add_executable(CapnProto::capnpc_cpp IMPORTED)
+ set_target_properties(CapnProto::capnpc_cpp PROPERTIES
+-  IMPORTED_LOCATION "${_IMPORT_PREFIX}/bin/capnpc-c++${CMAKE_EXECUTABLE_SUFFIX}"
++  IMPORTED_LOCATION "/usr/bin/capnpc-c++${CMAKE_EXECUTABLE_SUFFIX}"
+ )
+ 
+ add_executable(CapnProto::capnpc_capnp IMPORTED)
+ set_target_properties(CapnProto::capnpc_capnp PROPERTIES
+-  IMPORTED_LOCATION "${_IMPORT_PREFIX}/bin/capnpc-capnp${CMAKE_EXECUTABLE_SUFFIX}"
++  IMPORTED_LOCATION "/usr/bin/capnpc-capnp${CMAKE_EXECUTABLE_SUFFIX}"
+ )
