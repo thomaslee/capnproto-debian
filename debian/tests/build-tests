@@ -77,6 +77,32 @@ target_link_libraries(cmake-test ${CAPNP_LIBRARIES})
   assertEquals "bcde" "$("$WORKDIR/cmake-test")"
 }
 
+# Regression test for https://bugs.debian.org/1145818
+test_cmake_imported_tool_paths() {
+  local WORKDIR="$(mktemp -d)"
+  trap "rm -rf '$WORKDIR'" RETURN EXIT
+
+  echo '
+CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
+
+project(cmake_tool_path_test)
+
+find_package(CapnProto REQUIRED)
+
+foreach(_capnp_tgt CapnProto::capnp_tool CapnProto::capnpc_cpp CapnProto::capnpc_capnp)
+  get_target_property(_capnp_tgt_loc ${_capnp_tgt} IMPORTED_LOCATION)
+  message(STATUS "${_capnp_tgt} IMPORTED_LOCATION = ${_capnp_tgt_loc}")
+  if(NOT EXISTS "${_capnp_tgt_loc}")
+    message(FATAL_ERROR "${_capnp_tgt} IMPORTED_LOCATION does not exist: ${_capnp_tgt_loc}")
+  endif()
+endforeach()
+' >"$WORKDIR/CMakeLists.txt"
+
+  if ! (cd "$WORKDIR" && cmake .); then
+    fail "cmake configure failed: a CapnProto imported tool target did not resolve to an existing path"
+  fi
+}
+
 test_version() {
   local WORKDIR="$(mktemp -d)"
   trap "rm -rf '$WORKDIR'" RETURN EXIT
